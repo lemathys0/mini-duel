@@ -1,0 +1,36 @@
+﻿<!DOCTYPE html>
+<html lang='fr'>
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <title>Mini Duel de Cartes</title>
+  <link rel='stylesheet' href='style.css'>
+</head>
+<body>
+  <div id='auth'>
+    <h1>Connexion</h1>
+    <input type='text' id='pseudo' placeholder='Pseudo'>
+    <input type='password' id='code' placeholder='Code (4 chiffres)' maxlength='4'>
+    <button onclick='login()'>Se connecter</button>
+    <p id='authMsg'></p>
+  </div>
+
+  <div id='game' style='display:none;'>
+    <h2 id='welcome'></h2>
+    <button onclick='createRoom()'>Créer une partie</button>
+    <input id='roomInput' placeholder='Code de la room'>
+    <button onclick='joinRoom()'>Rejoindre</button>
+    <div id='status'></div>
+    <div id='actions' style='display:none;'>
+      <button onclick='play("Attaque")'>Attaque</button>
+      <button onclick='play("Défense")'>Défense</button>
+      <button onclick='play("Soin")'>Soin</button>
+    </div>
+    <div id='resultat'></div>
+  </div>
+
+  <script src='https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'></script>
+  <script src='https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js'></script>
+  <script src='script.js'></script>
+</body>
+</html>

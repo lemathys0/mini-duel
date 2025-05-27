@@ -1,0 +1,21 @@
+﻿body {
+  font-family: sans-serif;
+  text-align: center;
+  background: #f4f4f4;
+  padding: 2rem;
+}
+
+input, button {
+  margin: 0.5rem;
+  padding: 0.5rem;
+  font-size: 1rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+#actions button {
+  margin: 1rem;
+  font-weight: bold;
+}
