@@ -17,27 +17,27 @@ let currentUser = null;
 let roomId = null;
 
 // Affichage des sections
-function showSignup() {
+window.showSignup = function() {
   document.getElementById('signup-section').style.display = 'block';
   document.getElementById('login-section').style.display = 'none';
   document.getElementById('game-section').style.display = 'none';
-}
+};
 
-function showLogin() {
+window.showLogin = function() {
   document.getElementById('signup-section').style.display = 'none';
   document.getElementById('login-section').style.display = 'block';
   document.getElementById('game-section').style.display = 'none';
-}
+};
 
-function showGame() {
+window.showGame = function() {
   document.getElementById('signup-section').style.display = 'none';
   document.getElementById('login-section').style.display = 'none';
   document.getElementById('game-section').style.display = 'block';
   document.getElementById('user-name').textContent = currentUser.pseudo;
-}
+};
 
 // Inscription
-function signup() {
+window.signup = function() {
   const pseudo = document.getElementById('signup-pseudo').value.trim();
   const code = document.getElementById('signup-code').value.trim();
   const msg = document.getElementById('signup-msg');
@@ -61,10 +61,10 @@ function signup() {
       });
     }
   });
-}
+};
 
 // Connexion
-function login() {
+window.login = function() {
   const pseudo = document.getElementById('login-pseudo').value.trim();
   const code = document.getElementById('login-code').value.trim();
   const msg = document.getElementById('login-msg');
@@ -87,10 +87,10 @@ function login() {
       msg.textContent = "Compte non trouvé, inscris-toi d'abord";
     }
   });
-}
+};
 
 // Création de la room
-function createRoom() {
+window.createRoom = function() {
   const id = Math.random().toString(36).substring(2, 6).toUpperCase();
   roomId = id;
   const ref = db.ref('rooms/' + id);
@@ -101,10 +101,10 @@ function createRoom() {
   });
   listenToRoom();
   document.getElementById('status').textContent = `Room créée : ${id}`;
-}
+};
 
 // Rejoindre une room
-function joinRoom() {
+window.joinRoom = function() {
   const id = document.getElementById('room-code').value.trim().toUpperCase();
   if (!id) return;
 
@@ -130,7 +130,7 @@ function joinRoom() {
       document.getElementById('status').textContent = `Déjà dans la room : ${id}`;
     }
   });
-}
+};
 
 // Écoute les changements dans la room
 function listenToRoom() {
@@ -150,12 +150,12 @@ function listenToRoom() {
 }
 
 // Jouer une action
-function play(action) {
+window.play = function(action) {
   if (!roomId) return;
   const ref = db.ref('rooms/' + roomId + '/actions/' + currentUser.key);
   ref.set(action);
   document.getElementById('result').textContent = `Action jouée : ${action}`;
-}
+};
 
 // Affiche la page d'inscription au départ
-showSignup();
+window.showSignup();
