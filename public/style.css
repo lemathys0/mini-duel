@@ -1,85 +1,50 @@
-﻿* {
-  box-sizing: border-box;
+﻿body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
 }
 
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: #fff;
-  margin: 0;
-  padding: 0;
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-#container {
-  background: rgba(0, 0, 0, 0.5);
-  padding: 2rem 3rem;
-  border-radius: 12px;
-  width: 320px;
-  text-align: center;
-  box-shadow: 0 0 15px rgba(0,0,0,0.6);
-}
-
-h2 {
-  margin-bottom: 1rem;
-}
-
-input {
-  width: 100%;
-  padding: 0.7rem;
-  margin: 0.5rem 0;
-  border-radius: 8px;
-  border: none;
-  font-size: 1rem;
+#signup-section,
+#login-section,
+#game-section,
+#combat-section {
+  border: 1px solid #ccc;
+  padding: 20px;
+  margin-bottom: 20px;
+  border-radius: 6px;
 }
 
 button {
-  width: 100%;
-  padding: 0.7rem;
-  margin-top: 1rem;
-  border-radius: 8px;
-  border: none;
-  background: #4caf50;
-  color: white;
-  font-weight: bold;
+  margin: 5px;
+  padding: 10px 20px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
 }
 
-button:hover {
-  background: #45a049;
+#combat-actions button {
+  width: 100px;
 }
 
-.msg {
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
-  min-height: 1.3em;
-}
-
-a {
-  color: #ffd700;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-#status, #result {
-  margin-top: 1rem;
+#status,
+#signup-msg,
+#login-msg,
+#combat-status,
+#combat-result {
+  margin-top: 10px;
   font-weight: bold;
 }
 
-#actions button {
-  width: 30%;
-  margin: 0.3rem 1%;
-  background: #2196f3;
+#signup-msg,
+#login-msg {
+  color: red;
 }
 
-#actions button:hover {
-  background: #0b7dda;
+#status {
+  color: green;
+}
+
+#pv-status {
+  margin-bottom: 15px;
+}
+
+#combat-result {
+  font-style: italic;
 }
