@@ -2,7 +2,7 @@
 const firebaseConfig = {
   apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
   authDomain: "mini-duel-de-cartes.firebaseapp.com",
-  databaseURL: "https://mini-duel-de-cartes-default-rtdb.europe-west1.firebasedatabase.app",
+  databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
   projectId: "mini-duel-de-cartes",
   storageBucket: "mini-duel-de-cartes.appspot.com",
   messagingSenderId: "1084207708579",
