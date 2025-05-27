@@ -57,7 +57,7 @@ window.signup = function() {
     } else {
       userRef.set({ pseudo, code, trophées: 100, pv: 100 }).then(() => {
         currentUser = { pseudo, code, trophées: 100, pv: 100, key };
-        showGame();
+        window.showGame();
       });
     }
   });
@@ -82,7 +82,7 @@ window.login = function() {
     if (snapshot.exists()) {
       currentUser = snapshot.val();
       currentUser.key = key;
-      showGame();
+      window.showGame();
     } else {
       msg.textContent = "Compte non trouvé, inscris-toi d'abord";
     }
@@ -122,7 +122,7 @@ window.joinRoom = function() {
       return;
     }
     if (!room.player2) {
-      ref.update({ player2: currentUser.key, 'pv/' + currentUser.key: 100 });
+      ref.update({ player2: currentUser.key, ['pv/' + currentUser.key]: 100 });
       listenToRoom();
       document.getElementById('status').textContent = `Rejoint la room : ${id}`;
     } else if (room.player2 === currentUser.key) {
