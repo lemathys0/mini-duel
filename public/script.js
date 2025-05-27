@@ -1,4 +1,4 @@
-﻿// --- Configuration Firebase ---
+﻿// Config Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
   authDomain: "mini-duel-de-cartes.firebaseapp.com",
@@ -15,21 +15,19 @@ const db = firebase.database();
 let currentUser = null;
 let roomId = null;
 
-// Afficher la page d'inscription
+// Affichage des sections
 function showSignup() {
   document.getElementById('signup-section').style.display = 'block';
   document.getElementById('login-section').style.display = 'none';
   document.getElementById('game-section').style.display = 'none';
 }
 
-// Afficher la page de connexion
 function showLogin() {
   document.getElementById('signup-section').style.display = 'none';
   document.getElementById('login-section').style.display = 'block';
   document.getElementById('game-section').style.display = 'none';
 }
 
-// Afficher la page de jeu
 function showGame() {
   document.getElementById('signup-section').style.display = 'none';
   document.getElementById('login-section').style.display = 'none';
@@ -92,7 +90,7 @@ function login() {
   });
 }
 
-// Création room, rejoindre, jouer et logique restent identiques à ton précédent code
+// Création de la room
 function createRoom() {
   const id = Math.random().toString(36).substring(2, 6).toUpperCase();
   roomId = id;
@@ -106,36 +104,53 @@ function createRoom() {
   document.getElementById('status').textContent = `Room créée : ${id}`;
 }
 
+// Rejoindre une room
 function joinRoom() {
   const id = document.getElementById('room-code').value.trim().toUpperCase();
   if (!id) return;
 
   roomId = id;
   const ref = db.ref('rooms/' + id);
+
   ref.once('value').then(snapshot => {
-    if (snapshot.exists() && !snapshot.val().player2) {
-      ref.update({ player2: currentUser.key, pv: { ...snapshot.val().pv, [currentUser.key]: 100 } });
+    if (!snapshot.exists()) {
+      document.getElementById('status').textContent = 'Room introuvable';
+      return;
+    }
+    const room = snapshot.val();
+    if (room.player2 && room.player2 !== currentUser.key) {
+      document.getElementById('status').textContent = 'Room pleine';
+      return;
+    }
+    if (!room.player2) {
+      ref.update({ player2: currentUser.key, 'pv/' + currentUser.key: 100 });
       listenToRoom();
-      document.getElementById('status').textContent = `Rejoint la room ${id}`;
-    } else {
-      document.getElementById('status').textContent = 'Room introuvable ou déjà pleine';
+      document.getElementById('status').textContent = `Rejoint la room : ${id}`;
+    } else if (room.player2 === currentUser.key) {
+      listenToRoom();
+      document.getElementById('status').textContent = `Déjà dans la room : ${id}`;
     }
   });
 }
 
+// Écoute les changements dans la room
 function listenToRoom() {
   const ref = db.ref('rooms/' + roomId);
   ref.on('value', snapshot => {
     const data = snapshot.val();
     if (!data) return;
+
     if (data.player1 && data.player2) {
       document.getElementById('actions').style.display = 'block';
-      // Logique simplifiée, afficher PV etc.
       document.getElementById('status').textContent = `Joueurs : ${data.player1} vs ${data.player2}`;
+    } else {
+      document.getElementById('actions').style.display = 'none';
+      document.getElementById('status').textContent = 'En attente d\'un adversaire...';
     }
   });
 }
 
+// Jouer une action
 function play(action) {
   if (!roomId) return;
   const ref = db.ref('rooms/' + roomId + '/actions/' + currentUser.key);
