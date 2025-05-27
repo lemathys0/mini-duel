@@ -9,6 +9,7 @@ const firebaseConfig = {
   appId: "1:1084207708579:web:f1312b68b7eb08f9d44216"
 };
 
+// Initialiser Firebase (compat)
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -39,7 +40,6 @@ function showGame() {
 function signup() {
   const pseudo = document.getElementById('signup-pseudo').value.trim();
   const code = document.getElementById('signup-code').value.trim();
-
   const msg = document.getElementById('signup-msg');
   msg.textContent = '';
 
@@ -67,7 +67,6 @@ function signup() {
 function login() {
   const pseudo = document.getElementById('login-pseudo').value.trim();
   const code = document.getElementById('login-code').value.trim();
-
   const msg = document.getElementById('login-msg');
   msg.textContent = '';
 
