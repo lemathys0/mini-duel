@@ -18,7 +18,7 @@
       <p class="msg" id="signup-msg"></p>
       <p>
         Déjà un compte ? 
-        <a href="#" onclick="showLogin()">Connecte-toi ici</a>
+        <a href="#" onclick="showLogin(); return false;">Connecte-toi ici</a>
       </p>
     </div>
 
@@ -31,7 +31,7 @@
       <p class="msg" id="login-msg"></p>
       <p>
         Pas encore de compte ? 
-        <a href="#" onclick="showSignup()">Inscris-toi ici</a>
+        <a href="#" onclick="showSignup(); return false;">Inscris-toi ici</a>
       </p>
     </div>
 
@@ -52,10 +52,11 @@
 
   </div>
 
-  <!-- Firebase compat (version 9) -->
+  <!-- Firebase compat SDK (v9) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
+  <!-- Ton script JS avec tes fonctions signup, login etc. -->
   <script src="script.js"></script>
 </body>
 </html>
