@@ -1,36 +1,59 @@
 ﻿<!DOCTYPE html>
-<html lang='fr'>
+<html lang="fr">
 <head>
-  <meta charset='UTF-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-  <title>Mini Duel de Cartes</title>
-  <link rel='stylesheet' href='style.css'>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini Duel - Inscription / Connexion</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id='auth'>
-    <h1>Connexion</h1>
-    <input type='text' id='pseudo' placeholder='Pseudo'>
-    <input type='password' id='code' placeholder='Code (4 chiffres)' maxlength='4'>
-    <button onclick='login()'>Se connecter</button>
-    <p id='authMsg'></p>
-  </div>
+  <div id="container">
 
-  <div id='game' style='display:none;'>
-    <h2 id='welcome'></h2>
-    <button onclick='createRoom()'>Créer une partie</button>
-    <input id='roomInput' placeholder='Code de la room'>
-    <button onclick='joinRoom()'>Rejoindre</button>
-    <div id='status'></div>
-    <div id='actions' style='display:none;'>
-      <button onclick='play("Attaque")'>Attaque</button>
-      <button onclick='play("Défense")'>Défense</button>
-      <button onclick='play("Soin")'>Soin</button>
+    <!-- Inscription -->
+    <div id="signup-section">
+      <h2>Inscription</h2>
+      <input type="text" id="signup-pseudo" placeholder="Pseudo" />
+      <input type="password" id="signup-code" placeholder="Code à 4 chiffres" maxlength="4" />
+      <button onclick="signup()">S'inscrire</button>
+      <p class="msg" id="signup-msg"></p>
+      <p>
+        Déjà un compte ? 
+        <a href="#" onclick="showLogin()">Connecte-toi ici</a>
+      </p>
     </div>
-    <div id='resultat'></div>
+
+    <!-- Connexion -->
+    <div id="login-section" style="display:none;">
+      <h2>Connexion</h2>
+      <input type="text" id="login-pseudo" placeholder="Pseudo" />
+      <input type="password" id="login-code" placeholder="Code à 4 chiffres" maxlength="4" />
+      <button onclick="login()">Se connecter</button>
+      <p class="msg" id="login-msg"></p>
+      <p>
+        Pas encore de compte ? 
+        <a href="#" onclick="showSignup()">Inscris-toi ici</a>
+      </p>
+    </div>
+
+    <!-- Zone de jeu (visible après connexion) -->
+    <div id="game-section" style="display:none;">
+      <h2>Bienvenue <span id="user-name"></span> !</h2>
+      <button onclick="createRoom()">Créer une partie</button>
+      <input type="text" id="room-code" placeholder="Code de la room" maxlength="4" />
+      <button onclick="joinRoom()">Rejoindre une partie</button>
+      <div id="status"></div>
+      <div id="actions" style="display:none;">
+        <button onclick="play('Attaque')">Attaque</button>
+        <button onclick="play('Défense')">Défense</button>
+        <button onclick="play('Soin')">Soin</button>
+      </div>
+      <div id="result"></div>
+    </div>
+
   </div>
 
-  <script src='https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'></script>
-  <script src='https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js'></script>
-  <script src='script.js'></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
