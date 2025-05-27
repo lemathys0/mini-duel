@@ -1,122 +1,233 @@
-﻿/* Général */
-body {
-  font-family: Arial, sans-serif;
-  max-width: 600px;
-  margin: 30px auto;
-  padding: 0 15px;
-  background-color: #f9f9f9;
-  color: #222;
-}
-
-h1, h2 {
-  text-align: center;
-  color: #333;
-}
-
-input {
-  padding: 8px 10px;
-  margin: 5px 0;
-  width: 100%;
+﻿/* Reset simple */
+* {
   box-sizing: border-box;
-  font-size: 16px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  margin: 0;
+  padding: 0;
 }
 
-input#room-code {
-  text-transform: uppercase;
+body {
+  background: linear-gradient(135deg, #1e3c72, #2a5298);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #eee;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
 }
 
-button {
-  background-color: #007bff;
-  border: none;
-  color: white;
-  padding: 10px 20px;
-  margin: 8px 0;
-  font-size: 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-  display: inline-block;
+h1 {
+  font-size: 3rem;
+  text-align: center;
+  margin-bottom: 20px;
+  color: #ffd700;
+  text-shadow: 2px 2px 6px #0008;
+  user-select: none;
 }
 
-button:hover {
-  background-color: #0056b3;
+h2 {
+  margin-bottom: 15px;
+  color: #ffcc00;
+  text-shadow: 1px 1px 3px #0008;
 }
 
-/* Sections */
+/* Container sections */
 #signup-section,
 #login-section,
 #game-section,
 #combat-section {
-  background-color: white;
-  padding: 20px;
-  margin-bottom: 25px;
-  border-radius: 6px;
-  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+  padding: 25px 30px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 0 15px #ffd700aa;
+  margin-bottom: 30px;
+}
+
+/* Inputs */
+input {
+  width: 100%;
+  padding: 12px 15px;
+  margin-bottom: 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 1rem;
+  outline: none;
+  transition: box-shadow 0.3s ease;
+  background: #222c44;
+  color: #eee;
+  box-shadow: inset 0 0 6px #0009;
+}
+
+input:focus {
+  box-shadow: 0 0 8px #ffd700;
+  background: #2e3959;
+}
+
+/* Uppercase for room code input */
+input#room-code {
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* Buttons */
+button {
+  cursor: pointer;
+  background: linear-gradient(135deg, #ffcc00, #ffaa00);
+  border: none;
+  border-radius: 12px;
+  color: #222;
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 12px 25px;
+  margin-top: 10px;
+  width: 100%;
+  box-shadow: 0 5px 12px #b8860b99;
+  transition: background 0.4s ease, transform 0.2s ease;
+  user-select: none;
+}
+
+button:hover {
+  background: linear-gradient(135deg, #ffdd33, #ffbb00);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 15px #ffdd33cc;
+}
+
+button:active {
+  transform: translateY(1px);
+  box-shadow: 0 3px 8px #bb8800cc;
+}
+
+/* Quit button style */
+#combat-section button:last-child {
+  background: linear-gradient(135deg, #ff4e42, #d32f2f);
+  color: #fff;
+  margin-top: 25px;
+  box-shadow: 0 5px 12px #d32f2f99;
+}
+
+#combat-section button:last-child:hover {
+  background: linear-gradient(135deg, #ff665d, #f44336);
+  box-shadow: 0 8px 15px #ff665dcc;
+}
+
+/* Links */
+a {
+  color: #ffcc00;
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-block;
+  margin-top: 12px;
+  user-select: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: #fff;
+  text-decoration: underline;
 }
 
 /* Messages */
 #signup-msg,
 #login-msg {
-  color: red;
-  margin: 5px 0 0 0;
-}
-
-#status {
-  color: green;
-  margin-top: 10px;
-  min-height: 18px;
-}
-
-/* Combat */
-#pv-status div {
-  margin-bottom: 10px;
-  font-weight: bold;
-}
-
-#combat-status {
-  margin-top: 10px;
-  font-size: 18px;
+  color: #ff6b6b;
   font-weight: 600;
+  margin-bottom: 15px;
   min-height: 24px;
   text-align: center;
 }
 
-#combat-actions {
-  margin-top: 10px;
+/* Status */
+#status {
+  margin-top: 15px;
   text-align: center;
+  font-weight: 600;
+  color: #7fff00;
+  text-shadow: 0 0 5px #7fff0055;
+  min-height: 22px;
+}
+
+/* Combat section */
+
+#combat-section h2 {
+  text-align: center;
+  user-select: none;
+}
+
+#pv-status {
+  background: #333d59;
+  padding: 15px 20px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  box-shadow: inset 0 0 10px #000a;
+}
+
+#pv-status div {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+  color: #ffd700;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+}
+
+#combat-status {
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+  color: #ffd700;
+  text-shadow: 1px 1px 3px #000a;
+  min-height: 26px;
+  margin-bottom: 10px;
+  user-select: none;
+}
+
+#combat-actions {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 10px;
 }
 
 #combat-actions button {
-  margin: 0 8px;
-  min-width: 90px;
+  width: 30%;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0099ff, #005f99);
+  color: #fff;
+  box-shadow: 0 5px 10px #004080aa;
+  transition: background 0.3s ease;
+}
+
+#combat-actions button:hover {
+  background: linear-gradient(135deg, #33bbff, #0080cc);
+  box-shadow: 0 8px 15px #33bbffcc;
+}
+
+#combat-actions button:active {
+  transform: translateY(2px);
+  box-shadow: 0 3px 6px #006699cc;
 }
 
 #combat-result {
-  margin-top: 10px;
+  margin-top: 15px;
   font-style: italic;
+  font-size: 1rem;
+  color: #ffd;
   text-align: center;
-  min-height: 20px;
+  min-height: 24px;
+  user-select: none;
 }
 
-#combat-section button:last-child {
-  margin-top: 20px;
-  background-color: #dc3545;
-}
+/* Responsive */
 
-#combat-section button:last-child:hover {
-  background-color: #a71d2a;
-}
+@media (max-width: 480px) {
+  #combat-actions {
+    flex-direction: column;
+  }
 
-/* Links */
-a {
-  cursor: pointer;
-  color: #007bff;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-a:hover {
-  text-decoration: underline;
+  #combat-actions button {
+    width: 100%;
+    margin-bottom: 10px;
+  }
 }
