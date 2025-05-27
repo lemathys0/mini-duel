@@ -6,8 +6,67 @@
   <title>Mini Duel de Cartes</title>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-  <link rel="stylesheet" href="style.css" />
-  </head>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding-bottom: 60px; /* espace pour menu bas */
+      background: #f9f9f9;
+      color: #222;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    input {
+      padding: 8px;
+      margin: 5px 0;
+      width: 100%;
+      max-width: 250px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      font-size: 1em;
+    }
+    #bottom-tabs {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      display: flex;
+      background: #222;
+      color: white;
+      font-size: 1.2em;
+      justify-content: space-around;
+      padding: 8px 0;
+      z-index: 1000;
+    }
+    #bottom-tabs button {
+      background: none;
+      border: none;
+      color: white;
+      flex: 1;
+    }
+    #bottom-tabs button.active {
+      background: #444;
+      font-weight: bold;
+    }
+    #tab-content section {
+      padding: 10px 15px;
+      max-width: 600px;
+      margin: auto;
+    }
+    /* Responsive simple */
+    @media (max-width: 480px) {
+      button {
+        font-size: 1em;
+        padding: 12px;
+      }
+      input {
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
 <body>
 
 <h1>Mini Duel de Cartes</h1>
@@ -32,30 +91,26 @@
   <p><a href="#" onclick="showSignup()">Pas encore inscrit ? Inscription</a></p>
 </div>
 
-<!-- Interface du jeu -->
-<div id="game-section" style="display:none;">
-  <h2>Bienvenue, <span id="user-name"></span></h2>
-  <button onclick="createRoom()">Créer une room</button>
-  <input id="room-code" placeholder="Code de la room" maxlength="4" style="text-transform: uppercase;" />
-  <button onclick="joinRoom()">Rejoindre une room</button>
-  <p id="status" style="color:green;"></p>
-</div>
+<!-- Conteneur onglets -->
+<div id="tab-content" style="display:none;">
 
-<!-- Zone de combat -->
-<div id="combat-section" style="display:none;">
-  <h2>Combat entre <span id="player1-name"></span> et <span id="player2-name"></span></h2>
-  <div id="pv-status" style="margin-bottom:15px;">
-    <div><b><span id="player1-name-pv"></span> :</b> <span id="player1-pv">100</span> PV</div>
-    <div><b><span id="player2-name-pv"></span> :</b> <span id="player2-pv">100</span> PV</div>
-  </div>
-  <div id="combat-status">En attente que les deux joueurs jouent...</div>
-  <div id="combat-actions" style="margin-top:10px; display:none;">
-    <button onclick="play('Attaque')">Attaque</button>
-    <button onclick="play('Défense')">Défense</button>
-    <button onclick="play('Soin')">Soin</button>
-  </div>
-  <div id="combat-result" style="margin-top:10px; font-style: italic;"></div>
-  <button onclick="leaveRoom()" style="margin-top:20px;">Quitter la partie</button>
+  <section id="tab-game" style="display:block;">
+    <h2>🎮 Jeu</h2>
+    <p>Bienvenue dans la section Jeu, <span id="user-name"></span> !</p>
+    <button onclick="alert('🗡️ Attaque !')">🗡️ Attaquer</button>
+    <button onclick="alert('🛡️ Défendre !')">🛡️ Défendre</button>
+  </section>
+
+  <section id="tab-leaderboard" style="display:none;">
+    <h2>🏆 Classement</h2>
+    <p>Ici, tu verras les meilleurs joueurs !</p>
+  </section>
+
+  <section id="tab-friends" style="display:none;">
+    <h2>👥 Amis</h2>
+    <p>Ta liste d'amis sera ici.</p>
+  </section>
+
 </div>
 
 <script>
@@ -74,40 +129,26 @@
   const db = firebase.database();
 
   let currentUser = null;
-  let roomId = null;
-  let roomData = null;
-  let playerRole = null; // 'player1' ou 'player2'
-  let turn = null; // clé du joueur dont c'est le tour
 
   // Affichage des sections
   window.showSignup = function() {
     document.getElementById('signup-section').style.display = 'block';
     document.getElementById('login-section').style.display = 'none';
-    document.getElementById('game-section').style.display = 'none';
-    document.getElementById('combat-section').style.display = 'none';
+    document.getElementById('tab-content').style.display = 'none';
   };
 
   window.showLogin = function() {
     document.getElementById('signup-section').style.display = 'none';
     document.getElementById('login-section').style.display = 'block';
-    document.getElementById('game-section').style.display = 'none';
-    document.getElementById('combat-section').style.display = 'none';
+    document.getElementById('tab-content').style.display = 'none';
   };
 
-  window.showGame = function() {
+  window.showGameTabs = function() {
     document.getElementById('signup-section').style.display = 'none';
     document.getElementById('login-section').style.display = 'none';
-    document.getElementById('game-section').style.display = 'block';
-    document.getElementById('combat-section').style.display = 'none';
+    document.getElementById('tab-content').style.display = 'block';
     document.getElementById('user-name').textContent = currentUser.pseudo;
   };
-
-  function showCombat() {
-    document.getElementById('signup-section').style.display = 'none';
-    document.getElementById('login-section').style.display = 'none';
-    document.getElementById('game-section').style.display = 'none';
-    document.getElementById('combat-section').style.display = 'block';
-  }
 
   // Inscription
   window.signup = function() {
@@ -130,7 +171,7 @@
       } else {
         userRef.set({ pseudo, code, trophées: 100, pv: 100 }).then(() => {
           currentUser = { pseudo, code, trophées: 100, pv: 100, key };
-          window.showGame();
+          window.showGameTabs();
         });
       }
     });
@@ -155,217 +196,57 @@
       if (snapshot.exists()) {
         currentUser = snapshot.val();
         currentUser.key = key;
-        window.showGame();
+        window.showGameTabs();
       } else {
         msg.textContent = "Compte non trouvé, inscris-toi d'abord";
       }
     });
   };
 
-  // Création de la room
-  window.createRoom = function() {
-    const id = Math.random().toString(36).substring(2, 6).toUpperCase();
-    roomId = id;
-    const ref = db.ref('rooms/' + id);
-    ref.set({
-      player1: currentUser.key,
-      player2: null,
-      pv: { [currentUser.key]: 100 },
-      actions: {},
-      turn: currentUser.key,
-      winner: null
-    });
-    playerRole = 'player1';
-    listenToRoom();
-    document.getElementById('status').textContent = `Room créée : ${id}`;
+  // Onglets menu bas
+  const tabs = document.querySelectorAll('#bottom-tabs button');
+  const sections = {
+    game: document.getElementById('tab-game'),
+    leaderboard: document.getElementById('tab-leaderboard'),
+    friends: document.getElementById('tab-friends'),
   };
 
-  // Rejoindre une room
-  window.joinRoom = function() {
-    const id = document.getElementById('room-code').value.trim().toUpperCase();
-    if (!id) return;
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Retire active de tous
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
 
-    roomId = id;
-    const ref = db.ref('rooms/' + id);
-
-    ref.once('value').then(snapshot => {
-      if (!snapshot.exists()) {
-        document.getElementById('status').textContent = 'Room introuvable';
-        return;
-      }
-      const room = snapshot.val();
-      if (room.player2 && room.player2 !== currentUser.key) {
-        document.getElementById('status').textContent = 'Room pleine';
-        return;
-      }
-      if (!room.player2) {
-        ref.update({ player2: currentUser.key, ['pv/' + currentUser.key]: 100 });
-        playerRole = 'player2';
-        listenToRoom();
-        document.getElementById('status').textContent = `Rejoint la room : ${id}`;
-      } else if (room.player2 === currentUser.key) {
-        playerRole = 'player2';
-        listenToRoom();
-        document.getElementById('status').textContent = `Déjà dans la room : ${id}`;
+      // Affiche la bonne section
+      const tab = btn.getAttribute('data-tab');
+      for (const key in sections) {
+        sections[key].style.display = (key === tab) ? 'block' : 'none';
       }
     });
-  };
+  });
+</script>
 
-  // Écoute les changements dans la room + logique combat
-  function listenToRoom() {
-    const ref = db.ref('rooms/' + roomId);
-    ref.on('value', snapshot => {
-      roomData = snapshot.val();
-      if (!roomData) return;
+<!-- Menu onglets bas -->
+<div id="bottom-tabs" style="display:none;">
+  <button class="tab-btn active" data-tab="game">🎮 Jeu</button>
+  <button class="tab-btn" data-tab="leaderboard">🏆 Classement</button>
+  <button class="tab-btn" data-tab="friends">👥 Amis</button>
+</div>
 
-      // Si les deux joueurs sont là, afficher le combat
-      if (roomData.player1 && roomData.player2) {
-        showCombat();
-
-        // Affiche noms et PV
-        getUserPseudo(roomData.player1).then(name1 => {
-          document.getElementById('player1-name').textContent = name1;
-          document.getElementById('player1-name-pv').textContent = name1;
-        });
-        getUserPseudo(roomData.player2).then(name2 => {
-          document.getElementById('player2-name').textContent = name2;
-          document.getElementById('player2-name-pv').textContent = name2;
-        });
-
-        // Affiche PV
-        document.getElementById('player1-pv').textContent = roomData.pv[roomData.player1];
-        document.getElementById('player2-pv').textContent = roomData.pv[roomData.player2];
-
-        // Affiche tour actuel
-        turn = roomData.turn;
-        const combatStatus = document.getElementById('combat-status');
-
-        if (roomData.winner) {
-          const winnerName = (roomData.winner === currentUser.key) ? 'Tu as gagné 🎉' : 'Tu as perdu 😞';
-          combatStatus.textContent = `Partie terminée : ${winnerName}`;
-          document.getElementById('combat-actions').style.display = 'none';
-          return;
-        }
-
-        if (turn === currentUser.key) {
-          combatStatus.textContent = 'À ton tour de jouer';
-          document.getElementById('combat-actions').style.display = 'block';
-        } else {
-          combatStatus.textContent = 'En attente du tour de l\'adversaire...';
-          document.getElementById('combat-actions').style.display = 'none';
-        }
-
-        // Si les 2 joueurs ont joué leurs actions, calcule le résultat
-        if (roomData.actions[roomData.player1] && roomData.actions[roomData.player2]) {
-          processActions(roomData);
-        }
-      } else {
-        document.getElementById('combat-section').style.display = 'none';
-        document.getElementById('status').textContent = 'En attente d\'un adversaire...';
-      }
-    });
+<script>
+  // Affiche le menu onglets bas seulement quand connecté
+  function toggleBottomTabs(show) {
+    document.getElementById('bottom-tabs').style.display = show ? 'flex' : 'none';
   }
 
-  function getUserPseudo(userKey) {
-    return db.ref('users/' + userKey).once('value').then(snap => {
-      if (snap.exists()) return snap.val().pseudo;
-      else return userKey;
-    });
-  }
-
-  // Traite les actions des deux joueurs
-  function processActions(room) {
-    const p1 = room.player1;
-    const p2 = room.player2;
-    const a1 = room.actions[p1];
-    const a2 = room.actions[p2];
-    let pv = {...room.pv}; // copie des PV
-
-    // Calcul des effets
-    // Attaque = 20 dégâts
-    // Défense réduit dégâts reçus de 10
-    // Soin restaure 15 PV (max 100)
-    const damageBase = 20;
-    const defenseValue = 10;
-    const healValue = 15;
-
-    let dmgToP1 = 0;
-    let dmgToP2 = 0;
-
-    // P1 attaque p2
-    if (a1 === 'Attaque') {
-      if (a2 === 'Défense') dmgToP2 = Math.max(0, damageBase - defenseValue);
-      else dmgToP2 = damageBase;
-    } else if (a1 === 'Soin') {
-      pv[p1] = Math.min(100, pv[p1] + healValue);
-    }
-
-    // P2 attaque p1
-    if (a2 === 'Attaque') {
-      if (a1 === 'Défense') dmgToP1 = Math.max(0, damageBase - defenseValue);
-      else dmgToP1 = damageBase;
-    } else if (a2 === 'Soin') {
-      pv[p2] = Math.min(100, pv[p2] + healValue);
-    }
-
-    // Applique dégâts
-    pv[p1] = Math.max(0, pv[p1] - dmgToP1);
-    pv[p2] = Math.max(0, pv[p2] - dmgToP2);
-
-    // Mets à jour BDD
-    const updates = {
-      pv,
-      actions: {},
-      turn: (room.turn === p1) ? p2 : p1
-    };
-
-    // Vérifie fin de partie
-    if (pv[p1] === 0) updates.winner = p2;
-    else if (pv[p2] === 0) updates.winner = p1;
-
-    db.ref('rooms/' + roomId).update(updates);
-
-    // Affiche résultat texte
-    const res = [];
-
-    res.push(`Toi: ${a1}`);
-    res.push(`Adversaire: ${a2}`);
-
-    document.getElementById('combat-result').textContent = res.join(' | ');
-  }
-
-  // Jouer une action
-  window.play = function(action) {
-    if (!roomId || !roomData) return;
-    if (roomData.turn !== currentUser.key) {
-      alert("Ce n'est pas ton tour !");
-      return;
-    }
-    if (roomData.actions[currentUser.key]) {
-      alert("Tu as déjà joué ce tour !");
-      return;
-    }
-    db.ref('rooms/' + roomId + '/actions/' + currentUser.key).set(action);
+  // Mets à jour la visibilité du menu onglets à la connexion/inscription
+  const originalShowGameTabs = window.showGameTabs;
+  window.showGameTabs = function() {
+    originalShowGameTabs();
+    toggleBottomTabs(true);
   };
 
-  // Quitter la room
-  window.leaveRoom = function() {
-    if (!roomId) return;
-
-    roomId = null;
-    roomData = null;
-    playerRole = null;
-    turn = null;
-
-    db.ref('rooms').off();
-
-    showGame();
-    document.getElementById('status').textContent = 'Tu as quitté la partie.';
-    document.getElementById('combat-result').textContent = '';
-    document.getElementById('combat-actions').style.display = 'none';
-  };
-
-  // Page d'inscription au démarrage
+  // Au démarrage, afficher inscription
   window.showSignup();
 </script>
 
