@@ -1,50 +1,122 @@
-﻿body {
+﻿/* Général */
+body {
   font-family: Arial, sans-serif;
-  margin: 20px;
+  max-width: 600px;
+  margin: 30px auto;
+  padding: 0 15px;
+  background-color: #f9f9f9;
+  color: #222;
 }
 
+h1, h2 {
+  text-align: center;
+  color: #333;
+}
+
+input {
+  padding: 8px 10px;
+  margin: 5px 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+input#room-code {
+  text-transform: uppercase;
+}
+
+button {
+  background-color: #007bff;
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  margin: 8px 0;
+  font-size: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: inline-block;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+/* Sections */
 #signup-section,
 #login-section,
 #game-section,
 #combat-section {
-  border: 1px solid #ccc;
+  background-color: white;
   padding: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 25px;
   border-radius: 6px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
 }
 
-button {
-  margin: 5px;
-  padding: 10px 20px;
-  cursor: pointer;
-}
-
-#combat-actions button {
-  width: 100px;
-}
-
-#status,
-#signup-msg,
-#login-msg,
-#combat-status,
-#combat-result {
-  margin-top: 10px;
-  font-weight: bold;
-}
-
+/* Messages */
 #signup-msg,
 #login-msg {
   color: red;
+  margin: 5px 0 0 0;
 }
 
 #status {
   color: green;
+  margin-top: 10px;
+  min-height: 18px;
 }
 
-#pv-status {
-  margin-bottom: 15px;
+/* Combat */
+#pv-status div {
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+#combat-status {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  min-height: 24px;
+  text-align: center;
+}
+
+#combat-actions {
+  margin-top: 10px;
+  text-align: center;
+}
+
+#combat-actions button {
+  margin: 0 8px;
+  min-width: 90px;
 }
 
 #combat-result {
+  margin-top: 10px;
   font-style: italic;
+  text-align: center;
+  min-height: 20px;
+}
+
+#combat-section button:last-child {
+  margin-top: 20px;
+  background-color: #dc3545;
+}
+
+#combat-section button:last-child:hover {
+  background-color: #a71d2a;
+}
+
+/* Links */
+a {
+  cursor: pointer;
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+a:hover {
+  text-decoration: underline;
 }
