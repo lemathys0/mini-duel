@@ -211,19 +211,29 @@ function startMatch(id, isCreator) {
     document.getElementById("opponent-pv").textContent = opponent.pv;
 
     // Gestion tour
-    if (data.turn !== youKey) {
-      disableActionButtons(true);
-      if (!hasPlayedThisTurn)
-        document.getElementById("action-msg").textContent = "Tour de l'adversaire, patience...";
-    } else {
-      if (!hasPlayedThisTurn) {
-        disableActionButtons(false);
-        document.getElementById("action-msg").textContent = "C'est ton tour, choisis une action.";
-      } else {
-        disableActionButtons(true);
-        document.getElementById("action-msg").textContent = "Action jouée, en attente du tour suivant...";
-      }
+    if (data.turn === youKey) {
+  if (!hasPlayedThisTurn) {
+    disableActionButtons(false);
+    document.getElementById("action-msg").textContent = "C'est ton tour, choisis une action.";
+    
+    // Lancer le timer seulement si ce n'est pas déjà fait
+    if (!timerInterval) {
+      startTimer();
     }
+  } else {
+    disableActionButtons(true);
+    document.getElementById("action-msg").textContent = "Action jouée, en attente du tour suivant...";
+  }
+} else {
+  disableActionButtons(true);
+  if (!hasPlayedThisTurn)
+    document.getElementById("action-msg").textContent = "Tour de l'adversaire, patience...";
+
+  // On s'assure d'arrêter le timer si ce n'est pas notre tour
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
 
     // Historique
     const histEl = document.getElementById("history");
@@ -369,10 +379,9 @@ function resetTimer() {
   clearInterval(timerInterval);
   timerCount = timerMax;
   updateTimerUI(timerCount);
-  if (!hasPlayedThisTurn) {
-    startTimer();
-  }
+  timerInterval = null;
 }
+
 
 function updateTimerUI(seconds) {
   document.getElementById("timer").textContent = seconds + "s";
