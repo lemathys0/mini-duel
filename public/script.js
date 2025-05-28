@@ -21,18 +21,18 @@ const db = getDatabase(app);
 let currentUser = null;
 let currentMatch = null;
 let opponent = null;
-let hasPlayedThisTurn = false; // Bloque action multiple par tour
+let hasPlayedThisTurn = false;
 let timerInterval = null;
 let timerSeconds = 30;
 
-// Helper to get input values
+// Helper pour récupérer les inputs
 function getInput(id) {
   const elem = document.getElementById(id);
   return elem ? elem.value.trim() : "";
 }
 
 // SIGNUP
-export function signup() {
+function signup() {
   const pseudo = getInput('pseudo');
   const code = getInput('code');
   const msg = document.getElementById('auth-msg');
@@ -57,7 +57,7 @@ export function signup() {
 }
 
 // LOGIN
-export function login() {
+function login() {
   const pseudo = getInput('pseudo');
   const code = getInput('code');
   const msg = document.getElementById('auth-msg');
@@ -79,7 +79,7 @@ export function login() {
 }
 
 // CREATE MATCH
-export function createMatch() {
+function createMatch() {
   const matchID = getInput('match-id');
   if (!matchID) return;
 
@@ -99,7 +99,7 @@ export function createMatch() {
 }
 
 // JOIN MATCH
-export function joinMatch() {
+function joinMatch() {
   const matchID = getInput('match-id');
   if (!matchID) return;
 
@@ -130,7 +130,7 @@ function startMatch(id, isCreator) {
   document.getElementById("game").style.display = "block";
   document.getElementById("current-match").textContent = id;
   document.getElementById("you-name").textContent = currentUser.pseudo;
-  document.getElementById("history").innerHTML = ""; // reset historique
+  document.getElementById("history").innerHTML = "";
 
   hasPlayedThisTurn = false;
   disableActionButtons(false);
@@ -140,7 +140,6 @@ function startMatch(id, isCreator) {
     const data = snapshot.val();
     if (!data) return;
 
-    // Timer démarre seulement quand les 2 joueurs sont présents
     if (data.joueur1 && data.joueur2) {
       if (!timerInterval) startTimer();
     } else {
@@ -157,7 +156,6 @@ function startMatch(id, isCreator) {
     document.getElementById("opponent-pv").textContent = data[opp + "_pv"];
     document.getElementById("opponent-name").textContent = opponent || "(en attente)";
 
-    // Résolution si les deux ont joué et tour en attente
     if (data[you + "_action"] && data[opp + "_action"] && data.turn_result === "waiting") {
       resolveTurn(data, you, opp, matchRef);
     }
@@ -197,7 +195,7 @@ function autoPlayIfNeeded() {
     const me = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
     if (!data[me + "_action"]) {
       let updates = {};
-      updates[me + "_action"] = "defend"; // action par défaut
+      updates[me + "_action"] = "defend";
       update(matchRef, updates);
       document.getElementById("action-msg").textContent = "Action automatique : Défendre";
       hasPlayedThisTurn = true;
@@ -210,8 +208,7 @@ function autoPlayIfNeeded() {
 function resolveTurn(data, you, opp, matchRef) {
   hasPlayedThisTurn = true;
   disableActionButtons(true);
-
-  clearInterval(timerInterval); // stop timer
+  clearInterval(timerInterval);
   timerInterval = null;
 
   const actionYou = data[you + "_action"];
@@ -226,12 +223,12 @@ function resolveTurn(data, you, opp, matchRef) {
     pvOpp = Math.max(0, pvOpp - 10);
     actionMsg = "Vous vous êtes tous les deux attaqués !";
   } else if (actionYou === "attack" && actionOpp === "defend") {
-    actionMsg = "Tu as attaqué, ton adversaire s'est défendu, pas de dégâts.";
+    actionMsg = "Tu as attaqué, ton adversaire s'est défendu.";
   } else if (actionYou === "defend" && actionOpp === "attack") {
     pvYou = Math.max(0, pvYou - 10);
     actionMsg = "Tu as défendu, mais ton adversaire t'a attaqué ! Tu perds 10 PV.";
   } else if (actionYou === "defend" && actionOpp === "defend") {
-    actionMsg = "Vous vous êtes tous les deux défendus, rien ne se passe.";
+    actionMsg = "Vous vous êtes tous les deux défendus.";
   }
 
   if (actionYou === "heal") {
@@ -278,34 +275,27 @@ function resetTurn(matchRef) {
   });
 }
 
-// Ajouter message dans historique
 function addHistoryMessage(message) {
   const historyDiv = document.getElementById("history");
   const p = document.createElement("p");
   p.textContent = message;
-  historyDiv.prepend(p); // ajoute en haut
+  historyDiv.prepend(p);
 }
 
-// ACTIONS
-export function attack() {
+function attack() {
   applyAction("attack");
 }
-
-export function defend() {
+function defend() {
   applyAction("defend");
 }
-
-export function heal() {
+function heal() {
   applyAction("heal");
 }
 
 function applyAction(type) {
-  if (hasPlayedThisTurn) return;
-
-  if (!currentMatch) return;
+  if (hasPlayedThisTurn || !currentMatch) return;
 
   const matchRef = ref(db, `matches/${currentMatch}`);
-
   get(matchRef).then(snapshot => {
     const data = snapshot.val();
     if (!data) return;
@@ -325,18 +315,19 @@ function applyAction(type) {
   });
 }
 
-// Désactiver ou activer les boutons d'action
 function disableActionButtons(disabled) {
   document.getElementById("attack-btn").disabled = disabled;
   document.getElementById("defend-btn").disabled = disabled;
   document.getElementById("heal-btn").disabled = disabled;
 }
 
-// Expose functions globally for HTML onclick
-window.signup = signup;
-window.login = login;
-window.createMatch = createMatch;
-window.joinMatch = joinMatch;
-window.attack = attack;
-window.defend = defend;
-window.heal = heal;
+// === Ajouter les listeners ===
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('signup-btn').addEventListener('click', signup);
+  document.getElementById('login-btn').addEventListener('click', login);
+  document.getElementById('create-match-btn').addEventListener('click', createMatch);
+  document.getElementById('join-match-btn').addEventListener('click', joinMatch);
+  document.getElementById('attack-btn').addEventListener('click', attack);
+  document.getElementById('defend-btn').addEventListener('click', defend);
+  document.getElementById('heal-btn').addEventListener('click', heal);
+});
