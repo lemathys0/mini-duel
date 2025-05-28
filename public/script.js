@@ -27,7 +27,8 @@ let timerSeconds = 30;
 
 // Helper to get input values
 function getInput(id) {
-  return document.getElementById(id).value.trim();
+  const elem = document.getElementById(id);
+  return elem ? elem.value.trim() : "";
 }
 
 // SIGNUP
@@ -141,9 +142,10 @@ function startMatch(id, isCreator) {
 
     // Timer démarre seulement quand les 2 joueurs sont présents
     if (data.joueur1 && data.joueur2) {
-      startTimer();
+      if (!timerInterval) startTimer();
     } else {
       clearInterval(timerInterval);
+      timerInterval = null;
       document.getElementById('timer').textContent = "--";
     }
 
@@ -178,6 +180,7 @@ function startTimer() {
 
     if (timerSeconds <= 0) {
       clearInterval(timerInterval);
+      timerInterval = null;
       autoPlayIfNeeded();
     }
   }, 1000);
@@ -209,6 +212,7 @@ function resolveTurn(data, you, opp, matchRef) {
   disableActionButtons(true);
 
   clearInterval(timerInterval); // stop timer
+  timerInterval = null;
 
   const actionYou = data[you + "_action"];
   const actionOpp = data[opp + "_action"];
@@ -230,7 +234,6 @@ function resolveTurn(data, you, opp, matchRef) {
     actionMsg = "Vous vous êtes tous les deux défendus, rien ne se passe.";
   }
 
-  // TODO: gérer le heal si tu veux
   if (actionYou === "heal") {
     pvYou = Math.min(100, pvYou + 10);
     actionMsg += " Tu t'es soigné (+10 PV).";
@@ -254,6 +257,7 @@ function resolveTurn(data, you, opp, matchRef) {
       disableActionButtons(true);
       hasPlayedThisTurn = true;
       clearInterval(timerInterval);
+      timerInterval = null;
       document.getElementById('timer').textContent = "--";
     }
   });
@@ -298,6 +302,8 @@ export function heal() {
 function applyAction(type) {
   if (hasPlayedThisTurn) return;
 
+  if (!currentMatch) return;
+
   const matchRef = ref(db, `matches/${currentMatch}`);
 
   get(matchRef).then(snapshot => {
@@ -326,7 +332,7 @@ function disableActionButtons(disabled) {
   document.getElementById("heal-btn").disabled = disabled;
 }
 
-// Exports pour HTML buttons
+// Expose functions globally for HTML onclick
 window.signup = signup;
 window.login = login;
 window.createMatch = createMatch;
