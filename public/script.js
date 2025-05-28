@@ -417,3 +417,26 @@ function autoPassTurn() {
     document.getElementById("action-msg").textContent = "Temps écoulé, tour passé automatiquement.";
   });
 }
+
+
+
+
+document.getElementById("back-to-menu-btn").onclick = () => {
+  if (currentMatch) {
+    // Optionnel : retirer le joueur du match ou supprimer le match
+    // Exemple : remove(ref(db, `matches/${currentMatch}`)); si tu veux tout supprimer
+
+    currentMatch = null;
+  }
+
+  clearInterval(timerInterval);
+  timerInterval = null;
+  hasPlayedThisTurn = false;
+
+  // Réinitialiser l'interface
+  document.getElementById("game").style.display = "none";
+  document.getElementById("match").style.display = "block";
+  document.getElementById("match-id").value = "";
+  document.getElementById("match-msg").textContent = "";
+};
+
