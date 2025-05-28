@@ -17,6 +17,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+const db = getDatabase(app);
 // --- VARIABLES GLOBALES ---
 let currentUser = null; // { pseudo, code }
 let currentMatch = null;
