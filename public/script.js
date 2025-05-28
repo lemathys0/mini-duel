@@ -358,15 +358,21 @@ function doAction(action) {
 // --- TIMER ---
 
 function startTimer() {
-  resetTimer();
+  resetTimer(); // fait déjà tout !
+}
 
+
+function resetTimer() {
+  clearInterval(timerInterval);
+  timerCount = timerMax;
+  updateTimerUI(timerCount);
   timerInterval = setInterval(() => {
     timerCount--;
     updateTimerUI(timerCount);
 
     if (timerCount <= 0) {
       clearInterval(timerInterval);
-      // Si joueur n'a pas joué, forcer passage de tour (optionnel)
+      timerInterval = null;
       if (!hasPlayedThisTurn) {
         autoPassTurn();
       }
@@ -374,12 +380,6 @@ function startTimer() {
   }, 1000);
 }
 
-function resetTimer() {
-  clearInterval(timerInterval);
-  timerCount = timerMax;
-  updateTimerUI(timerCount);
-  timerInterval = null;
-}
 
 
 function updateTimerUI(seconds) {
