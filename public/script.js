@@ -1,118 +1,163 @@
-﻿// Import Firebase v9 modules
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-import { getDatabase, ref, get, set, update, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+﻿// Import Firebase (adapter selon ta config)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, update, push, child, remove } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 
+// --- CONFIGURATION FIREBASE ---
 const firebaseConfig = {
-  apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
-  authDomain: "mini-duel-de-cartes.firebaseapp.com",
-  databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
-  projectId: "mini-duel-de-cartes",
-  storageBucket: "mini-duel-de-cartes.appspot.com",
-  messagingSenderId: "1084207708579",
-  appId: "1:1084207708579:web:f1312b68b7eb08f9d44216",
-  measurementId: "G-7YW3J41XZF"
+  apiKey: "TA_CLE_API",
+  authDomain: "tonprojet.firebaseapp.com",
+  databaseURL: "https://tonprojet-default-rtdb.firebaseio.com",
+  projectId: "tonprojet",
+  storageBucket: "tonprojet.appspot.com",
+  messagingSenderId: "TON_ID",
+  appId: "TON_APP_ID"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-let currentUser = null;
+// --- VARIABLES GLOBALES ---
+let currentUser = null; // { pseudo, code }
 let currentMatch = null;
-let opponent = null;
 let hasPlayedThisTurn = false;
 let timerInterval = null;
-let timerSeconds = 30;
+let timerMax = 30; // secondes
+let timerCount = timerMax;
 
-function getInput(id) {
-  const elem = document.getElementById(id);
-  return elem ? elem.value.trim() : "";
+// --- FONCTIONS UTILITAIRES ---
+
+function showMessage(id, message, success = false) {
+  const el = document.getElementById(id);
+  el.style.color = success ? "#00ff88" : "#ff4d6d";
+  el.textContent = message;
 }
 
-function signup() {
-  const pseudo = getInput('pseudo');
-  const code = getInput('code');
-  const msg = document.getElementById('auth-msg');
+function disableActionButtons(disabled) {
+  document.getElementById("attack-btn").disabled = disabled;
+  document.getElementById("defend-btn").disabled = disabled;
+  document.getElementById("heal-btn").disabled = disabled;
+}
 
-  if (!pseudo || code.length !== 4) {
-    msg.textContent = "Remplis correctement les champs";
+// --- AUTHENTIFICATION (simplifiée, sans sécurité réelle) ---
+
+document.getElementById("signup-btn").onclick = () => {
+  const pseudo = document.getElementById("pseudo").value.trim();
+  const code = document.getElementById("code").value.trim();
+
+  if (pseudo.length < 2) {
+    showMessage("auth-msg", "Pseudo trop court");
+    return;
+  }
+  if (!/^\d{4}$/.test(code)) {
+    showMessage("auth-msg", "Code doit faire 4 chiffres");
     return;
   }
 
-  const userKey = `${pseudo}_${code}`;
-  const userRef = ref(db, `users/${userKey}`);
-
+  const userRef = ref(db, `users/${pseudo}`);
   get(userRef).then(snapshot => {
     if (snapshot.exists()) {
-      msg.textContent = "Ce compte existe déjà.";
+      showMessage("auth-msg", "Pseudo déjà pris");
     } else {
-      set(userRef, { pseudo, code }).then(() => {
-        login();
+      // Créer utilisateur
+      set(userRef, { code, wins: 0, losses: 0 })
+        .then(() => {
+          showMessage("auth-msg", "Inscription réussie", true);
+          currentUser = { pseudo, code };
+          afterLogin();
+        });
+    }
+  });
+};
+
+document.getElementById("login-btn").onclick = () => {
+  const pseudo = document.getElementById("pseudo").value.trim();
+  const code = document.getElementById("code").value.trim();
+
+  const userRef = ref(db, `users/${pseudo}`);
+  get(userRef).then(snapshot => {
+    if (!snapshot.exists()) {
+      showMessage("auth-msg", "Pseudo inconnu");
+    } else {
+      const data = snapshot.val();
+      if (data.code === code) {
+        showMessage("auth-msg", "Connexion réussie", true);
+        currentUser = { pseudo, code };
+        afterLogin();
+      } else {
+        showMessage("auth-msg", "Code incorrect");
+      }
+    }
+  });
+};
+
+function afterLogin() {
+  document.getElementById("auth").style.display = "none";
+  document.getElementById("match").style.display = "block";
+  document.getElementById("player-name").textContent = currentUser.pseudo;
+  showMessage("auth-msg", "");
+}
+
+// --- MATCH ---
+
+document.getElementById("create-match-btn").onclick = () => {
+  const matchId = document.getElementById("match-id").value.trim();
+  if (!matchId) {
+    showMessage("match-msg", "Indique un code de match");
+    return;
+  }
+
+  const matchRef = ref(db, `matches/${matchId}`);
+  get(matchRef).then(snapshot => {
+    if (snapshot.exists()) {
+      showMessage("match-msg", "Match déjà existant");
+    } else {
+      // Créer match avec currentUser comme joueur 1
+      set(matchRef, {
+        players: {
+          p1: { pseudo: currentUser.pseudo, pv: 100, defending: false },
+          p2: null
+        },
+        turn: "p1",
+        actions: {},
+        history: []
+      }).then(() => {
+        showMessage("match-msg", "Match créé, en attente adversaire...", true);
+        startMatch(matchId, true);
       });
     }
   });
-}
+};
 
-function login() {
-  const pseudo = getInput('pseudo');
-  const code = getInput('code');
-  const msg = document.getElementById('auth-msg');
+document.getElementById("join-match-btn").onclick = () => {
+  const matchId = document.getElementById("match-id").value.trim();
+  if (!matchId) {
+    showMessage("match-msg", "Indique un code de match");
+    return;
+  }
 
-  const userKey = `${pseudo}_${code}`;
-  const userRef = ref(db, `users/${userKey}`);
-
-  get(userRef).then(snapshot => {
-    if (snapshot.exists()) {
-      currentUser = { pseudo, code, key: userKey };
-      document.getElementById("auth").style.display = "none";
-      document.getElementById("match").style.display = "block";
-      document.getElementById("player-name").textContent = pseudo;
-      msg.textContent = "";
-    } else {
-      msg.textContent = "Compte introuvable.";
-    }
-  });
-}
-
-function createMatch() {
-  const matchID = getInput('match-id');
-  if (!matchID) return;
-
-  const matchRef = ref(db, `matches/${matchID}`);
-
-  set(matchRef, {
-    joueur1: currentUser.pseudo,
-    joueur2: "",
-    joueur1_pv: 100,
-    joueur2_pv: 100,
-    joueur1_action: null,
-    joueur2_action: null,
-    turn_result: "waiting"
-  }).then(() => {
-    startMatch(matchID, true);
-  });
-}
-
-function joinMatch() {
-  const matchID = getInput('match-id');
-  if (!matchID) return;
-
-  const matchRef = ref(db, `matches/${matchID}`);
-
+  const matchRef = ref(db, `matches/${matchId}`);
   get(matchRef).then(snapshot => {
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      if (data.joueur2 === "") {
-        update(matchRef, { joueur2: currentUser.pseudo }).then(() => {
-          startMatch(matchID, false);
-        });
-      } else {
-        alert("Match plein.");
-      }
-    } else {
-      alert("Match introuvable.");
+    if (!snapshot.exists()) {
+      showMessage("match-msg", "Match inexistant");
+      return;
     }
+
+    const match = snapshot.val();
+    if (match.players.p2) {
+      showMessage("match-msg", "Match complet");
+      return;
+    }
+
+    // Ajouter currentUser en p2
+    update(matchRef.child("players"), {
+      p2: { pseudo: currentUser.pseudo, pv: 100, defending: false }
+    }).then(() => {
+      showMessage("match-msg", "Rejoint le match !", true);
+      startMatch(matchId, false);
+    });
   });
-}
+};
+
+// --- DÉBUT DU MATCH ---
 
 function startMatch(id, isCreator) {
   currentMatch = id;
@@ -128,167 +173,235 @@ function startMatch(id, isCreator) {
   disableActionButtons(false);
   document.getElementById("action-msg").textContent = "";
 
+  startTimer();
+
   onValue(matchRef, (snapshot) => {
     const data = snapshot.val();
     if (!data) return;
 
-    const you = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
-    const opp = you === "joueur1" ? "joueur2" : "joueur1";
-    opponent = data[opp];
+    // Trouver joueur et adversaire
+    const p1 = data.players.p1;
+    const p2 = data.players.p2;
 
-    document.getElementById("you-pv").textContent = data[you + "_pv"];
-    document.getElementById("opponent-pv").textContent = data[opp + "_pv"];
-    document.getElementById("opponent-name").textContent = opponent || "(en attente)";
-
-    if (data[you + "_action"] && data[opp + "_action"] && data.turn_result === "waiting") {
-      resolveTurn(data, you, opp, matchRef);
+    if (!p1 || !p2) {
+      document.getElementById("action-msg").textContent = "En attente de l'adversaire...";
+      return;
     }
 
-    if (data.turn_result === "done") {
-      resetTurn(matchRef);
+    let you, opponent, youKey, opponentKey;
+    if (p1.pseudo === currentUser.pseudo) {
+      you = p1; youKey = "p1";
+      opponent = p2; opponentKey = "p2";
+    } else if (p2.pseudo === currentUser.pseudo) {
+      you = p2; youKey = "p2";
+      opponent = p1; opponentKey = "p1";
+    } else {
+      // Spectateur non géré
+      document.getElementById("action-msg").textContent = "Tu n'es pas dans ce match.";
+      disableActionButtons(true);
+      return;
+    }
+
+    // Afficher PV
+    document.getElementById("you-pv").textContent = you.pv;
+    document.getElementById("opponent-name").textContent = opponent.pseudo;
+    document.getElementById("opponent-pv").textContent = opponent.pv;
+
+    // Gestion tour
+    if (data.turn !== youKey) {
+      disableActionButtons(true);
+      if (!hasPlayedThisTurn)
+        document.getElementById("action-msg").textContent = "Tour de l'adversaire, patience...";
+    } else {
+      if (!hasPlayedThisTurn) {
+        disableActionButtons(false);
+        document.getElementById("action-msg").textContent = "C'est ton tour, choisis une action.";
+      } else {
+        disableActionButtons(true);
+        document.getElementById("action-msg").textContent = "Action jouée, en attente du tour suivant...";
+      }
+    }
+
+    // Historique
+    const histEl = document.getElementById("history");
+    histEl.innerHTML = "";
+    (data.history || []).forEach(entry => {
+      const p = document.createElement("p");
+      p.textContent = entry;
+      histEl.appendChild(p);
+    });
+
+    // Fin de partie
+    if (you.pv <= 0 || opponent.pv <= 0) {
+      disableActionButtons(true);
+      clearInterval(timerInterval);
+      if (you.pv <= 0 && opponent.pv <= 0) {
+        document.getElementById("action-msg").textContent = "Match nul !";
+      } else if (you.pv <= 0) {
+        document.getElementById("action-msg").textContent = "Tu as perdu...";
+      } else {
+        document.getElementById("action-msg").textContent = "Tu as gagné !";
+      }
     }
   });
 }
 
+// --- ACTIONS ---
+
+document.getElementById("attack-btn").onclick = () => doAction("attack");
+document.getElementById("defend-btn").onclick = () => doAction("defend");
+document.getElementById("heal-btn").onclick = () => doAction("heal");
+
+function doAction(action) {
+  if (hasPlayedThisTurn) return;
+
+  const matchRef = ref(db, `matches/${currentMatch}`);
+
+  get(matchRef).then(snapshot => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    let youKey = null;
+    if (data.players.p1.pseudo === currentUser.pseudo) youKey = "p1";
+    else if (data.players.p2 && data.players.p2.pseudo === currentUser.pseudo) youKey = "p2";
+
+    if (!youKey || data.turn !== youKey) {
+      showMessage("action-msg", "Ce n'est pas ton tour");
+      return;
+    }
+
+    // Appliquer action
+    const opponentKey = youKey === "p1" ? "p2" : "p1";
+    const you = data.players[youKey];
+    const opponent = data.players[opponentKey];
+
+    if (!opponent) {
+      showMessage("action-msg", "En attente de l'adversaire...");
+      return;
+    }
+
+    let newYouPV = you.pv;
+    let newOpponentPV = opponent.pv;
+    let historyEntry = "";
+
+    switch(action) {
+      case "attack":
+        let damage = 20;
+        if (opponent.defending) damage = 10;
+        newOpponentPV = Math.max(0, opponent.pv - damage);
+        historyEntry = `${you.pseudo} attaque et inflige ${damage} dégâts à ${opponent.pseudo}.`;
+        break;
+
+      case "defend":
+        // Défense active jusqu'au prochain tour
+        historyEntry = `${you.pseudo} se met en position défensive.`;
+        break;
+
+      case "heal":
+        let healAmount = 15;
+        newYouPV = Math.min(100, you.pv + healAmount);
+        historyEntry = `${you.pseudo} se soigne et récupère ${healAmount} PV.`;
+        break;
+
+      default:
+        return;
+    }
+
+    // Préparer nouvelle valeur players
+    let newPlayers = {...data.players};
+
+    // Reset défense joueur tour précédent
+    newPlayers[youKey].defending = false;
+    newPlayers[opponentKey].defending = opponent.defending || false;
+
+    if (action === "attack") {
+      newPlayers[opponentKey].pv = newOpponentPV;
+    } else if (action === "defend") {
+      newPlayers[youKey].defending = true;
+    } else if (action === "heal") {
+      newPlayers[youKey].pv = newYouPV;
+    }
+
+    // Changer tour
+    const newTurn = opponentKey;
+
+    // Ajouter historique
+    const newHistory = data.history || [];
+    newHistory.push(historyEntry);
+
+    // Mise à jour Firebase
+    update(matchRef, {
+      players: newPlayers,
+      turn: newTurn,
+      history: newHistory
+    });
+
+    hasPlayedThisTurn = true;
+    disableActionButtons(true);
+    document.getElementById("action-msg").textContent = "Action envoyée, en attente du tour adversaire.";
+    resetTimer();
+  });
+}
+
+// --- TIMER ---
+
 function startTimer() {
-  clearInterval(timerInterval);
-  timerSeconds = 30;
-  updateTimerDisplay();
+  resetTimer();
 
   timerInterval = setInterval(() => {
-    timerSeconds--;
-    updateTimerDisplay();
-    if (timerSeconds <= 0) {
+    timerCount--;
+    updateTimerUI(timerCount);
+
+    if (timerCount <= 0) {
       clearInterval(timerInterval);
-      timerInterval = null;
-      autoPlayIfNeeded();
+      // Si joueur n'a pas joué, forcer passage de tour (optionnel)
+      if (!hasPlayedThisTurn) {
+        autoPassTurn();
+      }
     }
   }, 1000);
 }
 
-function updateTimerDisplay() {
-  document.getElementById('timer').textContent = `${timerSeconds}s`;
-  document.getElementById('timer-progress').style.width = `${(timerSeconds / 30) * 100}%`;
-}
-
-function autoPlayIfNeeded() {
-  if (!currentMatch) return;
-  const matchRef = ref(db, `matches/${currentMatch}`);
-  get(matchRef).then(snapshot => {
-    const data = snapshot.val();
-    if (!data) return;
-    const me = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
-    if (!data[me + "_action"]) {
-      update(matchRef, { [me + "_action"]: "defend" });
-      document.getElementById("action-msg").textContent = "Action automatique : Défendre";
-      hasPlayedThisTurn = true;
-      disableActionButtons(true);
-    }
-  });
-}
-
-function resolveTurn(data, you, opp, matchRef) {
-  hasPlayedThisTurn = true;
-  disableActionButtons(true);
+function resetTimer() {
   clearInterval(timerInterval);
-  timerInterval = null;
-
-  const actionYou = data[you + "_action"];
-  const actionOpp = data[opp + "_action"];
-
-  let pvYou = data[you + "_pv"];
-  let pvOpp = data[opp + "_pv"];
-  let msg = "";
-
-  if (actionYou === "attack" && actionOpp === "attack") {
-    pvYou -= 10; pvOpp -= 10;
-    msg = "Vous vous êtes attaqués !";
-  } else if (actionYou === "attack" && actionOpp === "defend") {
-    msg = "Tu as attaqué, ton adversaire s'est défendu.";
-  } else if (actionYou === "defend" && actionOpp === "attack") {
-    pvYou -= 10;
-    msg = "Tu as défendu, mais ton adversaire t'a attaqué ! Tu perds 10 PV.";
-  } else if (actionYou === "defend" && actionOpp === "defend") {
-    msg = "Vous vous êtes tous les deux défendus.";
-  }
-  if (actionYou === "heal") {
-    pvYou = Math.min(100, pvYou + 10);
-    msg += " Tu t'es soigné.";
-  }
-  if (actionOpp === "heal") {
-    pvOpp = Math.min(100, pvOpp + 10);
-  }
-
-  const updates = {
-    [you + "_pv"]: Math.max(0, pvYou),
-    [opp + "_pv"]: Math.max(0, pvOpp),
-    turn_result: "done"
-  };
-  update(matchRef, updates).then(() => {
-    document.getElementById("action-msg").textContent = msg;
-    addHistoryMessage(`${currentUser.pseudo} a fait ${actionYou}. ${opponent} a fait ${actionOpp}.`);
-    if (pvYou <= 0 || pvOpp <= 0) {
-      alert("Match terminé ! Gagnant : " + (pvYou > pvOpp ? currentUser.pseudo : opponent));
-      disableActionButtons(true);
-      clearInterval(timerInterval);
-      document.getElementById('timer').textContent = "--";
-    }
-  });
-}
-
-function resetTurn(matchRef) {
-  update(matchRef, {
-    joueur1_action: null,
-    joueur2_action: null,
-    turn_result: "waiting"
-  }).then(() => {
-    hasPlayedThisTurn = false;
-    disableActionButtons(false);
-    document.getElementById("action-msg").textContent = "Nouveau tour, à toi de jouer !";
+  timerCount = timerMax;
+  updateTimerUI(timerCount);
+  if (!hasPlayedThisTurn) {
     startTimer();
-  });
+  }
 }
 
-function addHistoryMessage(msg) {
-  const div = document.getElementById("history");
-  const p = document.createElement("p");
-  p.textContent = msg;
-  div.prepend(p);
+function updateTimerUI(seconds) {
+  document.getElementById("timer").textContent = seconds + "s";
+  const progress = (seconds / timerMax) * 100;
+  document.getElementById("timer-progress").style.width = progress + "%";
 }
 
-function attack() { applyAction("attack"); }
-function defend() { applyAction("defend"); }
-function heal() { applyAction("heal"); }
-
-function applyAction(type) {
-  if (hasPlayedThisTurn || !currentMatch) return;
+function autoPassTurn() {
+  // Passe le tour si joueur n'a rien fait
   const matchRef = ref(db, `matches/${currentMatch}`);
+
   get(matchRef).then(snapshot => {
     const data = snapshot.val();
     if (!data) return;
-    const me = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
-    if (data[me + "_action"] === null) {
-      update(matchRef, { [me + "_action"]: type }).then(() => {
-        hasPlayedThisTurn = true;
-        disableActionButtons(true);
-        document.getElementById("action-msg").textContent = `Tu as choisi : ${type}`;
-      });
-    }
+
+    let youKey = null;
+    if (data.players.p1.pseudo === currentUser.pseudo) youKey = "p1";
+    else if (data.players.p2 && data.players.p2.pseudo === currentUser.pseudo) youKey = "p2";
+
+    if (!youKey || data.turn !== youKey) return;
+
+    const opponentKey = youKey === "p1" ? "p2" : "p1";
+    const newHistory = data.history || [];
+    newHistory.push(`${currentUser.pseudo} n'a pas joué, tour passé.`);
+
+    update(ref(db, `matches/${currentMatch}`), {
+      turn: opponentKey,
+      history: newHistory
+    });
+
+    hasPlayedThisTurn = true;
+    disableActionButtons(true);
+    document.getElementById("action-msg").textContent = "Temps écoulé, tour passé automatiquement.";
   });
 }
-
-function disableActionButtons(disabled) {
-  document.getElementById("attack-btn").disabled = disabled;
-  document.getElementById("defend-btn").disabled = disabled;
-  document.getElementById("heal-btn").disabled = disabled;
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('signup-btn').addEventListener('click', signup);
-  document.getElementById('login-btn').addEventListener('click', login);
-  document.getElementById('create-match-btn').addEventListener('click', createMatch);
-  document.getElementById('join-match-btn').addEventListener('click', joinMatch);
-  document.getElementById('attack-btn').addEventListener('click', attack);
-  document.getElementById('defend-btn').addEventListener('click', defend);
-  document.getElementById('heal-btn').addEventListener('click', heal);
-});

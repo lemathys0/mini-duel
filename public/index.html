@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Duel 1v1 Multijoueur</title>
   <link href="style.css" rel="stylesheet" />
 </head>
@@ -32,23 +33,17 @@
     <p><strong id="you-name"></strong> (PV: <span id="you-pv">100</span>)</p>
     <p><strong id="opponent-name"></strong> (PV: <span id="opponent-pv">100</span>)</p>
 
-    <!-- Boutons d'action -->
     <div id="actions">
       <button id="attack-btn">🗡️ Attaquer</button>
       <button id="defend-btn">🛡️ Défendre</button>
       <button id="heal-btn">🧪 Se soigner</button>
     </div>
 
-    <!-- Timer -->
     <p>Temps restant : <span id="timer">30s</span></p>
-    <div id="timer-bar">
-      <div id="timer-progress"></div>
-    </div>
+    <div id="timer-bar"><div id="timer-progress"></div></div>
 
-    <!-- Résultat du tour -->
     <p id="action-msg"></p>
 
-    <!-- Historique -->
     <h3>Historique</h3>
     <div id="history"></div>
   </div>
