@@ -1,57 +1,139 @@
-﻿// ... firebaseConfig et firebase.initializeApp() inchangés
-// ... db = firebase.database();
+﻿// Import Firebase v9 modules
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+import { getDatabase, ref, get, set, update, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+// Configuration Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
+  authDomain: "mini-duel-de-cartes.firebaseapp.com",
+  databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
+  projectId: "mini-duel-de-cartes",
+  storageBucket: "mini-duel-de-cartes.firebasestorage.app",
+  messagingSenderId: "1084207708579",
+  appId: "1:1084207708579:web:f1312b68b7eb08f9d44216",
+  measurementId: "G-7YW3J41XZF"
+};
+
+// Initialiser Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 let currentUser = null;
 let currentMatch = null;
 let opponent = null;
-let hasPlayedThisTurn = false;
-let turnTimer = null;
-let turnTimeLeft = 30;
+let hasPlayedThisTurn = false; // Bloque action multiple par tour
 
-// Nouvelle fonction : mettre à jour l'historique dans le DOM
-function addToHistory(text) {
-  const history = document.getElementById("history");
-  const entry = document.createElement("div");
-  entry.textContent = text;
-  history.appendChild(entry);
-  history.scrollTop = history.scrollHeight;
+// Helper to get input values
+function getInput(id) {
+  return document.getElementById(id).value.trim();
 }
 
-// Démarre un timer de tour
-function startTurnTimer() {
-  clearInterval(turnTimer);
-  turnTimeLeft = 30;
-  document.getElementById("timer").textContent = `${turnTimeLeft}s`;
+// SIGNUP
+export function signup() {
+  const pseudo = getInput('pseudo');
+  const code = getInput('code');
+  const msg = document.getElementById('auth-msg');
 
-  turnTimer = setInterval(() => {
-    turnTimeLeft--;
-    document.getElementById("timer").textContent = `${turnTimeLeft}s`;
+  if (!pseudo || code.length !== 4) {
+    msg.textContent = "Remplis correctement les champs";
+    return;
+  }
 
-    if (turnTimeLeft <= 0) {
-      clearInterval(turnTimer);
-      if (!hasPlayedThisTurn) {
-        applyAction("defend"); // Défend automatiquement si inactif
-      }
+  const userKey = `${pseudo}_${code}`;
+  const userRef = ref(db, `users/${userKey}`);
+
+  get(userRef).then(snapshot => {
+    if (snapshot.exists()) {
+      msg.textContent = "Ce compte existe déjà.";
+    } else {
+      set(userRef, { pseudo, code }).then(() => {
+        login();
+      });
     }
-  }, 1000);
+  });
 }
 
+// LOGIN
+export function login() {
+  const pseudo = getInput('pseudo');
+  const code = getInput('code');
+  const msg = document.getElementById('auth-msg');
+
+  const userKey = `${pseudo}_${code}`;
+  const userRef = ref(db, `users/${userKey}`);
+
+  get(userRef).then(snapshot => {
+    if (snapshot.exists()) {
+      currentUser = { pseudo, code, key: userKey };
+      document.getElementById("auth").style.display = "none";
+      document.getElementById("match").style.display = "block";
+      document.getElementById("player-name").textContent = pseudo;
+      msg.textContent = "";
+    } else {
+      msg.textContent = "Compte introuvable.";
+    }
+  });
+}
+
+// CREATE MATCH
+export function createMatch() {
+  const matchID = getInput('match-id');
+  if (!matchID) return;
+
+  const matchRef = ref(db, `matches/${matchID}`);
+
+  set(matchRef, {
+    joueur1: currentUser.pseudo,
+    joueur2: "",
+    joueur1_pv: 100,
+    joueur2_pv: 100,
+    joueur1_action: null,
+    joueur2_action: null,
+    turn_result: "waiting"
+  }).then(() => {
+    startMatch(matchID, true);
+  });
+}
+
+// JOIN MATCH
+export function joinMatch() {
+  const matchID = getInput('match-id');
+  if (!matchID) return;
+
+  const matchRef = ref(db, `matches/${matchID}`);
+
+  get(matchRef).then(snapshot => {
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      if (data.joueur2 === "") {
+        update(matchRef, { joueur2: currentUser.pseudo }).then(() => {
+          startMatch(matchID, false);
+        });
+      } else {
+        alert("Match plein.");
+      }
+    } else {
+      alert("Match introuvable.");
+    }
+  });
+}
+
+// START MATCH
 function startMatch(id, isCreator) {
   currentMatch = id;
-  const matchRef = db.ref("matches/" + id);
+  const matchRef = ref(db, `matches/${id}`);
 
   document.getElementById("match").style.display = "none";
   document.getElementById("game").style.display = "block";
   document.getElementById("current-match").textContent = id;
   document.getElementById("you-name").textContent = currentUser.pseudo;
+
   hasPlayedThisTurn = false;
   disableActionButtons(false);
   document.getElementById("action-msg").textContent = "";
-  document.getElementById("history").innerHTML = "";
-  startTurnTimer();
 
-  matchRef.on("value", snap => {
-    const data = snap.val();
+  onValue(matchRef, (snapshot) => {
+    const data = snapshot.val();
     if (!data) return;
 
     const you = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
@@ -72,10 +154,10 @@ function startMatch(id, isCreator) {
   });
 }
 
+// RESOLVE TURN
 function resolveTurn(data, you, opp, matchRef) {
   hasPlayedThisTurn = true;
   disableActionButtons(true);
-  clearInterval(turnTimer);
 
   const actionYou = data[you + "_action"];
   const actionOpp = data[opp + "_action"];
@@ -84,111 +166,94 @@ function resolveTurn(data, you, opp, matchRef) {
   let pvOpp = data[opp + "_pv"];
   let actionMsg = "";
 
-  // Logique des actions (inclut "heal")
   if (actionYou === "attack" && actionOpp === "attack") {
-    pvYou -= 10;
-    pvOpp -= 10;
+    pvYou = Math.max(0, pvYou - 10);
+    pvOpp = Math.max(0, pvOpp - 10);
     actionMsg = "Vous vous êtes tous les deux attaqués !";
   } else if (actionYou === "attack" && actionOpp === "defend") {
-    actionMsg = "Tu as attaqué, ton adversaire s'est défendu.";
+    actionMsg = "Tu as attaqué, ton adversaire s'est défendu, pas de dégâts.";
   } else if (actionYou === "defend" && actionOpp === "attack") {
-    pvYou -= 10;
-    actionMsg = "Tu t'es défendu, mais l'adversaire t'a touché.";
+    pvYou = Math.max(0, pvYou - 10);
+    actionMsg = "Tu as défendu, mais ton adversaire t'a attaqué ! Tu perds 10 PV.";
   } else if (actionYou === "defend" && actionOpp === "defend") {
-    actionMsg = "Deux défenses, personne n'attaque.";
-  } else if (actionYou === "heal") {
-    pvYou = Math.min(100, pvYou + 15);
-    actionMsg = "Tu t'es soigné de 15 PV.";
-  } else if (actionOpp === "heal") {
-    pvOpp = Math.min(100, pvOpp + 15);
-    actionMsg = "Ton adversaire s'est soigné.";
+    actionMsg = "Vous vous êtes tous les deux défendus, rien ne se passe.";
   }
-
-  pvYou = Math.max(0, pvYou);
-  pvOpp = Math.max(0, pvOpp);
 
   let updates = {};
   updates[you + "_pv"] = pvYou;
   updates[opp + "_pv"] = pvOpp;
   updates["turn_result"] = "done";
 
-  matchRef.update(updates).then(() => {
+  update(matchRef, updates).then(() => {
     document.getElementById("action-msg").textContent = actionMsg;
-    addToHistory(`Tour : ${actionYou} / ${actionOpp}`);
+
     if (pvYou <= 0 || pvOpp <= 0) {
-      endGame(pvYou > pvOpp ? currentUser.pseudo : opponent);
+      const winner = pvYou > pvOpp ? currentUser.pseudo : opponent || "Personne";
+      alert("Match terminé ! Gagnant : " + winner);
+      disableActionButtons(true);
+      hasPlayedThisTurn = true;
     }
   });
 }
 
-function endGame(winner) {
-  alert("Match terminé ! Gagnant : " + winner);
-  disableActionButtons(true);
-  clearInterval(turnTimer);
-  const userRef = db.ref("users/" + currentUser.key);
-  userRef.once("value").then(snapshot => {
-    const userData = snapshot.val() || {};
-    let wins = userData.wins || 0;
-    let losses = userData.losses || 0;
-
-    if (winner === currentUser.pseudo) {
-      wins++;
-    } else {
-      losses++;
-    }
-
-    userRef.update({ wins, losses });
-  });
-}
-
+// RESET TURN
 function resetTurn(matchRef) {
-  let updates = {
+  const updates = {
     joueur1_action: null,
     joueur2_action: null,
     turn_result: "waiting"
   };
-  matchRef.update(updates).then(() => {
+  update(matchRef, updates).then(() => {
     hasPlayedThisTurn = false;
     disableActionButtons(false);
-    document.getElementById("action-msg").textContent = "Nouveau tour, à toi !";
-    startTurnTimer();
+    document.getElementById("action-msg").textContent = "Nouveau tour, à toi de jouer !";
   });
 }
 
-function attack() {
+// ACTIONS
+export function attack() {
   applyAction("attack");
 }
-function defend() {
+
+export function defend() {
   applyAction("defend");
-}
-function heal() {
-  applyAction("heal");
 }
 
 function applyAction(type) {
-  if (hasPlayedThisTurn) return;
+  if (hasPlayedThisTurn) {
+    document.getElementById("action-msg").textContent = "Tu as déjà joué ce tour.";
+    return;
+  }
 
-  const matchRef = db.ref("matches/" + currentMatch);
-  matchRef.once("value").then(snapshot => {
+  const matchRef = ref(db, `matches/${currentMatch}`);
+
+  get(matchRef).then(snapshot => {
     const data = snapshot.val();
+    if (!data) return;
+
     const me = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
 
-    if (data[me + "_action"]) return;
+    if (data[me + "_action"] === "attack" || data[me + "_action"] === "defend") {
+      document.getElementById("action-msg").textContent = "Action déjà enregistrée, en attente de l'adversaire.";
+      hasPlayedThisTurn = true;
+      disableActionButtons(true);
+      return;
+    }
 
     let updates = {};
     updates[me + "_action"] = type;
     updates["turn_result"] = "waiting";
 
-    matchRef.update(updates).then(() => {
+    update(matchRef, updates).then(() => {
       hasPlayedThisTurn = true;
-      document.getElementById("action-msg").textContent = `Action "${type}" enregistrée.`;
+      document.getElementById("action-msg").textContent = "Action enregistrée, en attente de l'adversaire...";
       disableActionButtons(true);
     });
   });
 }
 
+// DISABLE BUTTONS
 function disableActionButtons(disable) {
   document.querySelector('button[onclick="attack()"]').disabled = disable;
   document.querySelector('button[onclick="defend()"]').disabled = disable;
-  document.querySelector('button[onclick="heal()"]').disabled = disable;
 }
