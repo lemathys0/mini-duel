@@ -1,7 +1,7 @@
 ﻿// Import Firebase (adapter selon ta config)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, update, push, child, remove } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics.js";
 // --- CONFIGURATION FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
