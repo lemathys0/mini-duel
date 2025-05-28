@@ -151,7 +151,7 @@ document.getElementById("join-match-btn").onclick = () => {
     }
 
     // Ajouter currentUser en p2
-    update(matchRef.child("players"), {
+    update(child(matchRef, "players"), {
       p2: { pseudo: currentUser.pseudo, pv: 100, defending: false }
     }).then(() => {
       showMessage("match-msg", "Rejoint le match !", true);
