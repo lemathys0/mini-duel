@@ -6,33 +6,40 @@ body {
   color: #eee;
   text-align: center;
   margin: 0;
-  padding: 20px;
+  padding: 20px 10px;
 }
 
 h1 {
   margin-bottom: 30px;
   color: #f39c12;
+  font-size: 1.8rem;
 }
 
 input {
-  padding: 10px;
-  margin: 5px;
+  padding: 12px;
+  margin: 10px auto;
   border: none;
-  border-radius: 5px;
-  font-size: 16px;
-  width: 200px;
+  border-radius: 8px;
+  font-size: 1rem;
+  width: 280px;
   max-width: 90vw;
+  display: block;
+  box-sizing: border-box;
 }
 
 button {
-  padding: 10px 20px;
-  margin: 5px;
+  padding: 14px 0;
+  margin: 10px auto;
   background-color: #f39c12;
   border: none;
-  border-radius: 5px;
-  font-weight: bold;
+  border-radius: 8px;
+  font-weight: 700;
   color: #121212;
   cursor: pointer;
+  width: 280px;
+  max-width: 90vw;
+  font-size: 1.1rem;
+  display: block;
   transition: background-color 0.3s ease;
 }
 
@@ -41,29 +48,55 @@ button:hover {
 }
 
 #auth-msg, #match-msg, #action-msg {
-  margin-top: 10px;
-  height: 20px;
-  font-weight: bold;
+  margin-top: 12px;
+  height: 22px;
+  font-weight: 700;
   color: #e74c3c;
+  min-height: 22px;
+  max-width: 90vw;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 #game p {
-  font-size: 18px;
-  margin: 10px 0;
+  font-size: 1.1rem;
+  margin: 12px 0;
+  max-width: 90vw;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 #game button {
-  font-size: 24px;
-  padding: 12px 25px;
-  width: 150px;
+  font-size: 1.4rem;
+  padding: 14px 0;
+  width: 140px;
+  max-width: 45vw;
+  margin: 10px 5px;
+  display: inline-block;
+  border-radius: 10px;
 }
 
 strong {
   color: #f1c40f;
 }
 
-@media (max-width: 400px) {
+/* Responsive layout */
+
+@media (max-width: 450px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+
   input, button {
     width: 90vw;
+  }
+
+  #game button {
+    width: 40vw;
+    margin: 10px 2vw;
+  }
+
+  #game p {
+    font-size: 1rem;
   }
 }
