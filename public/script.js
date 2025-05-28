@@ -1,4 +1,5 @@
-﻿const firebaseConfig = {
+﻿// Configuration Firebase
+const firebaseConfig = {
   apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
   authDomain: "mini-duel-de-cartes.firebaseapp.com",
   databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
@@ -9,8 +10,9 @@
   measurementId: "G-7YW3J41XZF"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialiser Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 let currentUser = null;
 let currentMatch = null;
@@ -31,8 +33,9 @@ function signup() {
     if (snapshot.exists()) {
       msg.textContent = "Ce compte existe déjà.";
     } else {
-      db.ref("users/" + userKey).set({ pseudo, code });
-      login(); // connecte automatiquement
+      db.ref("users/" + userKey).set({ pseudo, code }).then(() => {
+        login();
+      });
     }
   });
 }
@@ -49,6 +52,7 @@ function login() {
       document.getElementById("auth").style.display = "none";
       document.getElementById("match").style.display = "block";
       document.getElementById("player-name").textContent = pseudo;
+      msg.textContent = "";
     } else {
       msg.textContent = "Compte introuvable.";
     }
@@ -65,21 +69,23 @@ function createMatch() {
     joueur2: "",
     joueur1_pv: 100,
     joueur2_pv: 100
+  }).then(() => {
+    startMatch(matchID, true);
   });
-
-  startMatch(matchID, true);
 }
 
 function joinMatch() {
   const matchID = document.getElementById('match-id').value.trim();
-  const matchRef = db.ref("matches/" + matchID);
+  if (!matchID) return;
 
+  const matchRef = db.ref("matches/" + matchID);
   matchRef.once("value").then(snapshot => {
     if (snapshot.exists()) {
       const data = snapshot.val();
       if (data.joueur2 === "") {
-        matchRef.update({ joueur2: currentUser.pseudo });
-        startMatch(matchID, false);
+        matchRef.update({ joueur2: currentUser.pseudo }).then(() => {
+          startMatch(matchID, false);
+        });
       } else {
         alert("Match plein.");
       }
@@ -92,6 +98,7 @@ function joinMatch() {
 function startMatch(id, isCreator) {
   currentMatch = id;
   const matchRef = db.ref("matches/" + id);
+
   document.getElementById("match").style.display = "none";
   document.getElementById("game").style.display = "block";
   document.getElementById("current-match").textContent = id;
@@ -123,6 +130,8 @@ function applyAction(type) {
   const matchRef = db.ref("matches/" + currentMatch);
   matchRef.once("value").then(snapshot => {
     const data = snapshot.val();
+    if (!data) return;
+
     const me = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
     const opp = me === "joueur1" ? "joueur2" : "joueur1";
 
