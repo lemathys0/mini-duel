@@ -1,93 +1,99 @@
 ﻿/* style.css */
 
 body {
-  background-color: #121212;
-  color: #eee;
+  background-color: #0e0e0e;
+  color: #e0e0e0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  margin: 20px;
-  padding: 0;
+  margin: 0;
+  padding: 20px;
   text-align: center;
 }
 
 h1, h2, h3 {
-  color: #f0a500;
+  color: #00ffd5;
   margin-bottom: 15px;
 }
 
 input {
-  padding: 10px;
-  margin: 8px 5px;
-  border-radius: 5px;
-  border: none;
+  padding: 12px;
+  margin: 10px 5px;
+  border-radius: 8px;
+  border: 1px solid #222;
+  background-color: #1a1a1a;
+  color: #eee;
   font-size: 1rem;
-  width: 180px;
+  width: 200px;
   max-width: 80vw;
   outline: none;
+  transition: box-shadow 0.3s, background-color 0.3s;
 }
 
 input:focus {
-  box-shadow: 0 0 5px #f0a500;
+  box-shadow: 0 0 6px 2px #00ffd5;
   background-color: #222;
-  color: #fff;
 }
 
 button {
-  background-color: #f0a500;
+  background: linear-gradient(135deg, #00ffd5, #00b3ff);
   border: none;
-  border-radius: 5px;
-  color: #121212;
+  border-radius: 8px;
+  color: #0e0e0e;
   cursor: pointer;
   font-size: 1.1rem;
   font-weight: 600;
   margin: 10px 8px;
-  padding: 12px 25px;
-  transition: background-color 0.3s ease;
+  padding: 12px 30px;
+  transition: transform 0.2s, box-shadow 0.3s;
 }
 
 button:hover:not(:disabled) {
-  background-color: #cc8500;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 255, 213, 0.4);
 }
 
 button:disabled {
-  background-color: #555;
+  background: #444;
   cursor: not-allowed;
-  color: #999;
+  color: #aaa;
 }
 
 #actions {
-  margin-top: 20px;
+  margin-top: 25px;
 }
 
 #history p {
-  margin: 5px 0;
-  font-size: 0.9rem;
-  color: #ccc;
+  margin: 6px 0;
+  font-size: 0.95rem;
+  color: #a0a0a0;
 }
 
-#auth-msg, #match-msg, #action-msg {
-  color: #ff6666;
+#auth-msg,
+#match-msg,
+#action-msg {
+  color: #ff4d6d;
   font-weight: bold;
-  margin-top: 10px;
-  min-height: 24px;
+  margin-top: 12px;
+  min-height: 26px;
 }
 
 #game p {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
 }
 
-#you-name, #opponent-name {
+#you-name,
+#opponent-name {
   font-weight: 700;
-  color: #f0a500;
+  color: #00ffd5;
 }
 
 #timer {
   font-weight: 700;
-  font-size: 1.3rem;
-  margin-top: 10px;
-  color: #ffcc00;
+  font-size: 1.4rem;
+  margin-top: 12px;
+  color: #ffdd00;
 }
 
-/* Responsive pour mobile */
+/* Mobile Responsive */
 @media (max-width: 600px) {
   input {
     width: 90vw;
@@ -95,6 +101,10 @@ button:disabled {
 
   button {
     width: 90vw;
-    margin: 8px auto;
+    margin: 10px auto;
+  }
+
+  #game p {
+    font-size: 1rem;
   }
 }
