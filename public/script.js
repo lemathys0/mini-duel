@@ -2,19 +2,17 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
 import { getDatabase, ref, get, set, update, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-// Configuration Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
   authDomain: "mini-duel-de-cartes.firebaseapp.com",
   databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
   projectId: "mini-duel-de-cartes",
-  storageBucket: "mini-duel-de-cartes.firebasestorage.app",
+  storageBucket: "mini-duel-de-cartes.appspot.com",
   messagingSenderId: "1084207708579",
   appId: "1:1084207708579:web:f1312b68b7eb08f9d44216",
   measurementId: "G-7YW3J41XZF"
 };
 
-// Initialiser Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
@@ -25,13 +23,11 @@ let hasPlayedThisTurn = false;
 let timerInterval = null;
 let timerSeconds = 30;
 
-// Helper pour récupérer les inputs
 function getInput(id) {
   const elem = document.getElementById(id);
   return elem ? elem.value.trim() : "";
 }
 
-// SIGNUP
 function signup() {
   const pseudo = getInput('pseudo');
   const code = getInput('code');
@@ -56,7 +52,6 @@ function signup() {
   });
 }
 
-// LOGIN
 function login() {
   const pseudo = getInput('pseudo');
   const code = getInput('code');
@@ -78,7 +73,6 @@ function login() {
   });
 }
 
-// CREATE MATCH
 function createMatch() {
   const matchID = getInput('match-id');
   if (!matchID) return;
@@ -98,7 +92,6 @@ function createMatch() {
   });
 }
 
-// JOIN MATCH
 function joinMatch() {
   const matchID = getInput('match-id');
   if (!matchID) return;
@@ -121,7 +114,6 @@ function joinMatch() {
   });
 }
 
-// START MATCH
 function startMatch(id, isCreator) {
   currentMatch = id;
   const matchRef = ref(db, `matches/${id}`);
@@ -139,14 +131,6 @@ function startMatch(id, isCreator) {
   onValue(matchRef, (snapshot) => {
     const data = snapshot.val();
     if (!data) return;
-
-    if (data.joueur1 && data.joueur2) {
-      if (!timerInterval) startTimer();
-    } else {
-      clearInterval(timerInterval);
-      timerInterval = null;
-      document.getElementById('timer').textContent = "--";
-    }
 
     const you = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
     const opp = you === "joueur1" ? "joueur2" : "joueur1";
@@ -166,16 +150,14 @@ function startMatch(id, isCreator) {
   });
 }
 
-// TIMER
 function startTimer() {
   clearInterval(timerInterval);
   timerSeconds = 30;
-  document.getElementById('timer').textContent = `${timerSeconds}s`;
+  updateTimerDisplay();
 
   timerInterval = setInterval(() => {
     timerSeconds--;
-    document.getElementById('timer').textContent = `${timerSeconds}s`;
-
+    updateTimerDisplay();
     if (timerSeconds <= 0) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -184,19 +166,20 @@ function startTimer() {
   }, 1000);
 }
 
+function updateTimerDisplay() {
+  document.getElementById('timer').textContent = `${timerSeconds}s`;
+  document.getElementById('timer-progress').style.width = `${(timerSeconds / 30) * 100}%`;
+}
+
 function autoPlayIfNeeded() {
   if (!currentMatch) return;
-
   const matchRef = ref(db, `matches/${currentMatch}`);
   get(matchRef).then(snapshot => {
     const data = snapshot.val();
     if (!data) return;
-
     const me = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
     if (!data[me + "_action"]) {
-      let updates = {};
-      updates[me + "_action"] = "defend";
-      update(matchRef, updates);
+      update(matchRef, { [me + "_action"]: "defend" });
       document.getElementById("action-msg").textContent = "Action automatique : Défendre";
       hasPlayedThisTurn = true;
       disableActionButtons(true);
@@ -204,7 +187,6 @@ function autoPlayIfNeeded() {
   });
 }
 
-// RESOLVE TURN
 function resolveTurn(data, you, opp, matchRef) {
   hasPlayedThisTurn = true;
   disableActionButtons(true);
@@ -216,58 +198,55 @@ function resolveTurn(data, you, opp, matchRef) {
 
   let pvYou = data[you + "_pv"];
   let pvOpp = data[opp + "_pv"];
-  let actionMsg = "";
+  let msg = "";
+
+  if (actionYou === "attack") document.getElementById("attack-sound").play();
+  if (actionYou === "defend") document.getElementById("defend-sound").play();
+  if (actionYou === "heal") document.getElementById("heal-sound").play();
 
   if (actionYou === "attack" && actionOpp === "attack") {
-    pvYou = Math.max(0, pvYou - 10);
-    pvOpp = Math.max(0, pvOpp - 10);
-    actionMsg = "Vous vous êtes tous les deux attaqués !";
+    pvYou -= 10; pvOpp -= 10;
+    msg = "Vous vous êtes attaqués !";
   } else if (actionYou === "attack" && actionOpp === "defend") {
-    actionMsg = "Tu as attaqué, ton adversaire s'est défendu.";
+    msg = "Tu as attaqué, ton adversaire s'est défendu.";
   } else if (actionYou === "defend" && actionOpp === "attack") {
-    pvYou = Math.max(0, pvYou - 10);
-    actionMsg = "Tu as défendu, mais ton adversaire t'a attaqué ! Tu perds 10 PV.";
+    pvYou -= 10;
+    msg = "Tu as défendu, mais ton adversaire t'a attaqué ! Tu perds 10 PV.";
   } else if (actionYou === "defend" && actionOpp === "defend") {
-    actionMsg = "Vous vous êtes tous les deux défendus.";
+    msg = "Vous vous êtes tous les deux défendus.";
   }
-
   if (actionYou === "heal") {
     pvYou = Math.min(100, pvYou + 10);
-    actionMsg += " Tu t'es soigné (+10 PV).";
+    msg += " Tu t'es soigné.";
   }
   if (actionOpp === "heal") {
     pvOpp = Math.min(100, pvOpp + 10);
   }
 
-  let updates = {};
-  updates[you + "_pv"] = pvYou;
-  updates[opp + "_pv"] = pvOpp;
-  updates["turn_result"] = "done";
-
+  const updates = {
+    [you + "_pv"]: Math.max(0, pvYou),
+    [opp + "_pv"]: Math.max(0, pvOpp),
+    turn_result: "done"
+  };
   update(matchRef, updates).then(() => {
-    document.getElementById("action-msg").textContent = actionMsg;
+    document.getElementById("action-msg").textContent = msg;
     addHistoryMessage(`${currentUser.pseudo} a fait ${actionYou}. ${opponent} a fait ${actionOpp}.`);
-
     if (pvYou <= 0 || pvOpp <= 0) {
-      const winner = pvYou > pvOpp ? currentUser.pseudo : opponent || "Personne";
-      alert("Match terminé ! Gagnant : " + winner);
+      document.getElementById(pvYou > pvOpp ? "win-sound" : "lose-sound").play();
+      alert("Match terminé ! Gagnant : " + (pvYou > pvOpp ? currentUser.pseudo : opponent));
       disableActionButtons(true);
-      hasPlayedThisTurn = true;
       clearInterval(timerInterval);
-      timerInterval = null;
       document.getElementById('timer').textContent = "--";
     }
   });
 }
 
-// RESET TURN
 function resetTurn(matchRef) {
-  const updates = {
+  update(matchRef, {
     joueur1_action: null,
     joueur2_action: null,
     turn_result: "waiting"
-  };
-  update(matchRef, updates).then(() => {
+  }).then(() => {
     hasPlayedThisTurn = false;
     disableActionButtons(false);
     document.getElementById("action-msg").textContent = "Nouveau tour, à toi de jouer !";
@@ -275,38 +254,26 @@ function resetTurn(matchRef) {
   });
 }
 
-function addHistoryMessage(message) {
-  const historyDiv = document.getElementById("history");
+function addHistoryMessage(msg) {
+  const div = document.getElementById("history");
   const p = document.createElement("p");
-  p.textContent = message;
-  historyDiv.prepend(p);
+  p.textContent = msg;
+  div.prepend(p);
 }
 
-function attack() {
-  applyAction("attack");
-}
-function defend() {
-  applyAction("defend");
-}
-function heal() {
-  applyAction("heal");
-}
+function attack() { applyAction("attack"); }
+function defend() { applyAction("defend"); }
+function heal() { applyAction("heal"); }
 
 function applyAction(type) {
   if (hasPlayedThisTurn || !currentMatch) return;
-
   const matchRef = ref(db, `matches/${currentMatch}`);
   get(matchRef).then(snapshot => {
     const data = snapshot.val();
     if (!data) return;
-
     const me = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
-
     if (data[me + "_action"] === null) {
-      let updates = {};
-      updates[me + "_action"] = type;
-
-      update(matchRef, updates).then(() => {
+      update(matchRef, { [me + "_action"]: type }).then(() => {
         hasPlayedThisTurn = true;
         disableActionButtons(true);
         document.getElementById("action-msg").textContent = `Tu as choisi : ${type}`;
@@ -321,7 +288,6 @@ function disableActionButtons(disabled) {
   document.getElementById("heal-btn").disabled = disabled;
 }
 
-// === Ajouter les listeners ===
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('signup-btn').addEventListener('click', signup);
   document.getElementById('login-btn').addEventListener('click', login);
