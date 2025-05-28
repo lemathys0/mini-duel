@@ -10,6 +10,7 @@
 <body>
   <h1>Duel 1v1 Multijoueur</h1>
 
+  <!-- Authentification -->
   <div id="auth">
     <input id="pseudo" placeholder="Pseudo" />
     <input id="code" placeholder="Code (4 chiffres)" maxlength="4" />
@@ -18,6 +19,7 @@
     <p id="auth-msg"></p>
   </div>
 
+  <!-- Interface de match -->
   <div id="match" style="display:none;">
     <p>Connecté en tant que <strong id="player-name"></strong></p>
     <input id="match-id" placeholder="Code du match (ex: duel123)" />
@@ -26,14 +28,28 @@
     <p id="match-msg"></p>
   </div>
 
+  <!-- Interface de jeu -->
   <div id="game" style="display:none;">
     <h2>Match: <span id="current-match"></span></h2>
     <p><strong id="you-name"></strong> (PV: <span id="you-pv">100</span>)</p>
     <p><strong id="opponent-name"></strong> (PV: <span id="opponent-pv">100</span>)</p>
 
-    <button onclick="attack()">🗡️ Attaquer</button>
-    <button onclick="defend()">🛡️ Défendre</button>
+    <!-- Boutons d'action -->
+    <div id="actions">
+      <button onclick="attack()">🗡️ Attaquer</button>
+      <button onclick="defend()">🛡️ Défendre</button>
+      <button onclick="heal()">🧪 Se soigner</button>
+    </div>
+
+    <!-- Timer -->
+    <p>Temps restant : <span id="timer">30s</span></p>
+
+    <!-- Résultat du tour -->
     <p id="action-msg"></p>
+
+    <!-- Historique -->
+    <h3>Historique</h3>
+    <div id="history" style="max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;"></div>
   </div>
 
   <script src="script.js"></script>

@@ -80,8 +80,47 @@ strong {
   color: #f1c40f;
 }
 
-/* Responsive layout */
+/* Ajout d’un container pour les boutons d’action */
+#actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+}
 
+/* Timer visible */
+#timer {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #1abc9c;
+  margin: 10px 0;
+}
+
+/* Historique des actions */
+#history {
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  padding: 10px;
+  margin-top: 15px;
+  max-height: 200px;
+  overflow-y: auto;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.95rem;
+  color: #ccc;
+  max-width: 90vw;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* PV critique */
+.pv-critical {
+  color: #e74c3c !important;
+  font-weight: bold;
+}
+
+/* Responsive layout */
 @media (max-width: 450px) {
   h1 {
     font-size: 1.5rem;
