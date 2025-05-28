@@ -4,17 +4,19 @@ import { getDatabase, ref, set, get, onValue, update, push, child, remove } from
 
 // --- CONFIGURATION FIREBASE ---
 const firebaseConfig = {
-  apiKey: "TA_CLE_API",
-  authDomain: "tonprojet.firebaseapp.com",
-  databaseURL: "https://tonprojet-default-rtdb.firebaseio.com",
-  projectId: "tonprojet",
-  storageBucket: "tonprojet.appspot.com",
-  messagingSenderId: "TON_ID",
-  appId: "TON_APP_ID"
+  apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
+  authDomain: "mini-duel-de-cartes.firebaseapp.com",
+  databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
+  projectId: "mini-duel-de-cartes",
+  storageBucket: "mini-duel-de-cartes.firebasestorage.app",
+  messagingSenderId: "1084207708579",
+  appId: "1:1084207708579:web:f1312b68b7eb08f9d44216",
+  measurementId: "G-7YW3J41XZF"
 };
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
 
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 // --- VARIABLES GLOBALES ---
 let currentUser = null; // { pseudo, code }
 let currentMatch = null;
