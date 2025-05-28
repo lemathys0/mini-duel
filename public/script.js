@@ -1,71 +1,142 @@
-﻿let currentUser = null;
-let enemyHP = 100;
+﻿const firebaseConfig = {
+  apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
+  authDomain: "mini-duel-de-cartes.firebaseapp.com",
+  databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
+  projectId: "mini-duel-de-cartes",
+  storageBucket: "mini-duel-de-cartes.firebasestorage.app",
+  messagingSenderId: "1084207708579",
+  appId: "1:1084207708579:web:f1312b68b7eb08f9d44216",
+  measurementId: "G-7YW3J41XZF"
+};
 
-function attack() {
-  const damage = Math.floor(Math.random() * 20) + 5;
-  enemyHP = Math.max(0, enemyHP - damage);
-  document.getElementById('enemy-hp').value = enemyHP;
-  document.getElementById('combat-result').textContent = `💥 Tu as infligé ${damage} dégâts !`;
-  if (enemyHP === 0) {
-    document.getElementById('combat-result').textContent = "🏆 Tu as vaincu le gobelin !";
-  }
-}
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
-function defend() {
-  document.getElementById('combat-result').textContent = "🛡️ Tu te défends, aucun dégât reçu.";
-}
+let currentUser = null;
+let currentMatch = null;
+let opponent = null;
 
 function signup() {
-  const pseudo = document.getElementById('signup-pseudo').value.trim();
-  const code = document.getElementById('signup-code').value.trim();
-  const msg = document.getElementById('signup-msg');
-  msg.textContent = '';
+  const pseudo = document.getElementById('pseudo').value.trim();
+  const code = document.getElementById('code').value.trim();
+  const msg = document.getElementById('auth-msg');
 
-  if (!pseudo || !/^\d{4}$/.test(code)) {
-    msg.textContent = 'Pseudo ou code invalide';
+  if (!pseudo || code.length !== 4) {
+    msg.textContent = "Remplis correctement les champs";
     return;
   }
 
-  currentUser = { pseudo, code };
-  document.getElementById('user-name').textContent = pseudo;
-  document.getElementById('signup-section').style.display = 'none';
-  document.getElementById('tab-content').style.display = 'block';
-  document.getElementById('bottom-tabs').style.display = 'flex';
+  const userKey = pseudo + "_" + code;
+  db.ref("users/" + userKey).once("value").then(snapshot => {
+    if (snapshot.exists()) {
+      msg.textContent = "Ce compte existe déjà.";
+    } else {
+      db.ref("users/" + userKey).set({ pseudo, code });
+      login(); // connecte automatiquement
+    }
+  });
 }
 
 function login() {
-  const pseudo = document.getElementById('login-pseudo').value.trim();
-  const code = document.getElementById('login-code').value.trim();
-  const msg = document.getElementById('login-msg');
-  msg.textContent = '';
+  const pseudo = document.getElementById('pseudo').value.trim();
+  const code = document.getElementById('code').value.trim();
+  const msg = document.getElementById('auth-msg');
 
-  if (!pseudo || !/^\d{4}$/.test(code)) {
-    msg.textContent = 'Pseudo ou code invalide';
-    return;
-  }
-
-  currentUser = { pseudo, code };
-  document.getElementById('user-name').textContent = pseudo;
-  document.getElementById('login-section').style.display = 'none';
-  document.getElementById('tab-content').style.display = 'block';
-  document.getElementById('bottom-tabs').style.display = 'flex';
+  const userKey = pseudo + "_" + code;
+  db.ref("users/" + userKey).once("value").then(snapshot => {
+    if (snapshot.exists()) {
+      currentUser = { pseudo, code, key: userKey };
+      document.getElementById("auth").style.display = "none";
+      document.getElementById("match").style.display = "block";
+      document.getElementById("player-name").textContent = pseudo;
+    } else {
+      msg.textContent = "Compte introuvable.";
+    }
+  });
 }
 
-function showLogin() {
-  document.getElementById('signup-section').style.display = 'none';
-  document.getElementById('login-section').style.display = 'block';
-  document.getElementById('tab-content').style.display = 'none';
+function createMatch() {
+  const matchID = document.getElementById('match-id').value.trim();
+  if (!matchID) return;
+
+  const matchRef = db.ref("matches/" + matchID);
+  matchRef.set({
+    joueur1: currentUser.pseudo,
+    joueur2: "",
+    joueur1_pv: 100,
+    joueur2_pv: 100
+  });
+
+  startMatch(matchID, true);
 }
 
-function showSignup() {
-  document.getElementById('signup-section').style.display = 'block';
-  document.getElementById('login-section').style.display = 'none';
-  document.getElementById('tab-content').style.display = 'none';
+function joinMatch() {
+  const matchID = document.getElementById('match-id').value.trim();
+  const matchRef = db.ref("matches/" + matchID);
+
+  matchRef.once("value").then(snapshot => {
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      if (data.joueur2 === "") {
+        matchRef.update({ joueur2: currentUser.pseudo });
+        startMatch(matchID, false);
+      } else {
+        alert("Match plein.");
+      }
+    } else {
+      alert("Match introuvable.");
+    }
+  });
 }
 
-function showTab(tab) {
-  alert(`Onglet ${tab} (placeholder)`); // Pour les autres onglets à venir
+function startMatch(id, isCreator) {
+  currentMatch = id;
+  const matchRef = db.ref("matches/" + id);
+  document.getElementById("match").style.display = "none";
+  document.getElementById("game").style.display = "block";
+  document.getElementById("current-match").textContent = id;
+  document.getElementById("you-name").textContent = currentUser.pseudo;
+
+  matchRef.on("value", snap => {
+    const data = snap.val();
+    if (!data) return;
+
+    const you = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
+    const opp = you === "joueur1" ? "joueur2" : "joueur1";
+    opponent = data[opp];
+
+    document.getElementById("you-pv").textContent = data[you + "_pv"];
+    document.getElementById("opponent-pv").textContent = data[opp + "_pv"];
+    document.getElementById("opponent-name").textContent = opponent || "(en attente)";
+  });
 }
 
-// Au chargement initial
-showSignup();
+function attack() {
+  applyAction("attack");
+}
+
+function defend() {
+  applyAction("defend");
+}
+
+function applyAction(type) {
+  const matchRef = db.ref("matches/" + currentMatch);
+  matchRef.once("value").then(snapshot => {
+    const data = snapshot.val();
+    const me = currentUser.pseudo === data.joueur1 ? "joueur1" : "joueur2";
+    const opp = me === "joueur1" ? "joueur2" : "joueur1";
+
+    let newPV = data[opp + "_pv"];
+    if (type === "attack") {
+      newPV = Math.max(0, newPV - 10);
+      document.getElementById("action-msg").textContent = "Tu attaques ton adversaire !";
+    } else {
+      document.getElementById("action-msg").textContent = "Tu te défends (pas de dégâts subis) !";
+      return;
+    }
+
+    let update = {};
+    update[opp + "_pv"] = newPV;
+    matchRef.update(update);
+  });
+}

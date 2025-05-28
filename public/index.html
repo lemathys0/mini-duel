@@ -2,128 +2,39 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mini Duel de Cartes</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Duel 1v1 Multijoueur</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
+  <h1>Duel 1v1 Multijoueur</h1>
 
-  <h1>Mini Duel de Cartes</h1>
-
-  <!-- Inscription -->
-  <div id="signup-section">
-    <h2>Inscription</h2>
-    <input id="signup-pseudo" placeholder="Pseudo" />
-    <input id="signup-code" placeholder="Code secret (4 chiffres)" maxlength="4" />
+  <div id="auth">
+    <input id="pseudo" placeholder="Pseudo" />
+    <input id="code" placeholder="Code (4 chiffres)" maxlength="4" />
     <button onclick="signup()">S'inscrire</button>
-    <p id="signup-msg"></p>
-    <p><a href="#" onclick="showLogin()">Déjà inscrit ? Connexion</a></p>
+    <button onclick="login()">Connexion</button>
+    <p id="auth-msg"></p>
   </div>
 
-  <!-- Connexion -->
-  <div id="login-section" style="display:none;">
-    <h2>Connexion</h2>
-    <input id="login-pseudo" placeholder="Pseudo" />
-    <input id="login-code" placeholder="Code secret (4 chiffres)" maxlength="4" />
-    <button onclick="login()">Se connecter</button>
-    <p id="login-msg"></p>
-    <p><a href="#" onclick="showSignup()">Pas encore inscrit ? Inscription</a></p>
+  <div id="match" style="display:none;">
+    <p>Connecté en tant que <strong id="player-name"></strong></p>
+    <input id="match-id" placeholder="Code du match (ex: duel123)" />
+    <button onclick="createMatch()">Créer un match</button>
+    <button onclick="joinMatch()">Rejoindre un match</button>
+    <p id="match-msg"></p>
   </div>
 
-  <!-- Zone de jeu -->
-  <div id="tab-content" style="display:none;">
-    <h2>Bienvenue <span id="user-name"></span> !</h2>
+  <div id="game" style="display:none;">
+    <h2>Match: <span id="current-match"></span></h2>
+    <p><strong id="you-name"></strong> (PV: <span id="you-pv">100</span>)</p>
+    <p><strong id="opponent-name"></strong> (PV: <span id="opponent-pv">100</span>)</p>
 
-    <div id="combat-zone">
-      <p>🧟 Ennemi : Gobelin</p>
-      <progress id="enemy-hp" value="100" max="100"></progress>
-      <div>
-        <button onclick="attack()">🗡️ Attaquer</button>
-        <button onclick="defend()">🛡️ Défendre</button>
-      </div>
-      <p id="combat-result"></p>
-    </div>
+    <button onclick="attack()">🗡️ Attaquer</button>
+    <button onclick="defend()">🛡️ Défendre</button>
+    <p id="action-msg"></p>
   </div>
 
-  <!-- Onglets bas -->
-  <div id="bottom-tabs" style="display:none;">
-    <button class="tab-btn active" onclick="showTab('game')">🎮 Jeu</button>
-    <button class="tab-btn" onclick="alert('Bientôt !')">🏆 Classement</button>
-    <button class="tab-btn" onclick="alert('À venir !')">👥 Amis</button>
-  </div>
-
-  <script>
-    let currentUser = null;
-    let enemyHP = 100;
-
-    function attack() {
-      const damage = Math.floor(Math.random() * 20) + 5;
-      enemyHP = Math.max(0, enemyHP - damage);
-      document.getElementById('enemy-hp').value = enemyHP;
-      document.getElementById('combat-result').textContent = `💥 Tu as infligé ${damage} dégâts !`;
-      if (enemyHP === 0) {
-        document.getElementById('combat-result').textContent = "🏆 Tu as vaincu le gobelin !";
-      }
-    }
-
-    function defend() {
-      document.getElementById('combat-result').textContent = "🛡️ Tu te défends, aucun dégât reçu.";
-    }
-
-    function signup() {
-      const pseudo = document.getElementById('signup-pseudo').value.trim();
-      const code = document.getElementById('signup-code').value.trim();
-      const msg = document.getElementById('signup-msg');
-      msg.textContent = '';
-
-      if (!pseudo || !/^\d{4}$/.test(code)) {
-        msg.textContent = 'Pseudo ou code invalide';
-        return;
-      }
-
-      currentUser = { pseudo, code };
-      document.getElementById('user-name').textContent = pseudo;
-      document.getElementById('signup-section').style.display = 'none';
-      document.getElementById('tab-content').style.display = 'block';
-      document.getElementById('bottom-tabs').style.display = 'flex';
-    }
-
-    function login() {
-      const pseudo = document.getElementById('login-pseudo').value.trim();
-      const code = document.getElementById('login-code').value.trim();
-      const msg = document.getElementById('login-msg');
-      msg.textContent = '';
-
-      if (!pseudo || !/^\d{4}$/.test(code)) {
-        msg.textContent = 'Pseudo ou code invalide';
-        return;
-      }
-
-      currentUser = { pseudo, code };
-      document.getElementById('user-name').textContent = pseudo;
-      document.getElementById('login-section').style.display = 'none';
-      document.getElementById('tab-content').style.display = 'block';
-      document.getElementById('bottom-tabs').style.display = 'flex';
-    }
-
-    function showLogin() {
-      document.getElementById('signup-section').style.display = 'none';
-      document.getElementById('login-section').style.display = 'block';
-      document.getElementById('tab-content').style.display = 'none';
-    }
-
-    function showSignup() {
-      document.getElementById('signup-section').style.display = 'block';
-      document.getElementById('login-section').style.display = 'none';
-      document.getElementById('tab-content').style.display = 'none';
-    }
-
-    function showTab(tab) {
-      alert(`Onglet ${tab} (placeholder)`); // à personnaliser
-    }
-
-    showSignup();
-  </script>
-
+  <script src="game.js"></script>
 </body>
 </html>
