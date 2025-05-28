@@ -200,10 +200,6 @@ function resolveTurn(data, you, opp, matchRef) {
   let pvOpp = data[opp + "_pv"];
   let msg = "";
 
-  if (actionYou === "attack") document.getElementById("attack-sound").play();
-  if (actionYou === "defend") document.getElementById("defend-sound").play();
-  if (actionYou === "heal") document.getElementById("heal-sound").play();
-
   if (actionYou === "attack" && actionOpp === "attack") {
     pvYou -= 10; pvOpp -= 10;
     msg = "Vous vous êtes attaqués !";
@@ -232,7 +228,6 @@ function resolveTurn(data, you, opp, matchRef) {
     document.getElementById("action-msg").textContent = msg;
     addHistoryMessage(`${currentUser.pseudo} a fait ${actionYou}. ${opponent} a fait ${actionOpp}.`);
     if (pvYou <= 0 || pvOpp <= 0) {
-      document.getElementById(pvYou > pvOpp ? "win-sound" : "lose-sound").play();
       alert("Match terminé ! Gagnant : " + (pvYou > pvOpp ? currentUser.pseudo : opponent));
       disableActionButtons(true);
       clearInterval(timerInterval);
