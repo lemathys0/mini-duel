@@ -1,255 +1,129 @@
 ﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <link rel="stylesheet" href="style.css" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mini Duel de Cartes</title>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0; padding-bottom: 60px; /* espace pour menu bas */
-      background: #f9f9f9;
-      color: #222;
-    }
-    h1, h2 {
-      text-align: center;
-    }
-    input {
-      padding: 8px;
-      margin: 5px 0;
-      width: 100%;
-      max-width: 250px;
-      box-sizing: border-box;
-    }
-    button {
-      padding: 10px 20px;
-      margin: 5px;
-      cursor: pointer;
-      font-size: 1em;
-    }
-    #bottom-tabs {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      display: flex;
-      background: #222;
-      color: white;
-      font-size: 1.2em;
-      justify-content: space-around;
-      padding: 8px 0;
-      z-index: 1000;
-    }
-    #bottom-tabs button {
-      background: none;
-      border: none;
-      color: white;
-      flex: 1;
-    }
-    #bottom-tabs button.active {
-      background: #444;
-      font-weight: bold;
-    }
-    #tab-content section {
-      padding: 10px 15px;
-      max-width: 600px;
-      margin: auto;
-    }
-    /* Responsive simple */
-    @media (max-width: 480px) {
-      button {
-        font-size: 1em;
-        padding: 12px;
-      }
-      input {
-        max-width: 100%;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<h1>Mini Duel de Cartes</h1>
+  <h1>Mini Duel de Cartes</h1>
 
-<!-- Inscription -->
-<div id="signup-section">
-  <h2>Inscription</h2>
-  <input id="signup-pseudo" placeholder="Pseudo" /><br />
-  <input id="signup-code" placeholder="Code secret (4 chiffres)" maxlength="4" /><br />
-  <button onclick="signup()">S'inscrire</button>
-  <p id="signup-msg" style="color:red;"></p>
-  <p><a href="#" onclick="showLogin()">Déjà inscrit ? Connexion</a></p>
-</div>
+  <!-- Inscription -->
+  <div id="signup-section">
+    <h2>Inscription</h2>
+    <input id="signup-pseudo" placeholder="Pseudo" />
+    <input id="signup-code" placeholder="Code secret (4 chiffres)" maxlength="4" />
+    <button onclick="signup()">S'inscrire</button>
+    <p id="signup-msg"></p>
+    <p><a href="#" onclick="showLogin()">Déjà inscrit ? Connexion</a></p>
+  </div>
 
-<!-- Connexion -->
-<div id="login-section" style="display:none;">
-  <h2>Connexion</h2>
-  <input id="login-pseudo" placeholder="Pseudo" /><br />
-  <input id="login-code" placeholder="Code secret (4 chiffres)" maxlength="4" /><br />
-  <button onclick="login()">Se connecter</button>
-  <p id="login-msg" style="color:red;"></p>
-  <p><a href="#" onclick="showSignup()">Pas encore inscrit ? Inscription</a></p>
-</div>
+  <!-- Connexion -->
+  <div id="login-section" style="display:none;">
+    <h2>Connexion</h2>
+    <input id="login-pseudo" placeholder="Pseudo" />
+    <input id="login-code" placeholder="Code secret (4 chiffres)" maxlength="4" />
+    <button onclick="login()">Se connecter</button>
+    <p id="login-msg"></p>
+    <p><a href="#" onclick="showSignup()">Pas encore inscrit ? Inscription</a></p>
+  </div>
 
-<!-- Conteneur onglets -->
-<div id="tab-content" style="display:none;">
+  <!-- Zone de jeu -->
+  <div id="tab-content" style="display:none;">
+    <h2>Bienvenue <span id="user-name"></span> !</h2>
 
-  <section id="tab-game" style="display:block;">
-    <h2>🎮 Jeu</h2>
-    <p>Bienvenue dans la section Jeu, <span id="user-name"></span> !</p>
-    <button onclick="alert('🗡️ Attaque !')">🗡️ Attaquer</button>
-    <button onclick="alert('🛡️ Défendre !')">🛡️ Défendre</button>
-  </section>
+    <div id="combat-zone">
+      <p>🧟 Ennemi : Gobelin</p>
+      <progress id="enemy-hp" value="100" max="100"></progress>
+      <div>
+        <button onclick="attack()">🗡️ Attaquer</button>
+        <button onclick="defend()">🛡️ Défendre</button>
+      </div>
+      <p id="combat-result"></p>
+    </div>
+  </div>
 
-  <section id="tab-leaderboard" style="display:none;">
-    <h2>🏆 Classement</h2>
-    <p>Ici, tu verras les meilleurs joueurs !</p>
-  </section>
+  <!-- Onglets bas -->
+  <div id="bottom-tabs" style="display:none;">
+    <button class="tab-btn active" onclick="showTab('game')">🎮 Jeu</button>
+    <button class="tab-btn" onclick="alert('Bientôt !')">🏆 Classement</button>
+    <button class="tab-btn" onclick="alert('À venir !')">👥 Amis</button>
+  </div>
 
-  <section id="tab-friends" style="display:none;">
-    <h2>👥 Amis</h2>
-    <p>Ta liste d'amis sera ici.</p>
-  </section>
+  <script>
+    let currentUser = null;
+    let enemyHP = 100;
 
-</div>
-
-<script>
-  // Config Firebase
-  const firebaseConfig = {
-    apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
-    authDomain: "mini-duel-de-cartes.firebaseapp.com",
-    databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
-    projectId: "mini-duel-de-cartes",
-    storageBucket: "mini-duel-de-cartes.appspot.com",
-    messagingSenderId: "1084207708579",
-    appId: "1:1084207708579:web:f1312b68b7eb08f9d44216"
-  };
-
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-
-  let currentUser = null;
-
-  // Affichage des sections
-  window.showSignup = function() {
-    document.getElementById('signup-section').style.display = 'block';
-    document.getElementById('login-section').style.display = 'none';
-    document.getElementById('tab-content').style.display = 'none';
-  };
-
-  window.showLogin = function() {
-    document.getElementById('signup-section').style.display = 'none';
-    document.getElementById('login-section').style.display = 'block';
-    document.getElementById('tab-content').style.display = 'none';
-  };
-
-  window.showGameTabs = function() {
-    document.getElementById('signup-section').style.display = 'none';
-    document.getElementById('login-section').style.display = 'none';
-    document.getElementById('tab-content').style.display = 'block';
-    document.getElementById('user-name').textContent = currentUser.pseudo;
-  };
-
-  // Inscription
-  window.signup = function() {
-    const pseudo = document.getElementById('signup-pseudo').value.trim();
-    const code = document.getElementById('signup-code').value.trim();
-    const msg = document.getElementById('signup-msg');
-    msg.textContent = '';
-
-    if (!pseudo || code.length !== 4 || !/^\d{4}$/.test(code)) {
-      msg.textContent = 'Pseudo invalide ou code doit être 4 chiffres';
-      return;
+    function attack() {
+      const damage = Math.floor(Math.random() * 20) + 5;
+      enemyHP = Math.max(0, enemyHP - damage);
+      document.getElementById('enemy-hp').value = enemyHP;
+      document.getElementById('combat-result').textContent = `💥 Tu as infligé ${damage} dégâts !`;
+      if (enemyHP === 0) {
+        document.getElementById('combat-result').textContent = "🏆 Tu as vaincu le gobelin !";
+      }
     }
 
-    const key = `${pseudo}_${code}`;
-    const userRef = db.ref('users/' + key);
-
-    userRef.once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        msg.textContent = 'Ce compte existe déjà, connecte-toi';
-      } else {
-        userRef.set({ pseudo, code, trophées: 100, pv: 100 }).then(() => {
-          currentUser = { pseudo, code, trophées: 100, pv: 100, key };
-          window.showGameTabs();
-        });
-      }
-    });
-  };
-
-  // Connexion
-  window.login = function() {
-    const pseudo = document.getElementById('login-pseudo').value.trim();
-    const code = document.getElementById('login-code').value.trim();
-    const msg = document.getElementById('login-msg');
-    msg.textContent = '';
-
-    if (!pseudo || code.length !== 4 || !/^\d{4}$/.test(code)) {
-      msg.textContent = 'Pseudo invalide ou code doit être 4 chiffres';
-      return;
+    function defend() {
+      document.getElementById('combat-result').textContent = "🛡️ Tu te défends, aucun dégât reçu.";
     }
 
-    const key = `${pseudo}_${code}`;
-    const userRef = db.ref('users/' + key);
+    function signup() {
+      const pseudo = document.getElementById('signup-pseudo').value.trim();
+      const code = document.getElementById('signup-code').value.trim();
+      const msg = document.getElementById('signup-msg');
+      msg.textContent = '';
 
-    userRef.once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        currentUser = snapshot.val();
-        currentUser.key = key;
-        window.showGameTabs();
-      } else {
-        msg.textContent = "Compte non trouvé, inscris-toi d'abord";
+      if (!pseudo || !/^\d{4}$/.test(code)) {
+        msg.textContent = 'Pseudo ou code invalide';
+        return;
       }
-    });
-  };
 
-  // Onglets menu bas
-  const tabs = document.querySelectorAll('#bottom-tabs button');
-  const sections = {
-    game: document.getElementById('tab-game'),
-    leaderboard: document.getElementById('tab-leaderboard'),
-    friends: document.getElementById('tab-friends'),
-  };
+      currentUser = { pseudo, code };
+      document.getElementById('user-name').textContent = pseudo;
+      document.getElementById('signup-section').style.display = 'none';
+      document.getElementById('tab-content').style.display = 'block';
+      document.getElementById('bottom-tabs').style.display = 'flex';
+    }
 
-  tabs.forEach(btn => {
-    btn.addEventListener('click', () => {
-      // Retire active de tous
-      tabs.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+    function login() {
+      const pseudo = document.getElementById('login-pseudo').value.trim();
+      const code = document.getElementById('login-code').value.trim();
+      const msg = document.getElementById('login-msg');
+      msg.textContent = '';
 
-      // Affiche la bonne section
-      const tab = btn.getAttribute('data-tab');
-      for (const key in sections) {
-        sections[key].style.display = (key === tab) ? 'block' : 'none';
+      if (!pseudo || !/^\d{4}$/.test(code)) {
+        msg.textContent = 'Pseudo ou code invalide';
+        return;
       }
-    });
-  });
-</script>
 
-<!-- Menu onglets bas -->
-<div id="bottom-tabs" style="display:none;">
-  <button class="tab-btn active" data-tab="game">🎮 Jeu</button>
-  <button class="tab-btn" data-tab="leaderboard">🏆 Classement</button>
-  <button class="tab-btn" data-tab="friends">👥 Amis</button>
-</div>
+      currentUser = { pseudo, code };
+      document.getElementById('user-name').textContent = pseudo;
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('tab-content').style.display = 'block';
+      document.getElementById('bottom-tabs').style.display = 'flex';
+    }
 
-<script>
-  // Affiche le menu onglets bas seulement quand connecté
-  function toggleBottomTabs(show) {
-    document.getElementById('bottom-tabs').style.display = show ? 'flex' : 'none';
-  }
+    function showLogin() {
+      document.getElementById('signup-section').style.display = 'none';
+      document.getElementById('login-section').style.display = 'block';
+      document.getElementById('tab-content').style.display = 'none';
+    }
 
-  // Mets à jour la visibilité du menu onglets à la connexion/inscription
-  const originalShowGameTabs = window.showGameTabs;
-  window.showGameTabs = function() {
-    originalShowGameTabs();
-    toggleBottomTabs(true);
-  };
+    function showSignup() {
+      document.getElementById('signup-section').style.display = 'block';
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('tab-content').style.display = 'none';
+    }
 
-  // Au démarrage, afficher inscription
-  window.showSignup();
-</script>
+    function showTab(tab) {
+      alert(`Onglet ${tab} (placeholder)`); // à personnaliser
+    }
+
+    showSignup();
+  </script>
 
 </body>
 </html>
