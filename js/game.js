@@ -53,26 +53,39 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     // Configure les opérations onDisconnect pour gérer la déconnexion du joueur
     // Ceci doit être fait une seule fois lors de la connexion du joueur à un match
     if (!onDisconnectRef) { // S'assure que ce n'est pas configuré plusieurs fois
+        console.log("--- DEBUGGING onDisconnect ---");
+        console.log("1. Value of db:", db); // Log the 'db' instance
+        
         // Obtient une référence à la présence du joueur actuel
         const playerPresenceRef = ref(db, `matches/${currentMatchId}/players/${youKey}`);
+        console.log("2. Value of playerPresenceRef:", playerPresenceRef); // Log the reference object
         
-        // Obtient l'objet OnDisconnect pour cette référence
         // C'est ICI que l'erreur se produit si playerPresenceRef n'est pas un objet Reference valide
-        const currentOnDisconnect = playerPresenceRef.onDisconnect();
-        
-        // Stocke cet objet OnDisconnect globalement pour pouvoir l'annuler plus tard
-        setOnDisconnectRef(currentOnDisconnect); 
+        // Testons la méthode directement
+        if (typeof playerPresenceRef === 'object' && playerPresenceRef !== null && typeof playerPresenceRef.onDisconnect === 'function') {
+            console.log("3. playerPresenceRef.onDisconnect is a function. Proceeding with method call.");
+            const currentOnDisconnect = playerPresenceRef.onDisconnect(); 
+            // Alternative: const currentOnDisconnect = onDisconnect(playerPresenceRef);
+            
+            // Stocke cet objet OnDisconnect globalement pour pouvoir l'annuler plus tard
+            setOnDisconnectRef(currentOnDisconnect); 
 
-        // Définit les mises à jour à effectuer en cas de déconnexion
-        currentOnDisconnect.update({
-            status: 'forfeited', // Marque le joueur comme "abandonné"
-            lastSeen: serverTimestamp(), // Met à jour la dernière fois vu
-            action: null // Efface son action en attente
-        }).then(() => {
-            console.log(`Opérations onDisconnect configurées pour ${youKey}`);
-        }).catch(error => {
-            console.error("Échec de la configuration des opérations onDisconnect:", error);
-        });
+            // Définit les mises à jour à effectuer en cas de déconnexion
+            currentOnDisconnect.update({
+                status: 'forfeited', // Marque le joueur comme "abandonné"
+                lastSeen: serverTimestamp(), // Met à jour la dernière fois vu
+                action: null // Efface son action en attente
+            }).then(() => {
+                console.log(`Opérations onDisconnect configurées pour ${youKey}`);
+            }).catch(error => {
+                console.error("Échec de la configuration des opérations onDisconnect:", error);
+            });
+        } else {
+            console.error("3. CRITICAL ERROR: playerPresenceRef.onDisconnect is NOT a function.", playerPresenceRef);
+            // You might want to add a more visible error message here in the UI
+            showMessage("action-msg", "Erreur critique: La fonction de déconnexion n'a pas pu être configurée. Le jeu pourrait être instable.");
+        }
+        console.log("--- END DEBUGGING onDisconnect ---");
     }
 
     // Listener principal du match
@@ -208,7 +221,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 async function performAction(actionType) {
     // Vérifie si c'est le tour du joueur et s'il n'a pas déjà joué
     if (!currentMatchId || !currentUser || !youKey || hasPlayedThisTurn) {
-        if (!hasPlayedThisTurn) { // Si le joueur n'a pas joué, mais qu'une autre condition est fausse
+        if (!hasPlayedThisTurn) { // Si le joueur n'a pas joué, mais qu'une autre condition est false
             showMessage("action-msg", "Ce n'est pas votre tour ou le match n'est pas prêt.");
         }
         return;
