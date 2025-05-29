@@ -1,13 +1,13 @@
 ﻿// Import Firebase (adapter selon ta config)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update, push, child, remove, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics.js";
+import { initializeApp } from "[https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js](https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js)";
+import { getDatabase, ref, set, get, onValue, update, push, child, remove, onDisconnect, serverTimestamp } from "[https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js](https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js)";
+import { getAnalytics } from "[https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics.js](https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics.js)";
 
 // --- CONFIGURATION FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
     authDomain: "mini-duel-de-cartes.firebaseapp.com",
-    databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
+    databaseURL: "[https://mini-duel-de-cartes-default-rtdb.firebaseio.com](https://mini-duel-de-cartes-default-rtdb.firebaseio.com)",
     projectId: "mini-duel-de-cartes",
     storageBucket: "mini-duel-de-cartes.firebasestorage.app",
     messagingSenderId: "1084207708579",
@@ -28,9 +28,10 @@ let timerInterval = null;
 let timerMax = 30; // secondes
 let timerCount = timerMax;
 
-// NOUVEAU: Variables pour gérer les timeouts de nettoyage des matchs
-let creatorMatchCleanupInterval = null;
+// Variables pour gérer les timeouts/intervals de nettoyage des matchs
+let unsubscribeMatchCleanupListener = null; // NEW: For the match creation timeout listener
 let matchForfeitDeletionTimeout = null;
+let currentMatchOnValueOffFunction = null; // NEW: To store the unsubscribe function for the main match listener
 
 // --- FONCTIONS UTILITAIRES ---
 
@@ -120,7 +121,6 @@ document.getElementById("create-match-btn").onclick = () => {
             showMessage("match-msg", "Match déjà existant");
         } else {
             // Créer match avec currentUser comme joueur 1
-            // Ajout de 'status: connected' pour le p1 et 'createdAt'
             set(matchRef, {
                 players: {
                     p1: { pseudo: currentUser.pseudo, pv: 100, defending: false, status: 'connected' },
@@ -136,32 +136,45 @@ document.getElementById("create-match-btn").onclick = () => {
                 startMatch(matchId, true);
 
                 // NOUVEAU: Démarrer un timer pour nettoyer le match si personne ne rejoint après 1 minute
-                // On utilise un onValue pour être sûr que createdAt est bien synchronisé
-                onValue(matchRef, (matchSnapshot) => {
+                // Stocker la fonction de désabonnement
+                unsubscribeMatchCleanupListener = onValue(matchRef, (matchSnapshot) => {
                     const matchData = matchSnapshot.val();
                     if (matchData && !matchData.players.p2 && matchData.createdAt) {
-                        const timeElapsed = Date.now() - matchData.createdAt; // Comparaison avec Date.now() après synchronisation
-                        if (timeElapsed > 60000) { // 60 secondes
-                            console.log(`Match ${matchId} non rejoint après 1 minute, suppression.`);
-                            remove(matchRef) // Supprime le match
-                                .then(() => {
-                                    showMessage("match-msg", "Match expiré et supprimé car aucun adversaire n'a rejoint.", false);
-                                    // Assure-toi que la suppression ne relance pas backToMenu si déjà en cours
-                                    if (currentMatch === matchId) {
-                                        backToMenu(true);
-                                    }
-                                })
-                                .catch(error => console.error("Error removing expired match:", error));
-                            // Arrête l'écoute et le timer si le match est supprimé ou rejoint
-                            matchSnapshot.ref.off();
+                        // Assurez-vous que createdAt est un nombre (timestamp) si vous le comparez avec Date.now()
+                        // Firebase serverTimestamp() retourne un objet, qui se transforme en nombre après synchronisation.
+                        // On attend une valeur numérique.
+                        if (typeof matchData.createdAt === 'number') {
+                            const timeElapsed = Date.now() - matchData.createdAt;
+                            if (timeElapsed > 60000) { // 60 secondes
+                                console.log(`Match ${matchId} non rejoint après 1 minute, suppression.`);
+                                remove(matchRef) // Supprime le match
+                                    .then(() => {
+                                        showMessage("match-msg", "Match expiré et supprimé car aucun adversaire n'a rejoint.", false);
+                                        if (currentMatch === matchId) {
+                                            backToMenu(true);
+                                        }
+                                    })
+                                    .catch(error => console.error("Error removing expired match:", error));
+                                // Désabonner après l'action
+                                if (unsubscribeMatchCleanupListener) {
+                                    unsubscribeMatchCleanupListener();
+                                    unsubscribeMatchCleanupListener = null;
+                                }
+                            }
                         }
                     } else if (matchData && matchData.players.p2) {
                         // Adversaire a rejoint, arrêter l'écoute pour ce timer de nettoyage
-                        matchSnapshot.ref.off();
                         console.log(`Match ${matchId} rejoint, nettoyage annulé.`);
+                        if (unsubscribeMatchCleanupListener) {
+                            unsubscribeMatchCleanupListener();
+                            unsubscribeMatchCleanupListener = null;
+                        }
                     } else if (!matchData) {
-                        // Match déjà supprimé
-                        matchSnapshot.ref.off();
+                        // Match déjà supprimé ou n'existe plus, désabonner
+                        if (unsubscribeMatchCleanupListener) {
+                            unsubscribeMatchCleanupListener();
+                            unsubscribeMatchCleanupListener = null;
+                        }
                     }
                 });
 
@@ -191,7 +204,6 @@ document.getElementById("join-match-btn").onclick = () => {
         }
 
         // Ajouter currentUser en p2
-        // Ajout de 'status: connected' pour le p2
         update(child(matchRef, "players"), {
             p2: { pseudo: currentUser.pseudo, pv: 100, defending: false, status: 'connected' }
         }).then(() => {
@@ -219,14 +231,23 @@ function startMatch(id, isCreator) {
     disableActionButtons(false);
     document.getElementById("action-msg").textContent = "";
 
-    // Listener onDisconnect pour le joueur actuel
-    onValue(matchRef, (snapshot) => {
+    // IMPORTANT: Stocker la fonction de désabonnement pour le listener principal du match
+    if (currentMatchOnValueOffFunction) {
+        currentMatchOnValueOffFunction(); // Désabonne-toi de l'ancien match si tu en rejoins un nouveau
+    }
+
+    currentMatchOnValueOffFunction = onValue(matchRef, (snapshot) => {
         const data = snapshot.val();
         if (!data) {
             // Le match a été supprimé ou n'existe plus
             if (currentMatch === id) { // S'assurer que c'est bien le match en cours
                 showMessage("action-msg", "Le match a été terminé ou supprimé.");
                 setTimeout(() => backToMenu(true), 3000); // Retourne au menu après un délai
+            }
+            // Désabonne ce listener si le match n'existe plus
+            if (currentMatchOnValueOffFunction) {
+                currentMatchOnValueOffFunction();
+                currentMatchOnValueOffFunction = null;
             }
             return;
         }
@@ -237,13 +258,12 @@ function startMatch(id, isCreator) {
 
         if (!p1 || !p2) {
             document.getElementById("action-msg").textContent = "En attente de l'adversaire...";
-            // S'assurer que le timer est bien arrêté tant qu'il manque un joueur
             clearInterval(timerInterval);
             timerInterval = null;
             return; // Ne pas continuer tant que p2 n'est pas là
         }
 
-        // NOUVEAU: Vérifier le statut de connexion des deux joueurs
+        // Vérifier le statut de connexion des deux joueurs
         const bothPlayersReady = (p1.status === 'connected' && p2.status === 'connected');
 
         if (!bothPlayersReady) {
@@ -252,7 +272,6 @@ function startMatch(id, isCreator) {
             timerInterval = null;
             return; // Attendre que les deux joueurs soient marqués comme 'connected'
         }
-
 
         let you, opponent, youKey, opponentKey;
         if (p1.pseudo === currentUser.pseudo) {
@@ -265,19 +284,19 @@ function startMatch(id, isCreator) {
             // Spectateur non géré ou problème
             document.getElementById("action-msg").textContent = "Tu n'es pas dans ce match.";
             disableActionButtons(true);
-            clearInterval(timerInterval); // Arrête le timer
+            clearInterval(timerInterval);
             timerInterval = null;
             return;
         }
 
-        // GESTION DE L'ON DISCONNECT (ajouté ici pour s'assurer que youKey est bien défini)
-        // Ceci est important pour marquer le joueur comme déconnecté si le navigateur est fermé
+        // GESTION DE L'ON DISCONNECT (à l'intérieur du listener, car youKey est défini)
         const yourPlayerRef = ref(db, `matches/${id}/players/${youKey}`);
         onDisconnect(yourPlayerRef).update({
-            pv: 0, // Le joueur perd s'il se déconnecte
-            status: 'disconnected', // Marquer comme déconnecté
+            pv: 0,
+            status: 'disconnected',
             lastSeen: new Date().toISOString()
         }).catch(error => console.error("Error setting onDisconnect:", error));
+
 
         // Afficher PV
         document.getElementById("you-pv").textContent = you.pv;
@@ -309,25 +328,29 @@ function startMatch(id, isCreator) {
         }
 
 
-        // Gestion tour
+        // Gestion du tour
         if (data.turn !== youKey) {
+            // Ce n'est PAS ton tour
             disableActionButtons(true);
             document.getElementById("action-msg").textContent = `Tour de ${opponent.pseudo}, patience...`;
             clearInterval(timerInterval);
             timerInterval = null;
-            // CORRECTION BUG TOURS BLOQUÉS: Réinitialise hasPlayedThisTurn pour le prochain tour du joueur
-            hasPlayedThisTurn = false;
+            hasPlayedThisTurn = false; // Réinitialise pour ton prochain tour
         } else {
             // C'est ton tour
-            if (hasPlayedThisTurn) { // Si tu as déjà joué ce tour
+            if (hasPlayedThisTurn) {
+                // Tu as déjà joué pendant ce tour
                 disableActionButtons(true);
-                document.getElementById("action-msg").textContent = "Action jouée, en attente du tour adversaire.";
+                document.getElementById("action-msg").textContent = "Action jouée, en attente du tour adversaire...";
                 clearInterval(timerInterval);
                 timerInterval = null;
-            } else { // C'est ton tour et tu n'as pas encore joué
+            } else {
+                // C'est ton tour et tu n'as pas encore joué
                 disableActionButtons(false);
                 document.getElementById("action-msg").textContent = "C'est ton tour, choisis une action.";
-                resetTimer(); // Démarre ou réinitialise le timer
+                if (timerInterval === null) { // Seulement démarrer si pas déjà en cours
+                     resetTimer();
+                }
             }
         }
 
@@ -339,10 +362,9 @@ function startMatch(id, isCreator) {
             p.textContent = entry;
             histEl.appendChild(p);
         });
-        histEl.scrollTop = histEl.scrollHeight; // Scroll vers le bas pour voir le dernier message
+        histEl.scrollTop = histEl.scrollHeight;
 
         // Fin de partie
-        // Vérifie aussi si l'adversaire s'est déconnecté (status: 'disconnected' ou 'forfeited')
         const opponentDisconnected = (opponent.status === 'disconnected' || opponent.status === 'forfeited');
 
         if (you.pv <= 0 || opponent.pv <= 0 || data.status === 'finished' || data.status === 'forfeited' || opponentDisconnected) {
@@ -350,10 +372,10 @@ function startMatch(id, isCreator) {
             clearInterval(timerInterval);
             timerInterval = null;
 
-            // Annuler l'onDisconnect pour les joueurs qui terminent le match normalement
+            // Annuler l'onDisconnect quand le match se termine
             if (currentUser && currentMatch) {
                 const playerRefToCancel = ref(db, `matches/${currentMatch}/players/${youKey}`);
-                onDisconnect(playerRefToCancel).cancel();
+                onDisconnect(playerRefToCancel).cancel().catch(error => console.error("Error cancelling onDisconnect:", error));
             }
 
             let yourResult = "draw";
@@ -364,24 +386,21 @@ function startMatch(id, isCreator) {
             } else if (you.pv <= 0) {
                 finalMessage = "Tu as perdu...";
                 yourResult = "loss";
-            } else { // you.pv > 0
+            } else {
                 finalMessage = "Tu as gagné !";
                 yourResult = "win";
             }
 
-            // Si l'adversaire s'est déconnecté/a fait forfait, ajuster le message et la victoire
-            if (opponentDisconnected && you.pv > 0) { // Si tu es toujours en vie et l'adversaire a quitté
+            if (opponentDisconnected && you.pv > 0) {
                  finalMessage = "Ton adversaire a quitté le match. Tu as gagné par forfait !";
                  yourResult = "win";
-            } else if (opponentDisconnected && you.pv <= 0) { // Si tu es mort et l'adversaire a quitté
+            } else if (opponentDisconnected && you.pv <= 0) {
                 finalMessage = "Ton adversaire a quitté le match, mais tu as perdu tes PV.";
-                yourResult = "loss"; // Ou "draw" si c'est simultané
+                yourResult = "loss";
             }
-
 
             document.getElementById("action-msg").textContent = finalMessage;
 
-            // Mise à jour des stats du joueur actuel
             const userStatsRef = ref(db, `users/${currentUser.pseudo}`);
             get(userStatsRef).then(snapshot => {
                 if (snapshot.exists()) {
@@ -400,19 +419,18 @@ function startMatch(id, isCreator) {
                 }
             }).catch(error => console.error("Error updating user stats:", error));
 
-            // NOUVEAU: Démarrer un timer pour la suppression du match et le retour au menu
-            if (!matchForfeitDeletionTimeout) { // Pour éviter de créer plusieurs timeouts
+            if (!matchForfeitDeletionTimeout) {
                 document.getElementById("action-msg").textContent += " Retour au menu dans 10 secondes...";
                 matchForfeitDeletionTimeout = setTimeout(() => {
                     console.log(`Match ${id} terminé/forfait, suppression.`);
                     remove(matchRef)
                         .then(() => {
                             console.log(`Match ${id} supprimé.`);
-                            backToMenu(true); // Renvoie au menu après suppression
+                            backToMenu(true);
                         })
                         .catch(error => console.error("Error removing finished match:", error));
-                    matchForfeitDeletionTimeout = null; // Réinitialise la variable du timeout
-                }, 10000); // 10 secondes avant la suppression
+                    matchForfeitDeletionTimeout = null;
+                }, 10000);
             }
         }
     }, (error) => {
@@ -446,7 +464,6 @@ function doAction(action) {
             return;
         }
 
-        // Appliquer action
         const opponentKey = youKey === "p1" ? "p2" : "p1";
         const you = data.players[youKey];
         const opponent = data.players[opponentKey];
@@ -460,25 +477,20 @@ function doAction(action) {
         let newOpponentPV = opponent.pv;
         let historyEntry = "";
 
-        // Préparer nouvelle valeur players
         let newPlayers = { ...data.players };
-
-        // Réinitialise toujours la défense du joueur actuel avant d'appliquer la nouvelle action
         newPlayers[youKey].defending = false;
 
         switch (action) {
             case "attack":
-                // Dégâts de base entre 15 et 25
                 let damage = Math.floor(Math.random() * 11) + 15;
                 if (opponent.defending) {
-                    damage = Math.floor(damage / 2); // Moitié des dégâts si l'adversaire défend
-                    newPlayers[opponentKey].defending = false; // La défense de l'adversaire est consommée
+                    damage = Math.floor(damage / 2);
+                    newPlayers[opponentKey].defending = false;
                 }
                 newOpponentPV = Math.max(0, opponent.pv - damage);
                 historyEntry = `${you.pseudo} attaque et inflige ${damage} dégâts à ${opponent.pseudo}.`;
                 newPlayers[opponentKey].pv = newOpponentPV;
 
-                // Animation de dégâts
                 const opponentPVEl = document.getElementById("opponent-pv");
                 if (opponentPVEl) {
                     opponentPVEl.classList.add('damage-effect');
@@ -489,19 +501,16 @@ function doAction(action) {
                 break;
 
             case "defend":
-                // Le joueur actuel se met en défense pour le prochain tour de l'adversaire
                 newPlayers[youKey].defending = true;
                 historyEntry = `${you.pseudo} se met en position défensive.`;
                 break;
 
             case "heal":
-                // Soin de base entre 10 et 20
                 let healAmount = Math.floor(Math.random() * 11) + 10;
                 newYouPV = Math.min(100, you.pv + healAmount);
                 historyEntry = `${you.pseudo} se soigne et récupère ${healAmount} PV.`;
                 newPlayers[youKey].pv = newYouPV;
 
-                // Animation de soin
                 const youPVEl = document.getElementById("you-pv");
                 if (youPVEl) {
                     youPVEl.classList.add('heal-effect');
@@ -515,14 +524,10 @@ function doAction(action) {
                 return;
         }
 
-        // Changer tour
         const newTurn = opponentKey;
-
-        // Ajouter historique
         const newHistory = data.history || [];
         newHistory.push(historyEntry);
 
-        // Mise à jour Firebase
         update(matchRef, {
             players: newPlayers,
             turn: newTurn,
@@ -532,20 +537,19 @@ function doAction(action) {
         hasPlayedThisTurn = true;
         disableActionButtons(true);
         document.getElementById("action-msg").textContent = "Action envoyée, en attente du tour adversaire.";
-        resetTimer(); // Réinitialise le timer pour le prochain joueur
     }).catch(error => console.error("Error performing action:", error));
 }
 
 // --- TIMER ---
 
 function startTimer() {
-    resetTimer(); // Appelle resetTimer pour initialiser et lancer le timer
+    resetTimer();
 }
 
 function resetTimer() {
-    clearInterval(timerInterval); // Nettoie tout intervalle précédent
-    timerCount = timerMax; // Réinitialise le compteur
-    updateTimerUI(timerCount); // Met à jour l'affichage immédiatement
+    clearInterval(timerInterval);
+    timerCount = timerMax;
+    updateTimerUI(timerCount);
 
     timerInterval = setInterval(() => {
         timerCount--;
@@ -555,7 +559,7 @@ function resetTimer() {
             clearInterval(timerInterval);
             timerInterval = null;
             if (!hasPlayedThisTurn) {
-                autoPassTurn(); // Passer le tour si le joueur n'a rien fait
+                autoPassTurn();
             }
         }
     }, 1000);
@@ -568,7 +572,6 @@ function updateTimerUI(seconds) {
 }
 
 function autoPassTurn() {
-    // Passe le tour si le joueur n'a rien fait
     const matchRef = ref(db, `matches/${currentMatch}`);
 
     get(matchRef).then(snapshot => {
@@ -579,13 +582,12 @@ function autoPassTurn() {
         if (data.players.p1.pseudo === currentUser.pseudo) youKey = "p1";
         else if (data.players.p2 && data.players.p2.pseudo === currentUser.pseudo) youKey = "p2";
 
-        if (!youKey || data.turn !== youKey) return; // Ce n'est pas ton tour ou tu n'es pas dans le match
+        if (!youKey || data.turn !== youKey) return;
 
         const opponentKey = youKey === "p1" ? "p2" : "p1";
         const newHistory = data.history || [];
         newHistory.push(`${currentUser.pseudo} n'a pas joué à temps, tour passé automatiquement.`);
 
-        // Important : Réinitialise la défense du joueur qui a laissé le temps s'écouler
         let newPlayers = { ...data.players };
         newPlayers[youKey].defending = false;
 
@@ -595,7 +597,7 @@ function autoPassTurn() {
             history: newHistory
         });
 
-        hasPlayedThisTurn = true; // Pour éviter une double action si le onValue est lent
+        hasPlayedThisTurn = true;
         disableActionButtons(true);
         document.getElementById("action-msg").textContent = "Temps écoulé, tour passé automatiquement.";
     }).catch(error => console.error("Error in autoPassTurn:", error));
@@ -604,15 +606,20 @@ function autoPassTurn() {
 document.getElementById("back-to-menu-btn").onclick = () => backToMenu(false);
 
 function backToMenu(matchEndedUnexpectedly = false) {
-    // NOUVEAU: Nettoie les intervalles/timeouts de nettoyage de match
-    if (creatorMatchCleanupInterval) {
-        clearInterval(creatorMatchCleanupInterval);
-        creatorMatchCleanupInterval = null;
+    // Nettoyage des timers et listeners globaux liés aux matchs
+    if (unsubscribeMatchCleanupListener) {
+        unsubscribeMatchCleanupListener();
+        unsubscribeMatchCleanupListener = null;
     }
     if (matchForfeitDeletionTimeout) {
         clearTimeout(matchForfeitDeletionTimeout);
         matchForfeitDeletionTimeout = null;
     }
+    if (currentMatchOnValueOffFunction) {
+        currentMatchOnValueOffFunction(); // Désabonne le listener principal du match
+        currentMatchOnValueOffFunction = null;
+    }
+
 
     if (currentMatch && currentUser) {
         const matchRef = ref(db, `matches/${currentMatch}`);
@@ -625,8 +632,9 @@ function backToMenu(matchEndedUnexpectedly = false) {
 
                 if (youKey) {
                     const yourPlayerRef = ref(db, `matches/${currentMatch}/players/${youKey}`);
-                    // Annuler l'onDisconnect mis en place pour ce match
-                    yourPlayerRef.onDisconnect().cancel().catch(e => console.error("Failed to cancel onDisconnect:", e));
+                    // Annuler l'onDisconnect mis en place pour ce match si on quitte proprement
+                    // Cela empêche le onDisconnect de s'activer si l'utilisateur quitte via le bouton
+                    onDisconnect(yourPlayerRef).cancel().catch(e => console.error("Failed to cancel onDisconnect:", e));
 
                     // Si le match n'était pas déjà marqué comme 'finished' ou 'forfeited' et que tu le quittes (pas une fin normale)
                     if (!matchEndedUnexpectedly && data.status !== 'finished' && data.status !== 'forfeited') {
@@ -634,15 +642,14 @@ function backToMenu(matchEndedUnexpectedly = false) {
                         update(yourPlayerRef, { status: 'forfeited', pv: 0 })
                             .then(() => {
                                 console.log(`${currentUser.pseudo} a quitté le match par le bouton. Marqué comme forfait.`);
-                                // Notifier l'adversaire via l'historique
                                 const opponentKey = youKey === "p1" ? "p2" : "p1";
-                                if (data.players[opponentKey]) { // S'assurer que l'adversaire existe
+                                if (data.players[opponentKey]) {
                                     const newHistory = data.history || [];
                                     newHistory.push(`${currentUser.pseudo} a quitté le match. ${data.players[opponentKey].pseudo} gagne par forfait.`);
                                     update(matchRef, {
                                         history: newHistory,
-                                        status: 'forfeited', // Marquer le match comme 'forfeited'
-                                        turn: opponentKey // Donner la victoire à l'adversaire
+                                        status: 'forfeited',
+                                        turn: opponentKey
                                     }).catch(error => console.error("Error updating match on explicit forfeit:", error));
                                 }
                             })
@@ -664,5 +671,5 @@ function backToMenu(matchEndedUnexpectedly = false) {
     document.getElementById("match").style.display = "block";
     document.getElementById("match-id").value = "";
     document.getElementById("match-msg").textContent = "";
-    document.getElementById("action-msg").textContent = ""; // Nettoyer le message d'action
+    document.getElementById("action-msg").textContent = "";
 }
