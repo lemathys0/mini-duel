@@ -477,8 +477,11 @@
             <h2>Bienvenue <span id="player-name" style="color:#f1c40f;"></span> !</h2>
             <h3>Rejoindre ou Créer un Match</h3>
             <input type="text" id="match-id" placeholder="Code du Match (ex: ABC123)">
-            <button id="join-match-btn">Rejoindre Match</button>
-            <button id="create-match-btn">Créer Match</button>
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; margin-top: 10px;">
+                <button id="join-match-btn" style="flex: 1 1 auto; margin: 5px;">Rejoindre Match</button>
+                <button id="create-match-btn" style="flex: 1 1 auto; margin: 5px;">Créer Match</button>
+                <button id="play-ai-btn" style="flex: 1 1 auto; margin: 5px; background-color: #27ae60;">Jouer contre l'IA</button>
+            </div>
             <p id="match-msg" class="message"></p>
         </div>
 
@@ -533,7 +536,7 @@
 
         // --- CONFIGURATION FIREBASE ---
         const firebaseConfig = {
-            apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA", // REMPLACEZ PAR VOTRE VRAIE CLÉ API
+            apiKey: "YOUR_FIREBASE_API_KEY", // REMPLACEZ PAR VOTRE VRAIE CLÉ API
             authDomain: "mini-duel-de-cartes.firebaseapp.com",
             databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
             projectId: "mini-duel-de-cartes",
@@ -558,6 +561,7 @@
         // timerCount n'est plus géré directement par le script, mais par le calcul basé sur lastTurnProcessedAt
         let youKey = null; // 'p1' or 'p2' for the current user in the match
         let opponentKey = null; // 'p1' or 'p2' for the opponent
+        let gameMode = 'PvP'; // 'PvP' (Player vs Player) ou 'PvAI' (Player vs AI)
 
         let unsubscribeMatchCreationListener = null;
         let matchDeletionTimeout = null;
@@ -582,6 +586,7 @@
         const healBtn = document.getElementById("heal-btn");
         const backToMenuBtn = document.getElementById("back-to-menu-btn");
         const opponentActionStatusEl = document.getElementById("opponent-action-status"); // Nouvel élément
+        const playAiBtn = document.getElementById("play-ai-btn"); // Nouveau bouton
 
 
         // --- FONCTIONS UTILITAIRES ---
@@ -750,6 +755,7 @@
                 if (snapshot.exists()) {
                     showMessage("match-msg", "Ce code de match est déjà utilisé.");
                 } else {
+                    gameMode = 'PvP'; // Set game mode to PvP
                     const initialMatchData = {
                         players: {
                             p1: { pseudo: currentUser.pseudo, pv: 100, status: 'connected', lastSeen: serverTimestamp(), action: null },
@@ -839,6 +845,7 @@
                     return;
                 }
 
+                gameMode = 'PvP'; // Set game mode to PvP
                 const updates = {};
                 updates[`players/p2`] = { pseudo: currentUser.pseudo, pv: 100, status: 'connected', lastSeen: serverTimestamp(), action: null };
                 updates[`status`] = 'playing';
@@ -857,6 +864,40 @@
                 showMessage("match-msg", "Erreur de base de données.");
             });
         };
+
+        // --- NOUVEAU : Jouer contre l'IA ---
+        playAiBtn.onclick = async () => {
+            if (!currentUser) {
+                showMessage("match-msg", "Erreur : utilisateur non connecté.");
+                return;
+            }
+
+            gameMode = 'PvAI'; // Set game mode to PvAI
+            const aiMatchId = "AI_" + currentUser.pseudo + "_" + Date.now().toString().slice(-6); // Unique ID for AI match
+
+            const matchRef = ref(db, `matches/${aiMatchId}`);
+            const initialMatchData = {
+                players: {
+                    p1: { pseudo: currentUser.pseudo, pv: 100, status: 'connected', lastSeen: serverTimestamp(), action: null },
+                    p2: { pseudo: "IA", pv: 100, status: 'connected', lastSeen: serverTimestamp(), action: null } // IA est p2
+                },
+                turn: "p1", // Le joueur commence toujours
+                history: [`Match IA ${aiMatchId} créé par ${currentUser.pseudo}. Le duel contre l'IA commence !`],
+                status: "playing", // Le match commence immédiatement
+                createdAt: serverTimestamp(),
+                lastTurnProcessedAt: serverTimestamp()
+            };
+
+            try {
+                await set(matchRef, initialMatchData);
+                showMessage("match-msg", "Match contre l'IA créé. Bonne chance !", true);
+                startMatchMonitoring(aiMatchId);
+            } catch (error) {
+                console.error("Error creating AI match:", error);
+                showMessage("match-msg", "Erreur lors de la création du match IA.");
+            }
+        };
+
 
         // --- DÉBUT ET SUIVI DU MATCH ---
         function startMatchMonitoring(id) {
@@ -930,18 +971,21 @@
                     return;
                 }
 
-                // Mettre à jour lastSeen et définir onDisconnect
-                const yourPlayerRef = ref(db, `matches/${id}/players/${youKey}`);
-                if (!onDisconnectRef) { // Set onDisconnect only once per match
-                    onDisconnectRef = onDisconnect(yourPlayerRef);
-                    onDisconnectRef.update({
-                        pv: 0, // Set PV to 0 on disconnect as a forfeit
-                        status: 'forfeited', // Mark as forfeited
-                        lastSeen: serverTimestamp()
-                    }).catch(error => console.error("Error setting onDisconnect:", error));
+                // Mettre à jour lastSeen et définir onDisconnect (seulement pour PvP)
+                if (gameMode === 'PvP') {
+                    const yourPlayerRef = ref(db, `matches/${id}/players/${youKey}`);
+                    if (!onDisconnectRef) { // Set onDisconnect only once per match
+                        onDisconnectRef = onDisconnect(yourPlayerRef);
+                        onDisconnectRef.update({
+                            pv: 0, // Set PV to 0 on disconnect as a forfeit
+                            status: 'forfeited', // Mark as forfeited
+                            lastSeen: serverTimestamp()
+                        }).catch(error => console.error("Error setting onDisconnect:", error));
+                    }
+                    // Mise à jour régulière de lastSeen pour signaler la présence
+                    update(yourPlayerRef, { lastSeen: serverTimestamp(), status: 'connected' });
                 }
-                // Mise à jour régulière de lastSeen pour signaler la présence
-                update(yourPlayerRef, { lastSeen: serverTimestamp(), status: 'connected' });
+
 
                 // Mettre à jour l'interface avec les données des joueurs
                 updateHealthBar(youHealthBarEl, youPvDisplayEl, you.pv);
@@ -960,8 +1004,8 @@
                         opponentActionStatus = "";
                     }
 
-                    // Détection de forfait de l'adversaire via status ou PV
-                    if (opponent.status === 'forfeited' || opponent.pv <= 0) {
+                    // Détection de forfait de l'adversaire via status ou PV (seulement pour PvP)
+                    if (gameMode === 'PvP' && (opponent.status === 'forfeited' || opponent.pv <= 0)) {
                         actionMsgEl.textContent = `L'adversaire (${opponent.pseudo}) a quitté le match ou est vaincu.`;
                         handleGameEnd(data, youKey, opponentKey, 'win'); // Vous gagnez par forfait ou KO
                     }
@@ -992,8 +1036,8 @@
                     return;
                 }
 
-                // Si le match est en attente du P2
-                if (data.status === "waiting" || !opponent) {
+                // Si le match est en attente du P2 (seulement pour PvP)
+                if (gameMode === 'PvP' && (data.status === "waiting" || !opponent)) {
                     actionMsgEl.textContent = "En attente de l'adversaire...";
                     disableActionButtons(true);
                     if (timerInterval) clearInterval(timerInterval);
@@ -1007,7 +1051,7 @@
                 console.log("P1 action (from data):", data.players.p1?.action, "P2 action (from data):", data.players.p2?.action);
 
 
-                // --- NOUVELLE LOGIQUE CLÉ POUR GÉRER LE TOUR ET LE TIMER ---
+                // --- LOGIQUE CLÉ POUR GÉRER LE TOUR ET LE TIMER ---
                 const currentTime = Date.now();
                 // Assurez-vous que lastTurnProcessedAt est un nombre avant de l'utiliser
                 const lastTurnProcessedTime = data.lastTurnProcessedAt && typeof data.lastTurnProcessedAt.toMillis === 'function'
@@ -1065,6 +1109,23 @@
                             console.log(`Opponent (${activePlayerKey}) has timed out. Submitting default action for them.`);
                             submitDefaultAction(activePlayerKey, matchRef, data); // Soumet pour l'adversaire
                         }
+                        // --- NOUVEAU : Logique de l'IA ---
+                        if (gameMode === 'PvAI' && activePlayerKey === 'p2' && !activePlayer.action) {
+                            // C'est le tour de l'IA et elle n'a pas encore joué
+                            console.log("It's AI's turn, and AI has not played yet.");
+                            setTimeout(() => {
+                                // Re-vérifier l'état du match avant que l'IA ne joue
+                                get(matchRef).then(latestSnapshot => {
+                                    const latestData = latestSnapshot.val();
+                                    if (latestData && latestData.turn === 'p2' && !latestData.players.p2?.action) {
+                                        aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef);
+                                    } else {
+                                        console.log("AI's turn skipped: action already submitted or turn changed.");
+                                    }
+                                }).catch(err => console.error("Error getting match data for AI turn:", err));
+                            }, 1500); // Délai de 1.5 secondes pour simuler la "réflexion" de l'IA
+                        }
+                        // --- FIN NOUVEAU : Logique de l'IA ---
                     }
                 } else { // L'action du joueur actif est déjà soumise
                     if (timerInterval) {
@@ -1092,7 +1153,7 @@
                         actionMsgEl.textContent = "Action jouée. En attente de l'adversaire...";
                     }
                 }
-                // --- FIN NOUVELLE LOGIQUE CLÉ ---
+                // --- FIN LOGIQUE CLÉ ---
 
 
                 // Mettre à jour l'historique
@@ -1276,6 +1337,43 @@
                 // Ne pas afficher de message d'erreur à l'utilisateur, car cela peut se produire en arrière-plan
             }
         }
+
+        // --- NOUVELLE FONCTION : Logique de l'IA ---
+        async function aiTurn(playerPV, aiPV, matchRef) {
+            console.log("AI Turn: Player PV:", playerPV, "AI PV:", aiPV);
+            let aiAction = 'defend'; // Action par défaut
+
+            // Logique simple de l'IA
+            if (aiPV < 30 && playerPV > 0) { // Si l'IA a peu de PV et le joueur est encore en vie
+                aiAction = 'heal';
+                console.log("AI chose to HEAL.");
+            } else if (playerPV < 40 && aiPV > 0) { // Si le joueur a peu de PV et l'IA est encore en vie
+                aiAction = 'attack';
+                console.log("AI chose to ATTACK.");
+            } else {
+                // Choix aléatoire entre attaque et défense
+                const actions = ['attack', 'defend'];
+                aiAction = actions[Math.floor(Math.random() * actions.length)];
+                console.log("AI chose randomly:", aiAction);
+            }
+
+            // Soumettre l'action de l'IA à Firebase
+            const updates = {};
+            updates[`players/p2/action`] = aiAction; // L'IA est toujours p2
+
+            const newHistory = [...(await get(matchRef)).val().history || []];
+            newHistory.push(`L'IA a choisi : ${aiAction === 'attack' ? 'Attaque' : (aiAction === 'defend' ? 'Défense' : 'Soin')}.`);
+            updates.history = newHistory;
+
+            console.log("DEBUG: AI submitting action:", aiAction, "Payload:", JSON.stringify(updates, null, 2));
+            try {
+                await update(matchRef, updates);
+                console.log("DEBUG: AI action submitted successfully.");
+            } catch (error) {
+                console.error("DEBUG: Error submitting AI action:", error);
+            }
+        }
+
 
         // --- ACTIONS DU JOUEUR ---
         async function performAction(actionType) {
@@ -1499,7 +1597,7 @@
             }
 
             // Gérer le forfait si le joueur quitte un match en cours volontairement
-            if (currentMatchId && currentUser && !force) {
+            if (currentMatchId && currentUser && !force && gameMode === 'PvP') { // Seulement pour PvP
                 const matchRef = ref(db, `matches/${currentMatchId}`);
                 console.log(`Attempting to forfeit match ${currentMatchId} for ${currentUser.pseudo}.`);
                 get(matchRef).then(snapshot => {
@@ -1541,6 +1639,7 @@
             hasPlayedThisTurn = false;
             youKey = null; // Réinitialiser
             opponentKey = null; // Réinitialiser
+            gameMode = 'PvP'; // Réinitialiser le mode de jeu à PvP par défaut
 
             showMessage("action-msg", "");
             showMessage("match-msg", "");
