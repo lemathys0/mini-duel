@@ -382,7 +382,7 @@ async function processAITurn(matchData) {
             console.log("processAITurn: Joueur plus fort, IA a une chance de choisir 'defend'.");
         } else {
             aiAction = 'attack'; // Sinon, attaque
-            console.ol("processAITurn: Conditions par défaut, IA choisit 'attack'.");
+            console.log("processAITurn: Conditions par défaut, IA choisit 'attack'.");
         }
     }
 
