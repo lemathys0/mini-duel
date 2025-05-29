@@ -73,11 +73,13 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         // 4. Mettre à jour l'interface avec les données des joueurs (PV, noms)
         updateHealthBar(document.getElementById("you-health-bar"), document.getElementById("you-pv-display"), you.pv);
         document.getElementById("you-name").textContent = `${you.pseudo} (Vous)`;
+        console.log("Player PV (onValue - UI Update):", you.pv); // Debugging: PV du joueur
 
         let opponentActionStatus = "";
         if (opponent) {
             updateHealthBar(document.getElementById("opponent-health-bar"), document.getElementById("opponent-pv-display"), opponent.pv, true);
             document.getElementById("opponent-name").textContent = opponent.pseudo;
+            console.log("Opponent PV (onValue - UI Update):", opponent.pv); // Debugging: PV de l'adversaire
             if (opponent.action) {
                 opponentActionStatus = "Action soumise !";
             } else if (data.turn === opponentKey) {
@@ -270,6 +272,10 @@ async function processTurn(data, matchRef) {
 
     p1PV = Math.max(0, p1PV);
     p2PV = Math.max(0, p2PV);
+
+    console.log("New P1 PV (before DB update):", p1PV); // Debugging: Nouveaux PV P1
+    console.log("New P2 PV (before DB update):", p2PV); // Debugging: Nouveaux PV P2
+
 
     let nextTurn = (data.turn === 'p1') ? 'p2' : 'p1';
     let gameStatus = 'playing';
