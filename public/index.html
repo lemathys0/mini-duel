@@ -5,76 +5,75 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini Duel de Cartes</title>
     <style>
+        /* Base Styles */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #2c3e50, #4a6a8c);
             color: #ecf0f1;
-            /* Corrections pour le défilement */
             min-height: 100vh;
             margin: 0;
-            overflow-y: auto; /* Permet le défilement vertical si le contenu dépasse */
-            position: relative;
-            padding: 20px; /* Ajoute un peu de padding pour ne pas coller les bords */
-            box-sizing: border-box; /* Assurez-vous que le padding est inclus dans la largeur/hauteur */
-            display: flex; /* Garde le flex pour le centrage horizontal du container */
-            justify-content: center; /* Centre horizontalement */
-            /* align-items: center; /* COMMENTÉ pour permettre le défilement vertical */
+            padding: 20px 10px; /* Adjusted padding for smaller screens */
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align at the top for better scrolling on mobile */
+            overflow-y: auto;
         }
 
         .container {
             background: rgba(0, 0, 0, 0.7);
-            padding: 30px;
+            padding: 25px 15px; /* Adjusted padding */
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
             text-align: center;
-            width: 90%;
+            width: 100%; /* Full width on smaller screens */
             max-width: 600px;
             box-sizing: border-box;
             border: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
             z-index: 1;
-            margin: 0 auto; /* Centre le conteneur horizontalement */
-            margin-bottom: 50px; /* Pour un peu d'espace en bas si l'écran est petit */
+            margin: 0 auto 30px auto; /* More margin at the bottom */
         }
 
         h1 {
-            color: #e74c3c; /* Rouge pour le titre */
-            margin-bottom: 25px;
-            font-size: 2.5em;
+            color: #e74c3c;
+            margin-bottom: 20px;
+            font-size: 2.2em; /* Slightly smaller for mobile */
             text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.7);
         }
 
         h2 {
-            color: #f1c40f; /* Jaune pour les sous-titres */
-            margin-top: 20px;
-            margin-bottom: 15px;
-            font-size: 1.8em;
+            color: #f1c40f;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            font-size: 1.6em; /* Slightly smaller for mobile */
         }
 
         input[type="text"],
         input[type="password"] {
-            width: calc(100% - 20px);
-            padding: 12px;
-            margin-bottom: 15px;
+            width: calc(100% - 20px); /* Account for padding */
+            padding: 10px; /* Smaller padding */
+            margin-bottom: 12px; /* Smaller margin */
             border: 1px solid #34495e;
             border-radius: 8px;
             background-color: #1a252f;
             color: #ecf0f1;
-            font-size: 1em;
+            font-size: 0.95em;
             box-sizing: border-box;
         }
 
         button {
             background-color: #3498db;
             color: white;
-            padding: 12px 25px;
+            padding: 10px 20px; /* Adjusted padding */
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 1.1em;
+            font-size: 1em; /* Adjusted font size */
             transition: background-color 0.3s ease, transform 0.1s ease;
-            margin: 5px;
+            margin: 4px; /* Smaller margin */
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            flex-grow: 1; /* Allow buttons to grow in action group */
         }
 
         button:hover {
@@ -94,12 +93,13 @@
         }
 
         .message {
-            margin-top: 15px;
+            margin-top: 10px; /* Adjusted margin */
             font-weight: bold;
             min-height: 20px;
-            color: #ff4d6d; /* Default for errors */
+            color: #ff4d6d;
+            font-size: 0.95em; /* Adjusted font size */
         }
-        .message[style*="00ff88"] { /* Specific color for success */
+        .message[style*="00ff88"] {
             color: #00ff88;
         }
 
@@ -113,109 +113,97 @@
 
         .player-info {
             display: flex;
-            align-items: center;
-            margin-bottom: 20px;
+            flex-direction: column; /* Stack on mobile */
+            align-items: flex-start; /* Align text left */
+            margin-bottom: 15px; /* Adjusted margin */
             background: rgba(44, 62, 80, 0.6);
-            padding: 15px;
+            padding: 12px; /* Adjusted padding */
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .player-info.you {
-            background: rgba(39, 174, 96, 0.3); /* Vert pour le joueur */
+            background: rgba(39, 174, 96, 0.3);
         }
 
         .player-info.opponent {
-            background: rgba(231, 76, 60, 0.3); /* Rouge pour l'adversaire */
+            background: rgba(231, 76, 60, 0.3);
         }
 
         .player-name {
-            font-size: 1.5em;
+            font-size: 1.3em; /* Adjusted font size */
             font-weight: bold;
             color: #ecf0f1;
-            flex-grow: 1;
+            margin-bottom: 5px; /* Space between name and health */
         }
 
         .health-bar-container {
-            width: 150px;
-            height: 20px;
+            width: 100%; /* Full width */
+            height: 18px; /* Slightly smaller height */
             background-color: #34495e;
-            border-radius: 10px;
+            border-radius: 9px; /* Adjusted border radius */
             overflow: hidden;
             position: relative;
-            margin-left: 20px;
+            margin-left: 0; /* No margin-left on mobile */
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .health-bar {
             height: 100%;
-            width: 100%; /* Start full */
-            background-color: var(--heal, #2ecc71); /* Default green */
+            width: 100%;
+            background-color: var(--heal, #2ecc71);
             transition: width 0.5s ease-out, background-color 0.5s ease-out;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.8em;
+            font-size: 0.75em; /* Adjusted font size */
             color: white;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
         }
 
-        .health-bar.low {
-            background-color: var(--warning, #f1c40f); /* Orange */
-        }
-
-        .health-bar.critical {
-            background-color: var(--danger, #e74c3c); /* Red */
-        }
-
-        /* Health bar effects */
-        .health-bar.damage-effect {
-            animation: flashRed 0.3s ease-in-out;
-        }
-
-        .health-bar.heal-effect {
-            animation: flashGreen 0.6s ease-in-out;
-        }
-
-        @keyframes flashRed {
-            0% { background-color: #e74c3c; }
-            50% { background-color: #f06292; } /* Brighter red */
-            100% { background-color: var(--danger, #e74c3c); } /* Back to current color */
-        }
-
-        @keyframes flashGreen {
-            0% { background-color: #2ecc71; }
-            50% { background-color: #a7f7b7; } /* Lighter green */
-            100% { background-color: var(--heal, #2ecc71); } /* Back to current color */
-        }
-
-
         .pv-display {
-            margin-left: 10px;
+            margin-left: 0; /* No margin-left on mobile */
+            margin-top: 5px; /* Space between health bar and PV */
             font-weight: bold;
             color: #ecf0f1;
+            font-size: 1em; /* Adjusted font size */
+            text-align: right;
+            width: 100%; /* Full width for text alignment */
+        }
+
+        #opponent-action-status {
+            margin-top: 8px; /* Space below opponent health */
+            font-size: 0.8em;
+            color: #bbb;
+            text-align: center;
+            width: 100%;
         }
 
         .game-controls {
-            margin-top: 20px;
-            padding: 15px;
+            margin-top: 15px; /* Adjusted margin */
+            padding: 12px; /* Adjusted padding */
             background: rgba(0, 0, 0, 0.5);
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex; /* Flexbox for buttons */
+            flex-wrap: wrap; /* Wrap buttons on small screens */
+            justify-content: center; /* Center buttons */
         }
 
         .game-controls p {
-            font-size: 1.2em;
-            margin-bottom: 15px;
+            font-size: 1.1em; /* Adjusted font size */
+            margin-bottom: 12px;
             color: #ecf0f1;
-            min-height: 25px; /* Pour éviter le saut de layout */
+            min-height: 20px;
+            width: 100%; /* Full width for messages */
         }
         
         .timer-container {
             display: flex;
+            flex-direction: column; /* Stack timer elements */
             align-items: center;
-            margin-top: 15px;
-            margin-bottom: 20px;
+            margin-top: 12px; /* Adjusted margin */
+            margin-bottom: 15px;
             background-color: #1a252f;
             border-radius: 8px;
             padding: 10px;
@@ -223,45 +211,47 @@
 
         .timer-label {
             font-weight: bold;
-            margin-right: 10px;
-            color: #f39c12; /* Jaune-orange */
+            margin-right: 0; /* No margin-right on mobile */
+            margin-bottom: 5px; /* Space below label */
+            color: #f39c12;
+            font-size: 0.95em;
         }
 
         .timer-bar-wrapper {
-            flex-grow: 1;
-            height: 15px;
+            width: 100%; /* Full width */
+            height: 12px; /* Smaller height */
             background-color: #5d6d7e;
-            border-radius: 8px;
+            border-radius: 6px; /* Adjusted border radius */
             overflow: hidden;
             position: relative;
         }
 
-        .timer-progress-bar {
-            height: 100%;
-            width: 100%; /* Starts full */
-            background-color: #2ecc71; /* Green */
-            transition: width 0.5s linear, background-color 0.5s linear;
-        }
-
         .timer-value {
-            margin-left: 10px;
+            margin-left: 0; /* No margin-left on mobile */
+            margin-top: 5px; /* Space above value */
             font-weight: bold;
             color: #ecf0f1;
+            font-size: 0.9em;
         }
 
         .history-section {
             background: rgba(0, 0, 0, 0.4);
-            padding: 15px;
+            padding: 12px; /* Adjusted padding */
             border-radius: 10px;
-            max-height: 150px;
+            max-height: 120px; /* Smaller height */
             overflow-y: auto;
-            margin-top: 20px;
+            margin-top: 15px;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
+        .history-section h3 {
+            font-size: 1.1em; /* Adjusted font size */
+            margin-bottom: 8px;
+        }
+
         .history-section p {
-            margin: 5px 0;
-            font-size: 0.9em;
+            margin: 4px 0; /* Adjusted margin */
+            font-size: 0.85em; /* Adjusted font size */
             color: #bdc3c7;
         }
 
@@ -300,6 +290,143 @@
             100% { transform: translate(20px, 30px) scale(1.1); opacity: 0.08; }
         }
 
+        /* Health bar animation effects */
+        @keyframes flashRed {
+            0% { background-color: #e74c3c; }
+            50% { background-color: #f06292; } /* Brighter red */
+            100% { background-color: var(--danger, #e74c3c); } /* Back to current color */
+        }
+
+        @keyframes flashGreen {
+            0% { background-color: #2ecc71; }
+            50% { background-color: #a7f7b7; } /* Lighter green */
+            100% { background-color: var(--heal, #2ecc71); } /* Back to current color */
+        }
+
+        /* Desktop/Tablet Styles (min-width 768px) */
+        @media (min-width: 768px) {
+            body {
+                padding: 20px;
+                align-items: center; /* Center vertically on larger screens */
+            }
+
+            .container {
+                padding: 30px;
+                max-width: 600px;
+                margin: 0 auto;
+            }
+
+            h1 {
+                font-size: 2.5em;
+            }
+
+            h2 {
+                font-size: 1.8em;
+            }
+
+            input[type="text"],
+            input[type="password"] {
+                padding: 12px;
+                margin-bottom: 15px;
+                font-size: 1em;
+            }
+
+            button {
+                padding: 12px 25px;
+                font-size: 1.1em;
+                margin: 5px;
+            }
+
+            .message {
+                margin-top: 15px;
+                font-size: 1em;
+            }
+
+            .player-info {
+                flex-direction: row; /* Row on larger screens */
+                align-items: center;
+                margin-bottom: 20px;
+                padding: 15px;
+            }
+
+            .player-name {
+                font-size: 1.5em;
+                margin-bottom: 0;
+                flex-grow: 1; /* Takes remaining space */
+            }
+
+            .health-bar-container {
+                width: 150px; /* Fixed width */
+                height: 20px;
+                margin-left: 20px; /* Restore margin */
+            }
+
+            .health-bar {
+                font-size: 0.8em;
+            }
+
+            .pv-display {
+                margin-left: 10px; /* Restore margin */
+                margin-top: 0;
+                width: auto;
+            }
+            
+            #opponent-action-status {
+                margin-top: 0;
+                margin-left: 20px;
+                font-size: 0.9em;
+                text-align: left;
+                width: auto;
+            }
+
+            .game-controls {
+                margin-top: 20px;
+                padding: 15px;
+                flex-wrap: nowrap; /* No wrap on larger screens */
+            }
+
+            .game-controls p {
+                font-size: 1.2em;
+                margin-bottom: 15px;
+            }
+
+            .timer-container {
+                flex-direction: row; /* Row on larger screens */
+                margin-top: 15px;
+                margin-bottom: 20px;
+            }
+
+            .timer-label {
+                margin-right: 10px;
+                margin-bottom: 0;
+                font-size: 1em;
+            }
+
+            .timer-bar-wrapper {
+                flex-grow: 1; /* Takes remaining space */
+                height: 15px;
+            }
+
+            .timer-value {
+                margin-left: 10px;
+                margin-top: 0;
+                font-size: 1em;
+            }
+
+            .history-section {
+                padding: 15px;
+                max-height: 150px;
+                margin-top: 20px;
+            }
+
+            .history-section h3 {
+                font-size: 1.2em;
+            }
+
+            .history-section p {
+                font-size: 0.9em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -333,19 +460,19 @@
 
             <div class="player-info you">
                 <span id="you-name" class="player-name">Vous</span>
-                <span class="pv-display" id="you-pv-display">100</span>
                 <div class="health-bar-container">
                     <div class="health-bar" id="you-health-bar"></div>
                 </div>
+                <span class="pv-display" id="you-pv-display">100 PV</span>
             </div>
 
             <div class="player-info opponent">
                 <span id="opponent-name" class="player-name">Adversaire</span>
-                <span class="pv-display" id="opponent-pv-display">100</span>
                 <div class="health-bar-container">
                     <div class="health-bar" id="opponent-health-bar"></div>
                 </div>
-                <span id="opponent-action-status" style="margin-left: 20px; font-size: 0.9em; color: #bbb;"></span>
+                <span class="pv-display" id="opponent-pv-display">100 PV</span>
+                <span id="opponent-action-status"></span>
             </div>
             
             <div class="timer-container">
@@ -467,7 +594,7 @@
                 setTimeout(() => healthBarElement.classList.remove('heal-effect'), 1000);
             }
 
-            pvDisplayElement.textContent = currentPV;
+            pvDisplayElement.textContent = `${currentPV} PV`; // Display PV with "PV" suffix
 
             healthBarElement.classList.remove('low', 'critical');
             // Gérer les couleurs pour sa propre barre de vie et celle de l'adversaire
@@ -735,7 +862,7 @@
             actionMsgEl.textContent = "Chargement du match...";
 
             currentMatchUnsubscribe = onValue(matchRef, async (snapshot) => {
-                console.log("onValue triggered:", snapshot.val()); // Pour le débogage
+                console.log("onValue triggered (full snapshot):", snapshot.val()); // Pour le débogage
                 const data = snapshot.val();
                 if (!data) {
                     // Match supprimé ou inexistant
@@ -770,8 +897,8 @@
                 if (!onDisconnectRef) { // Set onDisconnect only once per match
                     onDisconnectRef = onDisconnect(yourPlayerRef);
                     onDisconnectRef.update({
-                        pv: 0, 
-                        status: 'disconnected',
+                        pv: 0, // Set PV to 0 on disconnect as a forfeit
+                        status: 'forfeited', // Mark as forfeited
                         lastSeen: serverTimestamp() 
                     }).catch(error => console.error("Error setting onDisconnect:", error));
                 }
@@ -782,15 +909,23 @@
                 updateHealthBar(youHealthBarEl, youPvDisplayEl, you.pv);
                 document.getElementById("you-name").textContent = `${you.pseudo} (Vous)`;
 
-                let opponentActionStatus = "En attente d'action...";
+                let opponentActionStatus = ""; // Initialisation vide
                 if (opponent) {
                     updateHealthBar(opponentHealthBarEl, opponentPvDisplayEl, opponent.pv, true); // true pour l'adversaire
                     document.getElementById("opponent-name").textContent = opponent.pseudo;
                     // Afficher si l'adversaire a soumis son action
                     if (opponent.action) {
                         opponentActionStatus = "Action soumise !";
-                    } else {
-                        opponentActionStatus = "En attente d'action...";
+                    } else if (data.turn === opponentKey) { // C'est le tour de l'adversaire et il n'a pas encore joué
+                        opponentActionStatus = "En attente d'action de l'adversaire...";
+                    } else { // Si ce n'est pas son tour et il n'a pas d'action (normal)
+                        opponentActionStatus = "";
+                    }
+
+                    // Détection de forfait de l'adversaire via status ou PV
+                    if (opponent.status === 'forfeited' || opponent.pv <= 0) {
+                        actionMsgEl.textContent = `L'adversaire (${opponent.pseudo}) a quitté le match ou est vaincu.`;
+                        handleGameEnd(data, youKey, opponentKey, 'win'); // Vous gagnez par forfait ou KO
                     }
                 } else {
                     opponentPvDisplayEl.textContent = "N/A";
@@ -801,23 +936,8 @@
                 }
                 if (opponentActionStatusEl) opponentActionStatusEl.textContent = opponentActionStatus;
                 
-                // Si en attente du P2 ou si P2 est déconnecté/forfait
-                if (data.status === "waiting" || !opponent || opponent.status === 'disconnected' || opponent.status === 'forfeited') {
-                    if (opponent && (opponent.status === 'disconnected' || opponent.status === 'forfeited')) {
-                        actionMsgEl.textContent = `L'adversaire (${opponent.pseudo}) est déconnecté. Le match est terminé.`;
-                        handleGameEnd(data, youKey, opponentKey, 'win'); // You win by forfeit
-                    } else {
-                        actionMsgEl.textContent = "En attente de l'adversaire...";
-                    }
-                    disableActionButtons(true);
-                    if (timerInterval) clearInterval(timerInterval);
-                    timerInterval = null;
-                    updateTimerUI(timerMax); // Reset timer display
-                    return;
-                }
-                
-                // Conditions de fin de jeu (après avoir géré l'attente)
-                if (data.status === 'finished' || you.pv <= 0 || opponent.pv <= 0) {
+                // Conditions de fin de jeu (après avoir géré l'attente du P2)
+                if (data.status === 'finished' || you.pv <= 0 || (opponent && opponent.pv <= 0)) {
                     // Unsubscribe onDisconnect as match is ending
                     if (onDisconnectRef) {
                         onDisconnectRef.cancel().catch(error => console.error("Error cancelling onDisconnect:", error));
@@ -825,57 +945,73 @@
                     }
 
                     let finalResult = "draw";
-                    if (you.pv > 0 && opponent.pv <= 0) {
+                    if (you.pv > 0 && (opponent && opponent.pv <= 0)) { // Vous avez plus de 0 PV et l'adversaire est à 0 ou moins
                         finalResult = "win";
-                    } else if (you.pv <= 0 && opponent.pv > 0) {
+                    } else if (you.pv <= 0 && (opponent && opponent.pv > 0)) { // Vous êtes à 0 PV ou moins et l'adversaire a encore des PV
                         finalResult = "loss";
                     }
                     handleGameEnd(data, youKey, opponentKey, finalResult);
                     return; 
                 }
 
+                // Si le match est en attente du P2
+                if (data.status === "waiting" || !opponent) {
+                    actionMsgEl.textContent = "En attente de l'adversaire...";
+                    disableActionButtons(true);
+                    if (timerInterval) clearInterval(timerInterval);
+                    timerInterval = null;
+                    updateTimerUI(timerMax); // Reset timer display
+                    return;
+                }
+                
                 // Logs pour le débogage des actions
-                console.log("P1 action:", data.players.p1?.action, "P2 action:", data.players.p2?.action);
+                console.log("P1 action (from data):", data.players.p1?.action, "P2 action (from data):", data.players.p2?.action);
 
                 // Gérer les actions si c'est le tour actuel et que les deux actions sont là
                 // SEULEMENT le joueur P1 (le créateur du match) est désigné pour traiter les actions
                 // pour éviter les courses et les boucles de mise à jour.
-                if (data.players.p1.action && data.players.p2.action) {
-                    console.log("Both actions are present.");
+                if (data.players.p1?.action && data.players.p2?.action) { // Utilisation de ?. pour la sûreté
+                    console.log("Both actions are present in Firebase.");
                     // Réinitialiser hasPlayedThisTurn pour les deux joueurs quand les deux actions sont là
                     // car cela signifie que le tour va être traité.
                     hasPlayedThisTurn = false; 
 
                     if (youKey === 'p1') { // Seul P1 traite le tour
-                        console.log("P1 detected both actions, will process turn.");
+                        console.log("P1 detected both actions, will process turn (after timeout).");
                         setTimeout(() => { // Augmenté le délai pour la stabilité
                             get(matchRef).then(latestSnapshot => {
                                 const latestData = latestSnapshot.val();
-                                if (latestData && latestData.players.p1.action && latestData.players.p2.action) {
+                                // Double-vérification après timeout pour s'assurer que les actions sont toujours là et non déjà traitées
+                                if (latestData && latestData.players.p1?.action && latestData.players.p2?.action) {
                                     console.log("P1 proceeding to call processTurn with latest data.");
                                     processTurn(latestData, youKey, opponentKey, matchRef);
                                 } else {
-                                    console.log("Actions already processed or not present for P1 processing (after timeout).");
+                                    console.log("Actions already processed or not present for P1 processing (after timeout get).");
                                 }
                             }).catch(err => console.error("Error getting latest match data for processing:", err));
                         }, 1000); // **Délai de 1000 ms**
                     } else {
-                        console.log("P2 detected both actions, P1 is responsible for processing. Waiting for P1's update.");
+                        console.log("P2 detected both actions. P1 is responsible for processing. Waiting for P1's update.");
                     }
                     // Le reste du onValue DOIT s'exécuter pour mettre à jour l'UI
                 }
 
 
                 // Gestion du Tour
-                if (data.turn === youKey) {
-                    // Si le joueur a déjà soumis son action, il attend l'adversaire
-                    if (data.players[youKey].action) { // Vérifier l'état de l'action dans Firebase
+                // Cette section est clé pour l'activation/désactivation des boutons et les messages
+                if (data.turn === youKey) { // C'est le tour de ce joueur (youKey)
+                    if (data.players[youKey].action) { // Si le joueur a déjà soumis son action
                         disableActionButtons(true);
                         actionMsgEl.textContent = "Action jouée. En attente de l'adversaire...";
                         if (timerInterval) clearInterval(timerInterval); 
                         timerInterval = null;
                         console.log("Your turn, action played. Waiting for opponent.");
                     } else { // C'est votre tour et vous n'avez PAS encore joué
+                        // La variable hasPlayedThisTurn est réinitialisée par P1 quand les deux actions sont soumises
+                        // Mais ici, si ce joueur doit jouer et n'a pas d'action, il faut lui permettre
+                        // de jouer, et si hasPlayedThisTurn est vrai à ce moment, c'est une erreur logique.
+                        // On force hasPlayedThisTurn à false si c'est son tour et qu'il n'a pas d'action enregistrée.
+                        hasPlayedThisTurn = false; 
                         disableActionButtons(false);
                         actionMsgEl.textContent = "C'est votre tour ! Choisissez une action.";
                         if (!timerInterval) { 
@@ -887,17 +1023,12 @@
                         } else {
                             console.log("Your turn, timer already running.");
                         }
-                        // Important : Réinitialiser hasPlayedThisTurn ici aussi,
-                        // car un nouveau tour vient de commencer pour ce joueur.
-                        hasPlayedThisTurn = false; 
                     }
                 } else { // Tour de l'adversaire
                     disableActionButtons(true);
                     actionMsgEl.textContent = `Tour de ${opponent ? opponent.pseudo : 'l\'adversaire'}. Veuillez patienter...`;
                     if (timerInterval) clearInterval(timerInterval); 
                     timerInterval = null;
-                    // Ne pas réinitialiser hasPlayedThisTurn ici, il doit rester à false ou true
-                    // jusqu'à ce que le tour du joueur revienne ou que le tour soit traité.
                     updateTimerUI(timerMax); // Afficher le timer plein pour l'adversaire (visuellement)
                     console.log("Opponent's turn. Waiting.");
                 }
@@ -927,8 +1058,8 @@
             console.log("data.turn at start of processTurn (current turn):", data.turn); // AJOUTÉ POUR DÉBOGAGE
 
             // Vérifiez encore une fois que les actions sont non-nulles pour éviter le double traitement
-            if (!data.players.p1.action || !data.players.p2.action) {
-                console.warn("processTurn called but one or both actions are null. Exiting (already processed or not ready).");
+            if (!data.players.p1?.action || !data.players.p2?.action) { // Utilisation de ?. pour la sûreté
+                console.warn("processTurn called but one or both actions are null (or missing). Exiting (already processed or not ready).");
                 return; // Ne rien faire si les actions sont déjà effacées
             }
 
@@ -1038,15 +1169,15 @@
                 if (loser) updates.loser = loser;
             }
 
-            console.log("Updates payload for Firebase:", JSON.stringify(updates)); // AJOUTÉ POUR DÉBOGAGE
+            console.log("DEBUG: Final updates payload sent to Firebase:", JSON.stringify(updates, null, 2)); // AJOUTÉ POUR DÉBOGAGE
             try {
                 // Utiliser une mise à jour atomique pour garantir la cohérence
                 await update(matchRef, updates);
-                console.log("Match updated successfully after turn processing.");
+                console.log("DEBUG: Firebase update completed successfully.");
                 // Le onValue listener va détecter ce changement et mettre à jour l'UI
                 // et potentiellement déclencher le timer pour le prochain tour.
             } catch (error) {
-                console.error("ERROR during Firebase update in processTurn:", error);
+                console.error("DEBUG: ERROR during Firebase update in processTurn:", error);
                 // Si l'update échoue, vous voudrez peut-être gérer une erreur côté utilisateur
                 showMessage("action-msg", "Erreur critique lors du traitement du tour. Veuillez recharger la page.");
             }
@@ -1345,7 +1476,7 @@
                             updates.status = 'forfeited';
                             updates.winner = opponentKeyForForfeit; 
                             updates.history = [...(matchData.history || [])]; // Copie l'historique existant
-                            updates.history.push(`${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForfeit].pseudo} gagne par forfait.`);
+                            updates.history.push(`${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForForfeit].pseudo} gagne par forfait.`);
                             
                             update(matchRef, updates)
                                 .then(() => console.log(`${currentUser.pseudo} left and forfeited match ${currentMatchId}`))
