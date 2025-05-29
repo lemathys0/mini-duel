@@ -133,6 +133,8 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             return;
         }
 
+        // Ajout de log complet pour inspecter matchData
+        // console.log("Données du match mises à jour :", JSON.stringify(matchData, null, 2)); 
         console.log("Données du match mises à jour :", matchData); // DEBUG
 
         const you = matchData.players[youKey];
@@ -158,7 +160,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             console.log("Match terminé."); // DEBUG
             setTimerInterval(clearInterval(setTimerInterval)); // Arrête le timer
             disableActionButtons();
-            const lastHistoryEntry = matchData.history[matchData.history.length - 1]; // Correction d'index
+            const lastHistoryEntry = matchData.history[matchData.history.length - 1];
             showMessage("match-msg", lastHistoryEntry);
 
             // Met à jour les statistiques de l'utilisateur en fonction du résultat
@@ -192,55 +194,62 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
         // Récupérer le timestamp du début du tour de manière sécurisée
         const currentTurnStartTime = matchData.turnStartTime;
-        let validStartTime = null;
+        let validStartTimeForTimer = null;
 
-        // Si currentTurnStartTime n'est pas un nombre (par ex: serverTimestamp() en attente ou null)
-        // utilise l'heure actuelle du client comme fallback pour démarrer le chrono.
-        if (typeof currentTurnStartTime !== 'number' || !currentTurnStartTime) {
-             console.warn("turnStartTime n'est pas un timestamp valide, utilisant Date.now() comme fallback.");
-             validStartTime = Date.now(); // Utilise l'heure actuelle du client comme point de départ
+        // Si currentTurnStartTime est un nombre, nous l'utilisons.
+        // Sinon, nous ne démarrons PAS le timer tant que Firebase n'a pas mis à jour avec le vrai timestamp.
+        if (typeof currentTurnStartTime === 'number' && !isNaN(currentTurnStartTime)) {
+             validStartTimeForTimer = currentTurnStartTime;
         } else {
-             validStartTime = currentTurnStartTime;
+             console.warn("turnStartTime n'est pas encore un timestamp numérique valide de Firebase. Le timer ne sera pas démarré pour l'instant.");
+             // On ne fait rien ici pour le timer, on attend la prochaine mise à jour de Firebase
         }
 
         // Cas général: Si c'est le tour de votre joueur
         if (matchData.turn === youKey) {
-            // Si votre joueur n'a pas encore soumis son action
             if (!matchData.players[youKey].action) {
                 console.log("C'est votre tour. Vous n'avez pas encore soumis d'action.");
                 showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
-                setHasPlayedThisTurn(false); // Réinitialise l'état pour permettre au joueur de jouer
+                setHasPlayedThisTurn(false);
                 enableActionButtons();
-                startTimer(validStartTime); // Utilise le validStartTime
+                // Démarrer le timer SEULEMENT si nous avons un timestamp valide de Firebase
+                if (validStartTimeForTimer !== null) {
+                    startTimer(validStartTimeForTimer);
+                } else {
+                    console.log("Timer non démarré car turnStartTime n'est pas encore valide.");
+                    updateTimerUI(timerMax); // Assure que l'affichage reste à son maximum
+                }
             } else {
-                // Votre action a été soumise, attendez l'adversaire
                 console.log("C'est votre tour. Votre action a été soumise. En attente de l'adversaire.");
                 showMessage("action-msg", "Action soumise. En attente de l'adversaire...");
                 disableActionButtons();
-                setTimerInterval(clearInterval(setTimerInterval)); // Arrête votre timer
-                updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
+                setTimerInterval(clearInterval(setTimerInterval));
+                updateTimerUI(timerMax);
             }
         }
-        // Cas général: Si c'est le tour de l'adversaire
+        // Cas général: Si c'est le tour de l'adversaire (ou si le tour est déjà passé à l'IA)
         else { // matchData.turn === opponentKey
             console.log("C'est le tour de l'adversaire.");
             showMessage("action-msg", `C'est le tour de ${opponent.pseudo}.`);
             disableActionButtons();
-            setTimerInterval(clearInterval(setTimerInterval)); // Arrête votre timer
-            updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
+            setTimerInterval(clearInterval(setTimerInterval));
+            updateTimerUI(timerMax);
 
             // Si c'est un match PvAI et l'IA n'a pas encore soumis son action (et c'est SON tour)
+            // Note: Cette condition sera VRAIE une fois que processTurn aura basculé le tour vers l'IA
+            // et qu'elle n'aura pas encore eu le temps de jouer (par ex. si on charge le match en cours de route)
             if (gameMode === 'PvAI' && !matchData.players[opponentKey].action) {
-                console.log("C'est le tour de l'IA et elle n'a pas encore choisi d'action, appel de processAITurn.");
+                console.log("C'est le tour de l'IA et elle n'a pas encore choisi d'action (tour IA actuel), appel de processAITurn.");
                 await processAITurn(matchData);
             }
         }
         
         // **Déclenchement immédiat de l'IA après l'action du joueur en mode PvAI**
-        // Ceci gère le cas où vous (P1) jouez, puis l'IA (P2) doit répondre dans le même "cycle" logique
-        // avant que le tour ne soit officiellement basculé par processTurn.
+        // Ceci est crucial : Si le joueur vient de soumettre son action (son action est présente)
+        // ET que l'IA n'a pas encore joué (son action est null), alors on déclenche l'IA IMMÉDIATEMENT.
+        // Cela gère le cas où P1 a joué, et P2 (l'IA) doit réagir AVANT que le tour ne soit traité et basculé.
         if (gameMode === 'PvAI' && matchData.players[youKey].action && !matchData.players[opponentKey].action) {
-            console.log("Détection : Joueur a joué en PvAI et IA n'a pas encore joué. Déclenchement de processAITurn.");
+            console.log("Détection : Joueur a joué en PvAI et IA n'a pas encore joué. Déclenchement IMMÉDIAT de processAITurn.");
             await processAITurn(matchData);
         }
 
@@ -469,29 +478,39 @@ async function processTurn(matchData) {
  * @param {number} startTime - Le timestamp de début du tour.
  */
 function startTimer(startTime) {
-    console.log("Timer démarré."); // DEBUG
-    // Arrête tout intervalle de timer précédent pour s'assurer qu'il n'y en a qu'un seul actif
+    console.log("Timer démarré avec startTime :", startTime, " (type:", typeof startTime, ")"); // DEBUG TRÈS IMPORTANT
     setTimerInterval(clearInterval(setTimerInterval));
 
     setTimerInterval(setInterval(() => {
-        // Assurez-vous que startTime est un nombre valide
+        // Vérification plus robuste pour le startTime avant calcul
         if (typeof startTime !== 'number' || isNaN(startTime)) {
-            console.error("startTimer: startTime est NaN ou non numérique. Arrêt du timer.");
+            console.error("startTimer: startTime est invalide. Arrêt du timer.", { startTime, type: typeof startTime, isNaN: isNaN(startTime) });
             setTimerInterval(clearInterval(setTimerInterval));
             updateTimerUI(timerMax); // Réinitialise l'affichage
-            return;
+            return; // Sort de cette itération de setInterval pour éviter d'autres erreurs
         }
 
-        const elapsedTime = (Date.now() - new Date(startTime).getTime()) / 1000;
+        const currentTime = Date.now();
+        const startTimestampMillis = new Date(startTime).getTime(); // Convertit en millisecondes
+        
+        // Vérifie si la conversion Date().getTime() a échoué (cela peut arriver si startTime était juste un objet ou null)
+        if (isNaN(startTimestampMillis)) {
+            console.error("startTimer: Conversion de startTime en timestamp a échoué. Arrêt du timer.", { startTime, startTimestampMillis });
+            setTimerInterval(clearInterval(setTimerInterval));
+            updateTimerUI(timerMax); // Réinitialise l'affichage
+            return; // Sort de cette itération de setInterval
+        }
+
+        const elapsedTime = (currentTime - startTimestampMillis) / 1000;
         const timeLeft = Math.max(0, timerMax - Math.floor(elapsedTime));
-        updateTimerUI(timeLeft); // Met à jour l'interface utilisateur du timer
+        updateTimerUI(timeLeft);
 
         if (timeLeft <= 0) {
-            setTimerInterval(clearInterval(setTimerInterval)); // Arrête le timer
+            setTimerInterval(clearInterval(setTimerInterval));
             // Si le temps est écoulé et que le joueur n'a pas encore joué, soumet une action par défaut
             if (!hasPlayedThisTurn && currentMatchId && currentUser && youKey) {
                 console.log("Temps écoulé, le joueur n'a pas joué. Soumission automatique de 'defend'."); // DEBUG
-                performAction('defend'); // Soumet "Défendre" par default
+                performAction('defend'); // Soumet "Défendre" par défaut
             }
         }
     }, 1000));
