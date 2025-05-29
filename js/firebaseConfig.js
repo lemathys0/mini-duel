@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebas
 import { getDatabase } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 
 const firebaseConfig = {
-    apiKey: "YOUR_FIREBASE_API_KEY",
+    apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
     authDomain: "mini-duel-de-cartes.firebaseapp.com",
     databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
     projectId: "mini-duel-de-cartes",
