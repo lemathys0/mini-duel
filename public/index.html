@@ -151,7 +151,7 @@
         .health-bar {
             height: 100%;
             width: 100%;
-            background-color: var(--heal, #2ecc71);
+            background-color: #2ecc71; /* Default green */
             transition: width 0.5s ease-out, background-color 0.5s ease-out;
             display: flex;
             align-items: center;
@@ -159,6 +159,19 @@
             font-size: 0.75em; /* Adjusted font size */
             color: white;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Specific colors for health bars based on state/player */
+        .health-bar.opponent-bar {
+            background-color: #e74c3c; /* Red for opponent */
+        }
+
+        .health-bar.low {
+            background-color: #e67e22; /* Orange for low health */
+        }
+
+        .health-bar.critical {
+            background-color: #c0392b; /* Dark red for critical health */
         }
 
         .pv-display {
@@ -226,6 +239,13 @@
             position: relative;
         }
 
+        .timer-progress-bar {
+            height: 100%;
+            width: 100%;
+            background-color: #2ecc71; /* Default green, will change with JS */
+            transition: width 0.5s ease-out, background-color 0.5s ease-out;
+        }
+
         .timer-value {
             margin-left: 0; /* No margin-left on mobile */
             margin-top: 5px; /* Space above value */
@@ -291,17 +311,24 @@
         }
 
         /* Health bar animation effects */
+        .health-bar.damage-effect {
+            animation: flashRed 0.5s ease-out;
+        }
+        .health-bar.heal-effect {
+            animation: flashGreen 1s ease-out;
+        }
         @keyframes flashRed {
-            0% { background-color: #e74c3c; }
+            0% { background-color: #e74c3c; } /* Current danger red */
             50% { background-color: #f06292; } /* Brighter red */
-            100% { background-color: var(--danger, #e74c3c); } /* Back to current color */
+            100% { background-color: #e74c3c; } /* Back to danger red */
         }
 
         @keyframes flashGreen {
-            0% { background-color: #2ecc71; }
+            0% { background-color: #2ecc71; } /* Current heal green */
             50% { background-color: #a7f7b7; } /* Lighter green */
-            100% { background-color: var(--heal, #2ecc71); } /* Back to current color */
+            100% { background-color: #2ecc71; } /* Back to heal green */
         }
+
 
         /* Desktop/Tablet Styles (min-width 768px) */
         @media (min-width: 768px) {
@@ -469,7 +496,7 @@
             <div class="player-info opponent">
                 <span id="opponent-name" class="player-name">Adversaire</span>
                 <div class="health-bar-container">
-                    <div class="health-bar" id="opponent-health-bar"></div>
+                    <div class="health-bar opponent-bar" id="opponent-health-bar"></div>
                 </div>
                 <span class="pv-display" id="opponent-pv-display">100 PV</span>
                 <span id="opponent-action-status"></span>
@@ -586,10 +613,10 @@
 
             // Ajout d'une animation si les PV ont changé (visuel)
             const oldPV = parseInt(pvDisplayElement.textContent);
-            if (currentPV < oldPV) { // Dégâts
+            if (!isNaN(oldPV) && currentPV < oldPV) { // Dégâts
                 healthBarElement.classList.add('damage-effect');
                 setTimeout(() => healthBarElement.classList.remove('damage-effect'), 500);
-            } else if (currentPV > oldPV) { // Soin
+            } else if (!isNaN(oldPV) && currentPV > oldPV) { // Soin
                 healthBarElement.classList.add('heal-effect');
                 setTimeout(() => healthBarElement.classList.remove('heal-effect'), 1000);
             }
@@ -597,15 +624,21 @@
             pvDisplayElement.textContent = `${currentPV} PV`; // Display PV with "PV" suffix
 
             healthBarElement.classList.remove('low', 'critical');
-            // Gérer les couleurs pour sa propre barre de vie et celle de l'adversaire
             if (isOpponent) {
-                healthBarElement.style.backgroundColor = `var(--danger)`; // Rouge pour l'adversaire
-            } else if (currentPV < 10) {
+                healthBarElement.classList.add('opponent-bar'); // Always apply opponent specific styling
+            } else {
+                healthBarElement.classList.remove('opponent-bar'); // Remove if not opponent
+            }
+
+            if (currentPV < 10) {
                 healthBarElement.classList.add('critical');
             } else if (currentPV < 30) {
                 healthBarElement.classList.add('low');
             } else {
-                healthBarElement.style.backgroundColor = `var(--heal)`; // Vert par défaut
+                // Reset to default green if not low/critical/opponent
+                if (!isOpponent) {
+                    healthBarElement.style.backgroundColor = ''; // Remove inline style to use CSS default
+                }
             }
         }
 
@@ -1016,7 +1049,7 @@
                         actionMsgEl.textContent = "C'est votre tour ! Choisissez une action.";
                         if (!timerInterval) { 
                              // Synchroniser le timer avec la base de données
-                            const elapsedSinceLastTurn = data.lastTurnProcessedAt ? (Date.now() - data.lastTurnProcessedAt) : 0;
+                            const elapsedSinceLastTurn = data.lastTurnProcessedAt ? (Date.now() - data.lastTurnProcessedAt.toMillis()) : 0; // .toMillis() for serverTimestamp
                             const initialTimerValue = Math.max(0, timerMax - Math.floor(elapsedSinceLastTurn / 1000));
                             resetTimerAndStart(youKey, opponentKey, initialTimerValue);
                             console.log("Your turn, starting timer.");
@@ -1469,14 +1502,14 @@
                         }
 
                         // S'assurer que le joueur est bien dans le match et qu'il y a un adversaire actif
-                        if (quitterKey && matchData.players[opponentKeyForForfeit] && matchData.players[opponentKeyForForfeit].status === 'connected') { 
+                        if (quitterKey && matchData.players[opponentKeyForForfeit] && matchData.players[opponentKeyForfeit].status === 'connected') { 
                             const updates = {};
                             updates[`players/${quitterKey}/pv`] = 0; 
                             updates[`players/${quitterKey}/status`] = 'forfeited';
                             updates.status = 'forfeited';
                             updates.winner = opponentKeyForForfeit; 
                             updates.history = [...(matchData.history || [])]; // Copie l'historique existant
-                            updates.history.push(`${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForForfeit].pseudo} gagne par forfait.`);
+                            updates.history.push(`${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForfeit].pseudo} gagne par forfait.`);
                             
                             update(matchRef, updates)
                                 .then(() => console.log(`${currentUser.pseudo} left and forfeited match ${currentMatchId}`))
