@@ -135,6 +135,8 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
 
         let activePlayerKey = data.turn;
         let activePlayer = data.players[activePlayerKey];
+        
+        console.log("Current turn in onValue:", data.turn); // Debugging: Qui est censé jouer ce tour
 
         // LOGIQUE DU JOUEUR HUMAIN
         if (youKey === activePlayerKey) {
@@ -292,7 +294,7 @@ async function processTurn(data, matchRef) {
         [`players/p1/action`]: null, // Réinitialise l'action de P1
         [`players/p2/action`]: null, // Réinitialise l'action de P2
         history: historyUpdates,
-        turn: nextTurn,
+        turn: nextTurn, // <--- C'est ici que le prochain tour est défini
         status: gameStatus,
         lastTurnProcessedAt: serverTimestamp() // Met à jour le timestamp du traitement du tour
     };
@@ -300,7 +302,7 @@ async function processTurn(data, matchRef) {
 
     try {
         await update(matchRef, updates);
-        console.log("DEBUG: Firebase update completed successfully (processTurn).");
+        console.log("DEBUG: Firebase update completed successfully (processTurn). New turn set to:", nextTurn); // Debugging: Confirme le prochain tour envoyé
     } catch (error) {
         console.error("DEBUG: ERROR during Firebase update in processTurn:", error);
         showMessage("action-msg", "Erreur critique lors du traitement du tour. Veuillez recharger la page.");
@@ -382,7 +384,14 @@ export async function performAction(actionType) {
     const matchData = matchSnapshot.val();
 
     if (!matchData) { showMessage("action-msg", "Match introuvable ou terminé."); backToMenu(true); return; }
-    if (matchData.turn !== youKey) { showMessage("action-msg", "Ce n'est pas votre tour !"); return; }
+    
+    // Ajout d'un log pour vérifier le tour avant de jouer
+    console.log("Attempting to perform action. Current turn in DB:", matchData.turn, "Your key:", youKey);
+
+    if (matchData.turn !== youKey) {
+        showMessage("action-msg", "Ce n'est pas votre tour !");
+        return;
+    }
     if (matchData.players[youKey].action) {
          showMessage("action-msg", "Vous avez déjà soumis une action pour ce tour (vérification Firebase).");
          setHasPlayedThisTurn(true); // Assure que l'état local est à jour
