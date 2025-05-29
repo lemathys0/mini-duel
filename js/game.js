@@ -229,6 +229,15 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 disableActionButtons();
                 setTimerInterval(clearInterval(timerInterval)); // Arrête votre timer
                 updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
+
+                // --- DÉCLENCHEMENT DE L'IA QUAND LE JOUEUR A JOUÉ (PvAI UNIQUEMENT) ---
+                if (gameMode === 'PvAI' && !matchData.players[opponentKey].action) {
+                    console.log("DEBUG IA (APRES JOUEUR): Conditions remplies. Déclenchement de processAITurn.");
+                    await processAITurn(matchData);
+                } else if (gameMode === 'PvAI') {
+                    console.log("DEBUG IA (APRES JOUEUR): Conditions NON remplies pour déclencher l'IA après action du joueur.");
+                    console.log("DEBUG IA (APRES JOUEUR): -> L'IA a déjà une action ou n'est pas en mode PvAI.");
+                }
             }
         }
         // Si c'est le tour de l'adversaire (et potentiellement l'IA)
@@ -239,18 +248,16 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             setTimerInterval(clearInterval(timerInterval)); // Arrête votre timer
             updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
 
-            // --- NOUVELLE LOGIQUE DE DÉCLENCHEMENT UNIQUE POUR L'IA ---
+            // --- DÉCLENCHEMENT DE L'IA AU DÉBUT DE SON TOUR (PvAI UNIQUEMENT) ---
             // L'IA joue si c'est un match PvAI, c'est son tour, et AUCUN joueur n'a d'action en attente.
-            // Cela signifie que le tour précédent est traité et qu'un nouveau tour commence.
+            // Ceci couvre le cas où le match vient de commencer ou si l'IA n'a pas réagi au déclenchement 'APRES JOUEUR'.
             if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players.p1.action && !matchData.players.p2.action) {
-                 console.log("DEBUG IA (DÉCLENCHEMENT UNIQUE): Conditions remplies. Déclenchement de processAITurn.");
+                 console.log("DEBUG IA (DEBUT TOUR IA): Conditions remplies. Déclenchement de processAITurn.");
                  await processAITurn(matchData);
-            } else {
-                 console.log("DEBUG IA (DÉCLENCHEMENT UNIQUE): Conditions NON remplies pour déclencher l'IA.");
-                 if (gameMode !== 'PvAI') console.log("DEBUG IA (DÉCLENCHEMENT UNIQUE): -> Pas un match PvAI.");
-                 if (matchData.turn !== opponentKey) console.log("DEBUG IA (DÉCLENCHEMENT UNIQUE): -> Ce n'est pas le tour de l'IA.");
-                 if (matchData.players.p1.action) console.log("DEBUG IA (DÉCLENCHEMENT UNIQUE): -> P1 a une action en attente.");
-                 if (matchData.players.p2.action) console.log("DEBUG IA (DÉCLENCHEMENT UNIQUE): -> P2 a une action en attente.");
+            } else if (gameMode === 'PvAI') {
+                 console.log("DEBUG IA (DEBUT TOUR IA): Conditions NON remplies pour déclencher l'IA.");
+                 if (matchData.players.p1.action) console.log("DEBUG IA (DEBUT TOUR IA): -> P1 a une action en attente.");
+                 if (matchData.players.p2.action) console.log("DEBUG IA (DEBUT TOUR IA): -> P2 a une action en attente.");
             }
         }
 
