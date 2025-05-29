@@ -1,29 +1,75 @@
-// Dans utils.js
+// utils.js (aucune modification majeure nécessaire, car la correction est dans game.js)
+// utils.js
 
-// Affiche un message temporaire dans un élément spécifié
-export function showMessage(elementId, message, duration = 3000) {
+export function showMessage(elementId, message, append = false) {
     const element = document.getElementById(elementId);
     if (element) {
-        element.textContent = message;
-        element.style.display = 'block'; // Assurez-vous qu'il est visible
-        setTimeout(() => {
-            element.textContent = '';
-            element.style.display = 'none'; // Le masque après la durée
-        }, duration);
+        if (append) {
+            const p = document.createElement('p');
+            p.textContent = message;
+            element.appendChild(p);
+            element.scrollTop = element.scrollHeight; // Scroll to bottom
+        } else {
+            element.textContent = message;
+        }
+    } else {
+        console.warn(`Element with ID '${elementId}' not found for message: ${message}`);
     }
 }
 
-// Active ou désactive les boutons d'action
-// Les boutons d'action ont la classe 'action-buttons' dans index.html,
-// mais les boutons eux-mêmes n'ont pas de classe spécifique dans le HTML fourni.
-// Il est préférable de cibler les IDs ou les enfants d'une div parent.
-// Dans l'index.html fourni, les boutons sont directement dans <div class="game-controls action-buttons">
-// On peut les cibler par leur ID ou par leur parent.
-export function enableActionButtons() {
-    // Les IDs de vos boutons sont action-attack, action-defend, action-heal
-    document.getElementById("action-attack").disabled = false;
-    document.getElementById("action-defend").disabled = false;
-    document.getElementById("action-heal").disabled = false;
+export function updateHealthBar(barId, health) {
+    const healthBar = document.getElementById(barId);
+    const pvDisplay = document.getElementById(barId.replace('health-bar', 'pv-display'));
+
+    if (healthBar) {
+        healthBar.style.width = `${health}%`;
+        if (health <= 25) {
+            healthBar.style.backgroundColor = '#e74c3c'; // Rouge
+        } else if (health <= 50) {
+            healthBar.style.backgroundColor = '#f1c40f'; // Jaune
+        } else {
+            healthBar.style.backgroundColor = '#2ecc71'; // Vert
+        }
+    } else {
+        console.error(`Elements for ${barId} health bar not found.`);
+    }
+
+    if (pvDisplay) {
+        pvDisplay.textContent = `${health} PV`;
+    }
+}
+
+export function updateTimerUI(timeLeft) {
+    const timerValueElement = document.getElementById("timer-value");
+    const timerProgressBarElement = document.getElementById("timer-progress-bar");
+    
+    if (timerValueElement) {
+        timerValueElement.textContent = timeLeft;
+    }
+    
+    if (timerProgressBarElement) {
+        // Supposons que timerMax est disponible via import ou est une valeur constante dans utils.js
+        // Si timerMax n'est pas importé, vous devrez l'importer de main.js ou le définir ici
+        // Pour l'instant, je le suppose disponible (il l'est via main.js)
+        const timerMax = 30; // Remplacez par votre valeur réelle si non importée
+        const percentage = (timeLeft / timerMax) * 100;
+        timerProgressBarElement.style.width = `${percentage}%`;
+
+        if (timeLeft <= 5) { // 5 dernières secondes en rouge
+            timerProgressBarElement.style.backgroundColor = '#e74c3c';
+        } else if (timeLeft <= 15) { // 15 secondes en orange
+            timerProgressBarElement.style.backgroundColor = '#e67e22';
+        } else {
+            timerProgressBarElement.style.backgroundColor = '#3498db'; // Bleu
+        }
+    }
+}
+
+export function clearHistory() {
+    const historyElement = document.getElementById("history");
+    if (historyElement) {
+        historyElement.innerHTML = ''; // Vide l'historique
+    }
 }
 
 export function disableActionButtons() {
@@ -32,88 +78,8 @@ export function disableActionButtons() {
     document.getElementById("action-heal").disabled = true;
 }
 
-
-// Met à jour la barre de vie et l'affichage numérique des PV
-// Note: Cette fonction a été ajustée pour prendre les IDs des éléments HTML directement
-// Plutôt que les éléments JS pour une meilleure réutilisabilité et clarté avec les IDs existants.
-export function updateHealthBar(playerType, currentPV) {
-    const barElementId = `${playerType}-health-bar`; // 'you-health-bar' ou 'opponent-health-bar'
-    const textElementId = `${playerType}-pv-display`; // 'you-pv-display' ou 'opponent-pv-display'
-
-    const barElement = document.getElementById(barElementId);
-    const textElement = document.getElementById(textElementId);
-
-    if (!barElement || !textElement) {
-        console.error(`Elements for ${playerType} health bar not found.`);
-        return;
-    }
-
-    // S'assurer que les PV sont entre 0 et 100
-    const clampedPV = Math.max(0, Math.min(100, currentPV));    
-    
-    // Mettre à jour la largeur de la barre de vie
-    barElement.style.width = `${clampedPV}%`;
-    
-    // Mettre à jour le texte affichant les PV numériques
-    textElement.textContent = `${clampedPV} PV`;
-
-    // Optionnel : Changer la couleur de la barre en fonction des PV
-    if (clampedPV < 25) {
-        barElement.style.backgroundColor = 'red';
-    } else if (clampedPV < 50) {
-        barElement.style.backgroundColor = 'orange';
-    } else {
-        barElement.style.backgroundColor = '#2ecc71'; // Vert par défaut, j'ai mis un vert plus clair que #4CAF50
-    }
-}
-
-// Met à jour l'affichage du timer
-// J'ai ajusté cette fonction pour correspondre aux IDs de votre index.html
-export function updateTimerUI(remainingTime, maxTime) {
-    const timerValueElement = document.getElementById("timer-value"); // Élément pour le compte à rebours numérique
-    const timerProgressBar = document.getElementById("timer-progress-bar"); // Élément pour la barre de progression
-
-    if (timerValueElement) {
-        timerValueElement.textContent = remainingTime;
-        if (remainingTime <= 5) {
-            timerValueElement.style.color = 'red';
-        } else {
-            timerValueElement.style.color = '#f1c40f'; // Couleur par défaut pour le texte du timer
-        }
-    }
-
-    if (timerProgressBar) {
-        const percentage = (remainingTime / maxTime) * 100;
-        timerProgressBar.style.width = `${percentage}%`;
-        
-        // Changer la couleur de la barre de progression du timer
-        if (percentage < 25) {
-            timerProgressBar.style.backgroundColor = 'red';
-        } else if (percentage < 50) {
-            timerProgressBar.style.backgroundColor = 'orange';
-        } else {
-            timerProgressBar.style.backgroundColor = '#3498db'; // Bleu par défaut
-        }
-    }
-}
-
-
-// Vide l'historique du match
-export function clearHistory() {
-    const histEl = document.getElementById("history");
-    if (histEl) {
-        histEl.innerHTML = "";
-    }
-}
-
-// AJOUTÉ: Ajoute un message à l'historique du match
-export function appendToHistory(message) {
-    const historyDiv = document.getElementById("history");
-    if (historyDiv) {
-        const p = document.createElement("p");
-        p.textContent = message;
-        historyDiv.appendChild(p);
-        // Fait défiler vers le bas pour toujours voir le dernier message
-        historyDiv.scrollTop = historyDiv.scrollHeight;
-    }
+export function enableActionButtons() {
+    document.getElementById("action-attack").disabled = false;
+    document.getElementById("action-defend").disabled = false;
+    document.getElementById("action-heal").disabled = false;
 }

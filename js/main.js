@@ -1,3 +1,4 @@
+// main.js (pas de changements substantiels nécessaires, la version précédente est correcte)
 // main.js
 
 console.log("main.js chargé."); // DEBUG : Confirme le chargement de main.js
@@ -6,7 +7,6 @@ import { app } from "./firebaseConfig.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import { db } from "./firebaseConfig.js";
 import { ref, push, set, onValue, update, remove, serverTimestamp, get } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-// Assurez-vous que game.js est bien importé, y compris la fonction performAction si elle est utilisée directement ici
 import { startMatchMonitoring } from "./game.js";
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons } from "./utils.js";
 
@@ -22,7 +22,7 @@ export let gameMode = null; // 'PvAI' or 'PvP'
 // Variables de contrôle du timer et de déconnexion
 export const timerMax = 30; // 30 secondes par tour
 export let timerInterval = null;
-export function setTimerInterval(interval) { timerInterval = interval; }
+export function setTimerInterval(interval) { timerInterval = interval; } // Cette fonction est utilisée par game.js
 
 export let onDisconnectRef = null;
 export function setOnDisconnectRef(ref) { onDisconnectRef = ref; }
@@ -50,7 +50,7 @@ export function setMatchVariables(id, user, playerKey, mode) {
 function setupGameModeSelection() {
     document.getElementById("start-ai-game-btn").addEventListener("click", () => {
         if (currentUser) {
-            console.log("Clic sur 'Jouer contre l'IA'."); // DEBUG
+            console.log("Clic sur 'Jouer contre l'IA'.");
             createMatch('PvAI');
         } else {
             showMessage("auth-msg", "Veuillez vous connecter pour démarrer un match IA.");
@@ -59,7 +59,7 @@ function setupGameModeSelection() {
 
     document.getElementById("start-pvp-game-btn").addEventListener("click", () => {
         if (currentUser) {
-            console.log("Clic sur 'Rejoindre un match PvP'."); // DEBUG
+            console.log("Clic sur 'Rejoindre un match PvP'.");
             findOrCreatePvPMatch();
         } else {
             showMessage("auth-msg", "Veuillez vous connecter pour démarrer un match PvP.");
@@ -67,8 +67,8 @@ function setupGameModeSelection() {
     });
 
     document.getElementById("cancel-matchmaking-btn").addEventListener("click", () => {
-        console.log("Clic sur 'Annuler la recherche'."); // DEBUG
-        backToMenu(true); // Retour au menu principal
+        console.log("Clic sur 'Annuler la recherche'.");
+        backToMenu(true);
         showMessage("match-msg", "Recherche de match annulée.");
     });
 }
@@ -111,17 +111,12 @@ function setupLogoutButton() {
             try {
                 await signOut(auth);
                 currentUser = null;
-                console.log("Utilisateur déconnecté."); // DEBUG
+                console.log("Utilisateur déconnecté.");
                 document.getElementById("pseudo-display").textContent = "Non connecté";
                 document.getElementById("player-name").textContent = "";
                 document.getElementById("auth-msg").textContent = "Déconnecté.";
                 document.getElementById("main-menu").style.display = "none";
                 document.getElementById("auth").style.display = "block";
-                // Nettoie les écouteurs de mode de jeu pour éviter des problèmes après déconnexion
-                // Note : removeEventListener a besoin de la même fonction de référence pour fonctionner
-                // Si vous avez utilisé des fonctions anonymes, cela ne fonctionnera pas directement ici.
-                // Pour cet exemple simple, nous laissons tel quel.
-                // document.getElementById("start-ai-game-btn").removeEventListener("click", null); // Ceci est incorrect
             } catch (error) {
                 console.error("Error signing out:", error);
                 showMessage("auth-msg", "Erreur lors de la déconnexion.");
@@ -219,8 +214,7 @@ async function createMatch(mode) {
             
             startMatchMonitoring(newMatchId, currentUser, 'p1', mode);
         } else {
-            // Mode PvAI, on passe directement au jeu
-            console.log(`Lancement de startMatchMonitoring pour PvAI avec ID: ${newMatchId}`); // DEBUG
+            console.log(`Lancement de startMatchMonitoring pour PvAI avec ID: ${newMatchId}`);
             startMatchMonitoring(newMatchId, currentUser, 'p1', mode);
         }
     } catch (error) {
@@ -276,7 +270,7 @@ async function findOrCreatePvPMatch() {
                         await update(ref(db), updates);
                         showMessage("match-msg", `Vous avez rejoint le match ${matchId} !`);
                         document.getElementById("matchmaking-status").style.display = "none";
-                        console.log(`Lancement de startMatchMonitoring pour PvP (joueur 2) avec ID: ${matchId}`); // DEBUG
+                        console.log(`Lancement de startMatchMonitoring pour PvP (joueur 2) avec ID: ${matchId}`);
                         startMatchMonitoring(matchId, currentUser, 'p2', 'PvP');
                         
                         if (pvpMatchFinderUnsubscribe) {
@@ -315,7 +309,7 @@ async function findOrCreatePvPMatch() {
 // --- GESTION DE LA FIN DE MATCH ET DU RETOUR AU MENU ---
 
 export function backToMenu(fromGame = false) {
-    console.log("Retour au menu demandé. From game:", fromGame); // DEBUG
+    console.log("Retour au menu demandé. From game:", fromGame);
     if (fromGame) {
         document.getElementById("game").style.display = "none";
         document.getElementById("main-menu").style.display = "block";
