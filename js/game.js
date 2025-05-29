@@ -13,7 +13,7 @@ import {
     gameMode,
     setMatchVariables,
     timerMax,
-    setTimerInterval,
+    setTimerInterval, // Assurez-vous que c'est bien la fonction qui met à jour la variable globale dans main.js
     setOnDisconnectRef,
     setMatchDeletionTimeout,
     hasPlayedThisTurn,
@@ -196,13 +196,12 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         const currentTurnStartTime = matchData.turnStartTime;
         let validStartTimeForTimer = null;
 
-        // Si currentTurnStartTime est un nombre, nous l'utilisons.
-        // Sinon, nous ne démarrons PAS le timer tant que Firebase n'a pas mis à jour avec le vrai timestamp.
+        // VÉRIFICATION TRÈS ROBUSTE : S'assurer que c'est un nombre et qu'il n'est pas NaN
         if (typeof currentTurnStartTime === 'number' && !isNaN(currentTurnStartTime)) {
              validStartTimeForTimer = currentTurnStartTime;
         } else {
-             console.warn("turnStartTime n'est pas encore un timestamp numérique valide de Firebase. Le timer ne sera pas démarré pour l'instant.");
-             // On ne fait rien ici pour le timer, on attend la prochaine mise à jour de Firebase
+             // Si ce n'est pas un nombre, ou si c'est NaN (par ex. pour le placeholder serverTimestamp())
+             console.warn("turnStartTime n'est pas encore un timestamp numérique valide de Firebase. Le timer ne sera pas démarré pour l'instant.", { currentTurnStartTime, type: typeof currentTurnStartTime, isNaN: isNaN(currentTurnStartTime) });
         }
 
         // Cas général: Si c'est le tour de votre joueur
@@ -223,8 +222,8 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 console.log("C'est votre tour. Votre action a été soumise. En attente de l'adversaire.");
                 showMessage("action-msg", "Action soumise. En attente de l'adversaire...");
                 disableActionButtons();
-                setTimerInterval(clearInterval(setTimerInterval));
-                updateTimerUI(timerMax);
+                setTimerInterval(clearInterval(setTimerInterval)); // Arrête votre timer
+                updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
             }
         }
         // Cas général: Si c'est le tour de l'adversaire (ou si le tour est déjà passé à l'IA)
@@ -232,8 +231,8 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             console.log("C'est le tour de l'adversaire.");
             showMessage("action-msg", `C'est le tour de ${opponent.pseudo}.`);
             disableActionButtons();
-            setTimerInterval(clearInterval(setTimerInterval));
-            updateTimerUI(timerMax);
+            setTimerInterval(clearInterval(setTimerInterval)); // Arrête votre timer
+            updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
 
             // Si c'est un match PvAI et l'IA n'a pas encore soumis son action (et c'est SON tour)
             // Note: Cette condition sera VRAIE une fois que processTurn aura basculé le tour vers l'IA
@@ -479,12 +478,13 @@ async function processTurn(matchData) {
  */
 function startTimer(startTime) {
     console.log("Timer démarré avec startTime :", startTime, " (type:", typeof startTime, ")"); // DEBUG TRÈS IMPORTANT
-    setTimerInterval(clearInterval(setTimerInterval));
+    // IMPORTANT : Arrêter TOUS les intervalles précédents pour éviter des timers multiples
+    setTimerInterval(clearInterval(setTimerInterval)); // Assurez-vous que setTimerInterval est bien une fonction qui gère l'ID global
 
     setTimerInterval(setInterval(() => {
-        // Vérification plus robuste pour le startTime avant calcul
+        // Ces vérifications sont très importantes. Elles arrêtent le timer si la valeur est corrompue en cours de route.
         if (typeof startTime !== 'number' || isNaN(startTime)) {
-            console.error("startTimer: startTime est invalide. Arrêt du timer.", { startTime, type: typeof startTime, isNaN: isNaN(startTime) });
+            console.error("startTimer: startTime est invalide. Arrêt du timer interne.", { startTime, type: typeof startTime, isNaN: isNaN(startTime) });
             setTimerInterval(clearInterval(setTimerInterval));
             updateTimerUI(timerMax); // Réinitialise l'affichage
             return; // Sort de cette itération de setInterval pour éviter d'autres erreurs
@@ -495,7 +495,7 @@ function startTimer(startTime) {
         
         // Vérifie si la conversion Date().getTime() a échoué (cela peut arriver si startTime était juste un objet ou null)
         if (isNaN(startTimestampMillis)) {
-            console.error("startTimer: Conversion de startTime en timestamp a échoué. Arrêt du timer.", { startTime, startTimestampMillis });
+            console.error("startTimer: Conversion de startTime en timestamp a échoué. Arrêt du timer interne.", { startTime, startTimestampMillis });
             setTimerInterval(clearInterval(setTimerInterval));
             updateTimerUI(timerMax); // Réinitialise l'affichage
             return; // Sort de cette itération de setInterval
