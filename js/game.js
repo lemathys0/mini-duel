@@ -49,6 +49,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     appendToHistory(`Début du match ${matchId} en mode ${gameMode}.`);
     showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
     enableActionButtons();
+    setHasPlayedThisTurn(false); // Réinitialise l'état au début du match <--- AJOUT ICI
 
     // Efface tous les chronomètres précédents d'éventuels matchs abandonnés
     if (playerTurnTimerId) clearInterval(playerTurnTimerId);
@@ -158,8 +159,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             document.getElementById("opponent-action-status").textContent = "";
 
             // Important: Réinitialise hasPlayedThisTurn uniquement si aucune action n'est en attente
-            // et si ce n'est pas déjà marqué comme joué par une action précédente du même tour
-            if (!youData.action && !hasPlayedThisTurn) {
+            if (!youData.action) { // <--- MODIFICATION ICI
                 setHasPlayedThisTurn(false);
             }
 
@@ -190,7 +190,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             // Tour de l'adversaire (ou de l'IA)
             disableActionButtons();
             showMessage("action-msg", `Tour ${turnCount} : C'est le tour de ${opponentData.pseudo}...`);
-            setHasPlayedThisTurn(true); // Le joueur ne peut pas agir pendant le tour de l'adversaire
+            // setHasPlayedThisTurn(true); // <--- SUPPRIMÉ ICI
 
             // Efface votre chronomètre s'il est actif
             if (playerTurnTimerId) {
