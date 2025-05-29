@@ -255,16 +255,14 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             // --- LOGIQUE SPÉCIFIQUE POUR L'IA AU DÉBUT DE SON PROPRE TOUR ---
             // L'IA doit jouer ici seulement si c'est son tour ET qu'elle n'a pas encore soumis d'action.
             // Cette condition est cruciale pour éviter le double déclenchement après processTurn.
-            // On s'assure qu'elle ne joue que si son action est undefined ET que l'action du joueur est aussi undefined (nouveau tour).
             console.log("DEBUG IA (TOUR IA): Vérification pour déclencher l'IA pendant le tour de l'adversaire.");
             console.log("DEBUG IA (TOUR IA): gameMode:", gameMode, ", matchData.turn:", matchData.turn, ", opponentKey:", opponentKey);
             console.log("DEBUG IA (TOUR IA): matchData.players[opponentKey].action (IA action):", matchData.players[opponentKey].action);
             console.log("DEBUG IA (TOUR IA): matchData.players[youKey].action (Joueur action):", matchData.players[youKey].action);
 
             // C'est LA condition critique pour éviter le double déclenchement.
-            // L'IA ne joue PAS si le joueur a encore une action en attente (ce qui signifie que le tour n'a pas encore été traité)
-            // OU si l'IA a déjà son action.
-            if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players[opponentKey].action && !matchData.players[youKey].action) {
+            // L'IA ne joue QUE si c'est son tour ET qu'elle n'a pas encore soumis d'action.
+            if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
                  console.log("DEBUG IA (TOUR IA): Conditions remplies (début de tour IA). Déclenchement de processAITurn.");
                  await processAITurn(matchData);
             } else {
@@ -272,7 +270,6 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                  if (gameMode !== 'PvAI') console.log("DEBUG IA (TOUR IA): -> Pas un match PvAI.");
                  if (matchData.turn !== opponentKey) console.log("DEBUG IA (TOUR IA): -> Ce n'est pas le tour de l'IA.");
                  if (matchData.players[opponentKey].action) console.log("DEBUG IA (TOUR IA): -> L'IA a déjà une action.");
-                 if (matchData.players[youKey].action) console.log("DEBUG IA (TOUR IA): -> Le joueur a une action en attente (le tour n'est pas encore traité).");
             }
         }
 
