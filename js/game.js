@@ -12,13 +12,13 @@ import {
     off,
     remove,
     onDisconnect, // <-- Assure que onDisconnect est importé
-    set,          // <-- Assure que set est importé (pour performAction)
-    get           // <-- Assure que get est importé (pour handleForfeit)
+    set,           // <-- Assure que set est importé (pour performAction)
+    get             // <-- Assure que get est importé (pour handleForfeit)
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 
 // Autres imports de votre projet
 import { currentUser, currentMatchId, youKey, opponentKey, gameMode,
-         timerMax, timerInterval, setTimerInterval, // timerInterval devrait maintenant être utilisé uniquement pour le timer du joueur
+         timerMax, timerInterval, setTimerInterval,
          onDisconnectRef, setOnDisconnectRef,
          matchDeletionTimeout, setMatchDeletionTimeout,
          hasPlayedThisTurn, setHasPlayedThisTurn, setMatchVariables, backToMenu, updateUserStats } from "./main.js";
@@ -49,7 +49,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     appendToHistory(`Début du match ${matchId} en mode ${gameMode}.`);
     showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
     enableActionButtons();
-    setHasPlayedThisTurn(false); // Réinitialise l'état au début du match <--- AJOUT ICI
+    setHasPlayedThisTurn(false); // Réinitialise l'état au début du match
 
     // Efface tous les chronomètres précédents d'éventuels matchs abandonnés
     if (playerTurnTimerId) clearInterval(playerTurnTimerId);
@@ -159,7 +159,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             document.getElementById("opponent-action-status").textContent = "";
 
             // Important: Réinitialise hasPlayedThisTurn uniquement si aucune action n'est en attente
-            if (!youData.action) { // <--- MODIFICATION ICI
+            if (!youData.action) {
                 setHasPlayedThisTurn(false);
             }
 
@@ -190,7 +190,6 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             // Tour de l'adversaire (ou de l'IA)
             disableActionButtons();
             showMessage("action-msg", `Tour ${turnCount} : C'est le tour de ${opponentData.pseudo}...`);
-            // setHasPlayedThisTurn(true); // <--- SUPPRIMÉ ICI
 
             // Efface votre chronomètre s'il est actif
             if (playerTurnTimerId) {
@@ -211,11 +210,11 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                     // Ajoute un léger délai pour le réalisme
                     // Empêche les actions multiples de l'IA pour le même tour
                     if (!aiTurnTimeoutId) {
-                         console.log("Tour de l'IA. En attente de l'action de l'IA.");
-                         aiTurnTimeoutId = setTimeout(() => {
-                             performAIAction(matchId, matchData);
-                             aiTurnTimeoutId = null; // Efface ce timeout après l'action de l'IA
-                         }, 1500); // Délai de 1.5 seconde pour l'IA
+                           console.log("Tour de l'IA. En attente de l'action de l'IA.");
+                           aiTurnTimeoutId = setTimeout(() => {
+                               performAIAction(matchId, matchData);
+                               aiTurnTimeoutId = null; // Efface ce timeout après l'action de l'IA
+                           }, 1500); // Délai de 1.5 seconde pour l'IA
                     }
                 }
             }
@@ -223,13 +222,15 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     });
 
     // Écouteurs d'événements pour les boutons d'action
+    // Ces gestionnaires sont attachés ici pour s'assurer qu'ils sont mis en place au début du match
     document.getElementById("action-attack").onclick = () => performAction('attack');
     document.getElementById("action-defend").onclick = () => performAction('defend');
     document.getElementById("action-heal").onclick = () => performAction('heal');
     document.getElementById("back-to-menu-btn").onclick = () => handleForfeit();
 }
 
-async function performAction(actionType) {
+// Rendre performAction exportable pour qu'elle puisse être appelée par les écouteurs d'événements
+export async function performAction(actionType) {
     if (!currentMatchId || !currentUser || !youKey || hasPlayedThisTurn) {
         if (!hasPlayedThisTurn) {
             showMessage("action-msg", "Ce n'est pas votre tour ou le match n'est pas prêt.");
@@ -539,5 +540,3 @@ async function handleForfeit() {
         showMessage("action-msg", "Erreur lors de l'abandon du match.");
     }
 }
-
-document.getElementById("back-to-menu-btn").addEventListener("click", handleForfeit);
