@@ -1,11 +1,14 @@
 // main.js
 
+console.log("main.js chargé."); // DEBUG : Confirme le chargement de main.js
+
 import { app } from "./firebaseConfig.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import { db } from "./firebaseConfig.js";
 import { ref, push, set, onValue, update, remove, serverTimestamp, get } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-import { startMatchMonitoring } from "./game.js"; // Assurez-vous que game.js est bien importé
-import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons } from "./utils.js"; // Assurez-vous que utils.js est bien importé
+// Assurez-vous que game.js est bien importé, y compris la fonction performAction si elle est utilisée directement ici
+import { startMatchMonitoring } from "./game.js";
+import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons } from "./utils.js";
 
 const auth = getAuth(app);
 
@@ -47,6 +50,7 @@ export function setMatchVariables(id, user, playerKey, mode) {
 function setupGameModeSelection() {
     document.getElementById("start-ai-game-btn").addEventListener("click", () => {
         if (currentUser) {
+            console.log("Clic sur 'Jouer contre l'IA'."); // DEBUG
             createMatch('PvAI');
         } else {
             showMessage("auth-msg", "Veuillez vous connecter pour démarrer un match IA.");
@@ -55,6 +59,7 @@ function setupGameModeSelection() {
 
     document.getElementById("start-pvp-game-btn").addEventListener("click", () => {
         if (currentUser) {
+            console.log("Clic sur 'Rejoindre un match PvP'."); // DEBUG
             findOrCreatePvPMatch();
         } else {
             showMessage("auth-msg", "Veuillez vous connecter pour démarrer un match PvP.");
@@ -62,6 +67,7 @@ function setupGameModeSelection() {
     });
 
     document.getElementById("cancel-matchmaking-btn").addEventListener("click", () => {
+        console.log("Clic sur 'Annuler la recherche'."); // DEBUG
         backToMenu(true); // Retour au menu principal
         showMessage("match-msg", "Recherche de match annulée.");
     });
@@ -75,25 +81,23 @@ async function authenticateAnonymously() {
         currentUser = userCredential.user;
         console.log("Authenticated anonymously:", currentUser.uid);
         
-        // Récupérer le pseudo ou en générer un
         const userRef = ref(db, `users/${currentUser.uid}`);
-        const snapshot = await get(userRef); // Utiliser get() pour lire une seule fois
+        const snapshot = await get(userRef);
         const userData = snapshot.val();
 
         if (userData && userData.pseudo) {
             currentUser.pseudo = userData.pseudo;
         } else {
             currentUser.pseudo = `Joueur_${Math.floor(Math.random() * 10000)}`;
-            // Initialise les stats aussi si c'est un nouvel utilisateur
             await set(userRef, { pseudo: currentUser.pseudo, wins: 0, losses: 0, draws: 0 }); 
         }
         document.getElementById("pseudo-display").textContent = `Connecté en tant que : ${currentUser.pseudo}`;
-        document.getElementById("player-name").textContent = currentUser.pseudo; // Met à jour le nom dans le titre du menu
+        document.getElementById("player-name").textContent = currentUser.pseudo;
         document.getElementById("auth-msg").textContent = "Connecté. Choisissez un mode de jeu.";
         document.getElementById("main-menu").style.display = "block";
         document.getElementById("auth").style.display = "none";
-        setupGameModeSelection(); // Appelle la fonction de sélection du mode de jeu
-        setupLogoutButton(); // Configure le bouton de déconnexion
+        setupGameModeSelection();
+        setupLogoutButton();
     } catch (error) {
         console.error("Authentication error:", error);
         showMessage("auth-msg", "Échec de l'authentification. Veuillez réessayer.");
@@ -107,15 +111,17 @@ function setupLogoutButton() {
             try {
                 await signOut(auth);
                 currentUser = null;
+                console.log("Utilisateur déconnecté."); // DEBUG
                 document.getElementById("pseudo-display").textContent = "Non connecté";
-                document.getElementById("player-name").textContent = ""; // Réinitialise le nom
+                document.getElementById("player-name").textContent = "";
                 document.getElementById("auth-msg").textContent = "Déconnecté.";
                 document.getElementById("main-menu").style.display = "none";
                 document.getElementById("auth").style.display = "block";
                 // Nettoie les écouteurs de mode de jeu pour éviter des problèmes après déconnexion
-                document.getElementById("start-ai-game-btn").removeEventListener("click", null); 
-                document.getElementById("start-pvp-game-btn").removeEventListener("click", null);
-                document.getElementById("cancel-matchmaking-btn").removeEventListener("click", null);
+                // Note : removeEventListener a besoin de la même fonction de référence pour fonctionner
+                // Si vous avez utilisé des fonctions anonymes, cela ne fonctionnera pas directement ici.
+                // Pour cet exemple simple, nous laissons tel quel.
+                // document.getElementById("start-ai-game-btn").removeEventListener("click", null); // Ceci est incorrect
             } catch (error) {
                 console.error("Error signing out:", error);
                 showMessage("auth-msg", "Erreur lors de la déconnexion.");
@@ -153,9 +159,7 @@ onAuthStateChanged(auth, async (user) => {
         document.getElementById("auth-msg").textContent = "Veuillez vous connecter.";
         document.getElementById("main-menu").style.display = "none";
         document.getElementById("auth").style.display = "block";
-        document.getElementById("login-btn").addEventListener("click", authenticateAnonymously); // Connecte anonymement si pas d'auth
-        // Optionnel: Si vous avez un bouton d'inscription pour l'auth par pseudo/code, vous le configurez ici.
-        // Pour l'instant, on n'utilise que l'authentification anonyme pour simplifier.
+        document.getElementById("login-btn").addEventListener("click", authenticateAnonymously);
     }
 });
 
@@ -175,14 +179,14 @@ async function createMatch(mode) {
 
     const initialData = {
         createdAt: serverTimestamp(),
-        status: mode === 'PvP' ? 'waiting' : 'playing', // PvP: waiting; PvAI: playing
-        turn: 'p1', // P1 commence toujours
-        mode: mode, // AJOUT IMPORTANT : le mode du match ('PvAI' ou 'PvP')
+        status: mode === 'PvP' ? 'waiting' : 'playing',
+        turn: 'p1',
+        mode: mode,
         players: {
             p1: {
                 pseudo: pseudo,
                 pv: 100,
-                status: 'connected', // 'connected', 'forfeited'
+                status: 'connected',
                 lastSeen: serverTimestamp(),
                 action: null,
                 lastAction: null,
@@ -197,8 +201,8 @@ async function createMatch(mode) {
         initialData.players.p2 = {
             pseudo: 'IA',
             pv: 100,
-            status: 'connected', // L'IA est toujours 'connectée'
-            lastSeen: serverTimestamp(), // L'IA n'a pas de 'lastSeen' réel mais on le met pour la cohérence
+            status: 'connected',
+            lastSeen: serverTimestamp(),
             action: null,
             lastAction: null,
             healCooldown: 0,
@@ -213,10 +217,10 @@ async function createMatch(mode) {
             document.getElementById("matchmaking-status").style.display = "block";
             document.getElementById("matchmaking-message").textContent = `Recherche un adversaire pour le match ${newMatchId}...`;
             
-            // Lancer la surveillance du match pour le joueur créateur (p1)
             startMatchMonitoring(newMatchId, currentUser, 'p1', mode);
         } else {
             // Mode PvAI, on passe directement au jeu
+            console.log(`Lancement de startMatchMonitoring pour PvAI avec ID: ${newMatchId}`); // DEBUG
             startMatchMonitoring(newMatchId, currentUser, 'p1', mode);
         }
     } catch (error) {
@@ -225,9 +229,8 @@ async function createMatch(mode) {
     }
 }
 
-let pvpMatchFinderUnsubscribe = null; // Variable pour stocker la fonction d'unsubscribe
+let pvpMatchFinderUnsubscribe = null;
 
-// Fonction pour rechercher ou créer un match PvP
 async function findOrCreatePvPMatch() {
     showMessage("match-msg", "Recherche de matchs PvP disponibles...");
     document.getElementById("main-menu").style.display = "none";
@@ -235,9 +238,8 @@ async function findOrCreatePvPMatch() {
     document.getElementById("matchmaking-message").textContent = "Recherche un adversaire...";
 
     const matchesRef = ref(db, 'matches');
-    let foundAndJoinedMatch = false; // Flag pour s'assurer qu'on ne rejoint qu'un seul match
+    let foundAndJoinedMatch = false;
 
-    // Si un listener existait, annulez-le pour éviter les écoutes multiples
     if (pvpMatchFinderUnsubscribe) {
         pvpMatchFinderUnsubscribe();
         pvpMatchFinderUnsubscribe = null;
@@ -246,7 +248,6 @@ async function findOrCreatePvPMatch() {
     pvpMatchFinderUnsubscribe = onValue(matchesRef, async (snapshot) => {
         const matchesData = snapshot.val();
         
-        // Si un match a déjà été trouvé et rejoint par ce client, on ne fait rien
         if (foundAndJoinedMatch) {
             return;
         }
@@ -254,12 +255,10 @@ async function findOrCreatePvPMatch() {
         let matchFound = false;
         for (const matchId in matchesData) {
             const match = matchesData[matchId];
-            // Vérifier si le match est en attente, en mode PvP, et n'a qu'un seul joueur (p1)
             if (match.status === 'waiting' && match.mode === 'PvP' && match.players && match.players.p1 && !match.players.p2) {
-                // S'assurer que le joueur actuel n'est pas déjà p1 de ce match (cas de rechargement/multi-onglet du même joueur)
                 if (match.players.p1.pseudo !== currentUser.pseudo) {
-                    foundAndJoinedMatch = true; // Définir le flag pour éviter de rejoindre d'autres matchs
-                    matchFound = true; // Indique qu'un match a été trouvé
+                    foundAndJoinedMatch = true;
+                    matchFound = true;
                     try {
                         const updates = {};
                         updates[`matches/${matchId}/players/p2`] = {
@@ -277,33 +276,30 @@ async function findOrCreatePvPMatch() {
                         await update(ref(db), updates);
                         showMessage("match-msg", `Vous avez rejoint le match ${matchId} !`);
                         document.getElementById("matchmaking-status").style.display = "none";
+                        console.log(`Lancement de startMatchMonitoring pour PvP (joueur 2) avec ID: ${matchId}`); // DEBUG
                         startMatchMonitoring(matchId, currentUser, 'p2', 'PvP');
                         
-                        // Annuler le listener de recherche de match après avoir rejoint
                         if (pvpMatchFinderUnsubscribe) {
                             pvpMatchFinderUnsubscribe();
                             pvpMatchFinderUnsubscribe = null;
                         }
-                        return; // Quitter la boucle et la fonction onValue
+                        return;
                     } catch (error) {
                         console.error("Error joining match:", error);
                         showMessage("match-msg", "Erreur lors de la tentative de rejoindre un match.");
-                        foundAndJoinedMatch = false; // Réinitialiser le flag si l'opération échoue
-                        matchFound = false; // Réinitialiser si l'opération échoue
+                        foundAndJoinedMatch = false;
+                        matchFound = false;
                     }
                 }
             }
         }
 
-        // Si aucun match n'a été trouvé après avoir parcouru tous les matchs
-        // ET si on n'est pas déjà en train de créer/rejoindre un match
         if (!matchFound && !foundAndJoinedMatch && !currentMatchId) { 
             showMessage("match-msg", "Aucun match disponible. Création d'un nouveau match PvP...");
             document.getElementById("matchmaking-message").textContent = "Aucun match disponible. Création d'un nouveau match...";
-            createMatch('PvP'); // Crée un nouveau match PvP en attente
-            foundAndJoinedMatch = true; // Pour éviter une boucle de création de match dans onValue
+            createMatch('PvP');
+            foundAndJoinedMatch = true;
             
-            // Annuler le listener de recherche de match après avoir créé le match
             if (pvpMatchFinderUnsubscribe) {
                 pvpMatchFinderUnsubscribe();
                 pvpMatchFinderUnsubscribe = null;
@@ -318,37 +314,32 @@ async function findOrCreatePvPMatch() {
 
 // --- GESTION DE LA FIN DE MATCH ET DU RETOUR AU MENU ---
 
-// Fonction de retour au menu
 export function backToMenu(fromGame = false) {
-    // Si on revient du jeu ou de la recherche de match
+    console.log("Retour au menu demandé. From game:", fromGame); // DEBUG
     if (fromGame) {
         document.getElementById("game").style.display = "none";
         document.getElementById("main-menu").style.display = "block";
         document.getElementById("matchmaking-status").style.display = "none"; 
-        showMessage("match-msg", ""); // Effacer le message de match
-        showMessage("action-msg", ""); // Effacer le message d'action
-        document.getElementById("matchmaking-message").textContent = ""; // Effacer message matchmaking
+        showMessage("match-msg", "");
+        showMessage("action-msg", "");
+        document.getElementById("matchmaking-message").textContent = "";
 
-        // Réinitialiser les variables globales du match
         currentMatchId = null;
         youKey = null;
         opponentKey = null;
         gameMode = null;
 
-        // Annuler les écouteurs Firebase et les timers
-        // currentMatchUnsubscribe est géré dans game.js
         if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
         if (onDisconnectRef) { onDisconnectRef.cancel().catch(err => console.error("Error cancelling old onDisconnect:", err)); setOnDisconnectRef(null); }
         if (matchDeletionTimeout) { clearTimeout(matchDeletionTimeout); setMatchDeletionTimeout(null); }
         setHasPlayedThisTurn(false);
 
-        // Annuler le listener de recherche de match si on revient au menu principal
         if (pvpMatchFinderUnsubscribe) {
             pvpMatchFinderUnsubscribe();
             pvpMatchFinderUnsubscribe = null;
         }
 
-    } else { // Si on revient d'une autre section (ex: auth)
+    } else {
         document.getElementById("main-menu").style.display = "block";
         document.getElementById("auth").style.display = "none";
         document.getElementById("matchmaking-status").style.display = "none";
