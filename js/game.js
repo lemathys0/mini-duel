@@ -176,40 +176,29 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
 
         // --- LOGIQUE DE DÉCLENCHEMENT DE L'IA (MODE PvAI UNIQUEMENT) ---
         if (gameMode === 'PvAI' && data.status === 'playing') {
-            // L'IA agit si c'est son tour (data.turn === opponentKey)
-            // ET si elle n'a pas encore soumis d'action pour ce tour.
-            // OU si c'est le tour du joueur, le joueur a soumis son action, ET l'IA n'a pas encore réagi.
-            const shouldAiAct = 
+            // L'IA doit agir si :
+            // 1. C'est le tour de l'IA (p2) et elle n'a pas encore soumis d'action.
+            // 2. C'est le tour du joueur (p1), le joueur a soumis son action, ET l'IA n'a pas encore réagi.
+            const shouldAiReactThisMoment = 
                 (data.turn === opponentKey && !data.players[opponentKey]?.action) || 
                 (data.turn === youKey && data.players[youKey]?.action && !data.players[opponentKey]?.action);
             
-            if (shouldAiAct) {
-                console.log("Triggering AI action based on current turn state.");
+            if (shouldAiReactThisMoment) {
+                console.log("Considering AI action based on current turn state.");
                 disableActionButtons(true); // Assurer que les boutons sont désactivés pendant le tour de l'IA
                 showMessage("action-msg", `L'IA réfléchit...`);
-                // Nous allons ajouter un délai pour que l'IA ne joue pas instantanément
+                
+                // Utilisez un délai pour appeler aiTurn. La logique interne de aiTurn fera une dernière vérification.
                 setTimeout(async () => {
+                    // Pas besoin de re-vérifier 'shouldAiAct' ici car aiTurn le fera de manière atomique.
+                    // Il est important de passer les dernières PV pour que l'IA décide bien.
                     const latestSnapshot = await get(matchRef);
                     const latestData = latestSnapshot.val();
-                    
-                    // Double vérification AVANT de déclencher l'IA pour éviter les doublons ou si l'état a changé
-                    // L'IA doit jouer si elle n'a pas d'action ET que les conditions de tour sont toujours valides
-                    const aiStillNeedsToAct = 
-                        latestData && latestData.status === 'playing' && !latestData.players[opponentKey]?.action &&
-                        (
-                            (latestData.turn === opponentKey) || 
-                            (latestData.turn === youKey && latestData.players[youKey]?.action)
-                        );
-
-                    if (aiStillNeedsToAct) {
+                    if (latestData) { // Assurez-vous que les données existent avant de passer.
                         aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef);
-                    } else {
-                        console.log("AI action skipped: State changed, or AI already played.");
                     }
                 }, 1000); // Délai pour simuler le temps de réaction de l'IA
             }
-            // IMPORTANT : NE PAS METTRE `return;` ici. Si l'IA n'agit pas, le reste du code doit quand même s'exécuter.
-            // Par contre, si l'IA soumet une action, cela déclenchera un nouveau onValue, et l'ancien traitement s'arrêtera de toute façon.
         }
         // --- FIN DE LA LOGIQUE DE DÉCLENCHEMENT DE L'IA ---
 
@@ -338,7 +327,6 @@ async function processTurn(data, matchRef) {
     if (gameStatus === 'playing') {
         updates.turn = nextTurn;
     } else {
-        // Si le jeu est terminé, on peut mettre le 'turn' à null ou 'finished'
         updates.turn = null; 
     }
 
@@ -385,10 +373,21 @@ export async function aiTurn(playerPV, aiPV, matchRef) {
     const snapshot = await get(matchRef);
     const currentMatchData = snapshot.val();
 
-    // L'IA ne joue que si le match est "playing", c'est son tour et elle n'a pas encore soumis d'action.
-    // L'IA agit UNIQUEMENT quand data.turn est 'p2' ET que p2.action est null.
-    if (!currentMatchData || currentMatchData.status !== 'playing' || currentMatchData.turn !== 'p2' || currentMatchData.players.p2?.action) {
-        console.log("AI skip: Not correct state for AI to play (status, turn, or action already exists).");
+    // L'IA ne joue que si le match est "playing",
+    // c'est son tour (ou son moment de réagir),
+    // ET elle n'a PAS encore soumis d'action pour ce tour.
+    // Cette vérification est cruciale pour éviter les doubles actions.
+    const isAITurnToAct = 
+        currentMatchData && 
+        currentMatchData.status === 'playing' && 
+        !currentMatchData.players.p2?.action && // <-- CRUCIAL: AI hasn't acted yet this round
+        (
+            (currentMatchData.turn === 'p2') || // If it's explicitly AI's turn
+            (currentMatchData.turn === 'p1' && currentMatchData.players.p1?.action) // If player has acted and AI needs to react
+        );
+
+    if (!isAITurnToAct) {
+        console.log("AI skip (aiTurn): Not the correct state for AI to play or AI already played.");
         return;
     }
 
