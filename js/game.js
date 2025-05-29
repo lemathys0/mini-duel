@@ -349,8 +349,10 @@ async function processAITurn(matchData) {
     isAIProcessingTurn = true; // Déclenche le verrouillage
 
     // Double vérification pour le cas où l'action serait déjà là (suite à une race condition très rapide)
-    if (matchData.players[aiPlayerKey].action) {
-        console.log("processAITurn: L'IA a déjà une action soumise (d'après matchData). Relâche le verrou et abandonne.");
+    // Vérifie avant le délai de l'IA pour s'assurer qu'aucune autre instance n'a déjà écrit
+    const initialAiActionSnapshot = await get(ref(db, `matches/${currentMatchId}/players/${aiPlayerKey}/action`));
+    if (initialAiActionSnapshot.exists() && initialAiActionSnapshot.val() !== null) {
+        console.warn("processAITurn: L'IA a déjà une action soumise (d'après matchData). Relâche le verrou et abandonne.");
         isAIProcessingTurn = false; // Relâche le verrou si cette condition est vraie
         return;
     }
@@ -382,7 +384,7 @@ async function processAITurn(matchData) {
             console.log("processAITurn: Joueur plus fort, IA a une chance de choisir 'defend'.");
         } else {
             aiAction = 'attack'; // Sinon, attaque
-            console.log("processAITurn: Conditions par défaut, IA choisit 'attack'.");
+            console.log("processAITurn: Conditions par défaut, IA choisit 'attack'."); // Correction de console.ol en console.log
         }
     }
 
@@ -390,13 +392,14 @@ async function processAITurn(matchData) {
 
     // Simule un délai pour le "temps de réflexion" de l'IA (4 secondes)
     await new Promise(resolve => setTimeout(resolve, 4000));
+    console.log("processAITurn: Délai de réflexion de l'IA terminé."); // NOUVEAU LOG
 
     try {
         // Nouvelle vérification de l'action de l'IA juste avant la mise à jour pour éviter une race condition
         // Récupère l'état le plus récent de l'action de l'IA directement de Firebase pour éviter les caches locaux
-        const currentAiActionSnapshot = await get(ref(db, `matches/${currentMatchId}/players/${aiPlayerKey}/action`));
-        if (currentAiActionSnapshot.exists() && currentAiActionSnapshot.val() !== null) {
-            console.warn("processAITurn: Action de l'IA déjà définie dans Firebase juste avant la mise à jour. Annulation pour éviter un écrasement."); // NOUVEAU LOG
+        const currentAiActionAfterDelaySnapshot = await get(ref(db, `matches/${currentMatchId}/players/${aiPlayerKey}/action`));
+        if (currentAiActionAfterDelaySnapshot.exists() && currentAiActionAfterDelaySnapshot.val() !== null) {
+            console.warn("processAITurn: Action de l'IA déjà définie dans Firebase juste avant la mise à jour après le délai. Annulation pour éviter un écrasement."); // NOUVEAU LOG
             isAIProcessingTurn = false; // Important de relâcher le verrou ici aussi
             return; // Sortir si l'action est déjà là
         }
@@ -411,12 +414,22 @@ async function processAITurn(matchData) {
         const latestMatchDataSnapshot = await get(matchRef); // Récupère les données les plus récentes
         const latestMatchData = latestMatchDataSnapshot.val();
 
+        console.log("DEBUG IA (processAITurn FINI - Vérification des conditions pour processTurn):"); // NOUVEAU LOG
+        console.log("  - action p1:", latestMatchData?.players?.p1?.action); // NOUVEAU LOG
+        console.log("  - action p2 (IA):", latestMatchData?.players?.p2?.action); // NOUVEAU LOG
+        console.log("  - statut du match:", latestMatchData?.status); // NOUVEAU LOG
+        console.log("  - isProcessingTurnInternally (verrou):", isProcessingTurnInternally); // NOUVEAU LOG
+
         if (latestMatchData && latestMatchData.players.p1.action && latestMatchData.players.p2.action && latestMatchData.status === 'playing' && !isProcessingTurnInternally) {
             console.log("DEBUG IA (processAITurn FINI): Les deux joueurs ont leurs actions, déclenchement de processTurn.");
             await processTurn(latestMatchData); // Déclenche le traitement du tour
         } else {
-            console.log("DEBUG IA (processAITurn FINI): Conditions non remplies pour déclencher processTurn après action IA.");
+            console.log("DEBUG IA (processAITurn FINI): Conditions NON remplies pour déclencher processTurn après action IA.");
             if (isProcessingTurnInternally) console.log("DEBUG IA (processAITurn FINI): -> Un traitement de tour est déjà en cours.");
+            if (!latestMatchData) console.log("DEBUG IA (processAITurn FINI): -> latestMatchData est null.");
+            if (latestMatchData && !latestMatchData.players.p1.action) console.log("DEBUG IA (processAITurn FINI): -> p1.action est null.");
+            if (latestMatchData && !latestMatchData.players.p2.action) console.log("DEBUG IA (processAITurn FINI): -> p2.action est null.");
+            if (latestMatchData && latestMatchData.status !== 'playing') console.log("DEBUG IA (processAITurn FINI): -> Le statut du match n'est pas 'playing'.");
         }
 
 
@@ -648,63 +661,53 @@ function startTimer(startTime) {
  */
 async function handleForfeit() {
     console.log("Demande d'abandon du match."); // DEBUG
-    if (!currentMatchId || !youKey) {
-        showMessage("match-msg", "Aucun match actif à abandonner.");
-        backToMenu(true);
+    if (!currentMatchId || !currentUser || !youKey) {
+        showMessage("match-msg", "Impossible d'abandonner : informations de match manquantes.");
+        console.error("handleForfeit : Informations de match manquantes.");
+        backToMenu(true); // Retourne au menu si les infos sont absentes
         return;
     }
 
+    if (!confirm("Voulez-vous vraiment abandonner le match ? Cela comptera comme une défaite.")) {
+        return; // Annule l'abandon si l'utilisateur ne confirme pas
+    }
+
     const matchRef = ref(db, `matches/${currentMatchId}`);
-    const opponentRef = ref(db, `matches/${currentMatchId}/players/${opponentKey}`);
+    const updates = {};
+    let forfeitMessage = "";
+
+    // Mettre à jour le statut du joueur à 'disconnected' ou 'forfeit'
+    updates[`players/${youKey}/status`] = 'forfeit';
+    updates[`players/${youKey}/lastSeen`] = serverTimestamp();
+
+    if (gameMode === 'PvAI') {
+        // En mode PvAI, l'abandon du joueur est une défaite directe et termine le match
+        updates.status = 'finished';
+        updates.winner = opponentKey; // L'IA gagne
+        forfeitMessage = `${currentUser.pseudo} a abandonné le match. L'IA a remporté la victoire !`;
+    } else { // PvP
+        // En mode PvP, le joueur qui abandonne perd, l'adversaire gagne.
+        // On marque son statut et l'adversaire sera informé via onValue.
+        updates.status = 'finished'; // Le match se termine
+        updates.winner = opponentKey; // L'adversaire gagne
+        forfeitMessage = `${currentUser.pseudo} a abandonné le match. ${document.getElementById("opponent-name").textContent} a remporté la victoire !`;
+    }
+    
+    // Ajoutez le message d'abandon à l'historique
+    const currentMatchData = (await get(matchRef)).val();
+    const currentHistory = currentMatchData ? currentMatchData.history || [] : [];
+    updates.history = [...currentHistory, forfeitMessage];
 
     try {
-        // Marque votre joueur comme ayant abandonné dans la base de données
-        await update(ref(db, `matches/${currentMatchId}/players/${youKey}`), { status: 'forfeited', lastSeen: serverTimestamp() });
-
-        if (gameMode === 'PvP') {
-            const opponentSnapshot = await get(opponentRef); // Récupère les données de l'adversaire une fois
-            const opponentStatus = opponentSnapshot.val()?.status;
-            const opponentPseudo = opponentSnapshot.val()?.pseudo;
-
-            if (opponentStatus === 'connected') {
-                // Si l'adversaire est toujours connecté, il gagne
-                await update(matchRef, {
-                    status: 'finished',
-                    winner: opponentKey,
-                    history: [...(await get(ref(db, `matches/${currentMatchId}/history`))).val(), `${currentUser.pseudo} a abandonné. ${opponentPseudo} remporte la victoire !`]
-                });
-                console.log("Match PvP abandonné, adversaire déclaré vainqueur."); // DEBUG
-            } else {
-                console.log("Match PvP abandonné, mais l'adversaire n'était pas connecté."); // DEBUG
-            }
-        } else if (gameMode === 'PvAI') {
-            // Pour l'IA, on déclare que le joueur a perdu et met fin au match
-            await update(matchRef, {
-                status: 'finished',
-                winner: opponentKey, // L'IA gagne
-                history: [...(await get(ref(db, `matches/${currentMatchId}/history`))).val(), `${currentUser.pseudo} a abandonné. L'IA remporte la victoire !`]
-            });
-            console.log("Match PvAI abandonné."); // DEBUG
-        }
-
-        // Nettoie les écouteurs et revient au menu principal
-        if (currentMatchUnsubscribe) {
-            currentMatchUnsubscribe();
-            currentMatchUnsubscribe = null;
-        }
-        // FIX: Arrête l'intervalle correctement
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            setTimerInterval(null);
-        }
-        if (onDisconnectRef) { // Annule l'opération onDisconnect si elle a été configurée
-            onDisconnectRef.cancel().catch(err => console.error("Erreur lors de l'annulation de l'ancienne opération onDisconnect :", err));
-        }
-        setOnDisconnectRef(null);
-        backToMenu(true);
-
+        await update(matchRef, updates);
+        console.log("Abandon enregistré dans Firebase."); // DEBUG
+        // Mettre à jour les statistiques de l'utilisateur pour une défaite
+        await updateUserStats('loss');
+        showMessage("match-msg", "Vous avez abandonné le match.");
+        // Le retour au menu sera géré par l'écouteur onValue qui détectera le statut 'finished'
     } catch (error) {
         console.error("Erreur lors de l'abandon du match :", error);
         showMessage("match-msg", "Erreur lors de l'abandon du match. Réessayez.");
     }
+    // Une fois que l'état 'finished' est propagé par Firebase, l'écouteur onValue s'occupera du backToMenu
 }
