@@ -316,6 +316,8 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     }
 }
 
+---
+
 /**
  * Traite le tour de l'IA dans un match PvAI.
  * @param {object} matchData - Les données actuelles du match.
@@ -336,7 +338,7 @@ async function processAITurn(matchData) {
     // Double vérification pour le cas où l'action serait déjà là (suite à une race condition très rapide)
     // Nous récupérons les données de l'IA directement de matchData pour être sûr de l'état actuel
     if (matchData.players[aiPlayerKey].action) {
-        console.log("processAITurn: L'IA a déjà une action soumise. Relâche le verrou et abandonne.");
+        console.log("processAITurn: L'IA a déjà une action soumise (d'après matchData). Relâche le verrou et abandonne.");
         isAIProcessingTurn = false; // Relâche le verrou si cette condition est vraie
         return;
     }
@@ -347,7 +349,7 @@ async function processAITurn(matchData) {
     const playerCurrentPv = matchData.players[youKey].pv;
     const aiHealCooldown = matchData.players[aiPlayerKey].healCooldown || 0;
 
-    console.log(`processAITurn: Décision de l'IA pour ${aiPlayerKey}. PV IA: ${aiCurrentPv}, PV Joueur: ${playerCurrentPv}, Cooldown Soin IA: ${aiHealCooldown}`);
+    console.log(`processAITurn: Début de la décision de l'IA pour ${aiPlayerKey}. PV IA: ${aiCurrentPv}, PV Joueur: ${playerCurrentPv}, Cooldown Soin IA: ${aiHealCooldown}`);
 
     if (aiHealCooldown > 0) {
         console.log("processAITurn: IA en cooldown de soin.");
@@ -372,27 +374,32 @@ async function processAITurn(matchData) {
         }
     }
 
+    console.log(`processAITurn: L'IA a déterminé son action potentielle : ${aiAction}`); // NOUVEAU LOG : Action déterminée
+
     // Simule un délai pour le "temps de réflexion" de l'IA (4 secondes)
     await new Promise(resolve => setTimeout(resolve, 4000));
 
     try {
         // Nouvelle vérification de l'action de l'IA juste avant la mise à jour pour éviter une race condition
-        // Récupère l'état le plus récent de l'action de l'IA
+        // Récupère l'état le plus récent de l'action de l'IA directement de Firebase pour éviter les caches locaux
         const currentAiActionSnapshot = await get(ref(db, `matches/${currentMatchId}/players/${aiPlayerKey}/action`));
         if (currentAiActionSnapshot.exists() && currentAiActionSnapshot.val() !== null) {
-            console.warn("processAITurn: Action de l'IA déjà définie juste avant la mise à jour. Annulation pour éviter un écrasement.");
+            console.warn("processAITurn: Action de l'IA déjà définie dans Firebase juste avant la mise à jour. Annulation pour éviter un écrasement."); // NOUVEAU LOG
             return; // Sortir si l'action est déjà là
         }
 
         await update(matchRef, { [`players/${aiPlayerKey}/action`]: aiAction });
-        console.log(`IA a choisi l'action : ${aiAction} et l'a enregistrée dans Firebase.`); // DEBUG
+        console.log(`IA a choisi et enregistré l'action : ${aiAction} dans Firebase.`); // NOUVEAU LOG : Action enregistrée
         showMessage("history", `L'IA a choisi son action.`); // Ajoute un message générique à l'historique
     } catch (error) {
         console.error("Erreur lors de l'enregistrement de l'action de l'IA :", error);
     } finally {
         isAIProcessingTurn = false; // Relâche le verrou une fois le traitement terminé (important !)
+        console.log("processAITurn: Verrou isAIProcessingTurn relâché."); // NOUVEAU LOG
     }
 }
+
+---
 
 /**
  * Traite les actions des deux joueurs et met à jour l'état du match.
@@ -533,6 +540,8 @@ async function processTurn(matchData) {
     }
 }
 
+---
+
 /**
  * Gère le décompte du temps pour un tour.
  * @param {number} startTime - Le timestamp de début du tour.
@@ -576,6 +585,8 @@ function startTimer(startTime) {
         }
     }, 1000));
 }
+
+---
 
 /**
  * Gère l'abandon du match par le joueur.
