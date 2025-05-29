@@ -13,7 +13,7 @@ import {
     gameMode,
     setMatchVariables,
     timerMax,
-    timerInterval, // Make sure timerInterval is imported so we can check its value
+    timerInterval,
     setTimerInterval,
     setOnDisconnectRef,
     setMatchDeletionTimeout,
@@ -281,14 +281,29 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         console.log("DEBUG PROCESS TURN: Vérification pour déclencher processTurn.");
         console.log("DEBUG PROCESS TURN: P1 action:", matchData.players.p1.action, ", P2 action:", matchData.players.p2.action, ", Match Status:", matchData.status);
 
-        if (matchData.players.p1.action && matchData.players.p2.action && matchData.status === 'playing') {
+        // MODIFICATION ICI: Ajoutez isAIProcessingTurn pour éviter que processTurn ne se déclenche
+        // AVANT que l'IA n'ait effectivement écrit son action.
+        if (matchData.players.p1.action && matchData.players.p2.action && matchData.status === 'playing' && !isAIProcessingTurn) {
             console.log("DEBUG PROCESS TURN: Les deux joueurs ont soumis leurs actions et le match est en cours. Traitement du tour.");
-            await processTurn(matchData);
+            // Ajout d'un délai minimum pour s'assurer que Firebase a bien propagé l'action de l'IA
+            // avant de lancer le processTurn. Cela aide à gérer les conditions de concurrence.
+            setTimeout(async () => {
+                const latestMatchDataSnapshot = await get(matchRef); // Récupère les données les plus récentes
+                const latestMatchData = latestMatchDataSnapshot.val();
+
+                if (latestMatchData && latestMatchData.players.p1.action && latestMatchData.players.p2.action && latestMatchData.status === 'playing') {
+                     console.log("DEBUG PROCESS TURN (Delayed): Les conditions sont toujours remplies, exécution de processTurn.");
+                     await processTurn(latestMatchData);
+                } else {
+                     console.log("DEBUG PROCESS TURN (Delayed): Conditions non remplies après le délai. Probablement déjà traité ou état invalide.");
+                }
+            }, 100); // Court délai (ex: 100ms) pour laisser Firebase se synchroniser.
         } else {
             console.log("DEBUG PROCESS TURN: Conditions NON remplies pour déclencher processTurn.");
             if (!matchData.players.p1.action) console.log("DEBUG PROCESS TURN: -> P1 n'a pas d'action.");
             if (!matchData.players.p2.action) console.log("DEBUG PROCESS TURN: -> P2 n'a pas d'action.");
             if (matchData.status !== 'playing') console.log("DEBUG PROCESS TURN: -> Le statut du match n'est pas 'playing'.");
+            if (isAIProcessingTurn) console.log("DEBUG PROCESS TURN: -> L'IA est en cours de traitement (isAIProcessingTurn est true).");
         }
     }, (error) => { // Fin de onValue
         console.error("Erreur d'écoute sur le match :", error);
