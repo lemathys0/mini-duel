@@ -1,8 +1,22 @@
 // game.js
 
-import { db } from "./firebaseConfig.js";
-// Use full CDN URL for firebase/database and specifically list all needed functions
-import { ref, update, serverTimestamp, onValue, off, remove, onDisconnect, set, get } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+import { db } from "./firebaseConfig.js"; // Importe l'instance 'db' depuis firebaseConfig.js
+
+// TRÈS IMPORTANT : Utilisez les URLs CDN complètes pour TOUS les imports Firebase,
+// et listez explicitement TOUTES les fonctions nécessaires.
+import { 
+    ref, 
+    update, 
+    serverTimestamp, 
+    onValue, 
+    off, 
+    remove, 
+    onDisconnect, // <-- Assure que onDisconnect est importé
+    set,          // <-- Assure que set est importé (pour performAction)
+    get           // <-- Assure que get est importé (pour handleForfeit)
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+// Autres imports de votre projet
 import { currentUser, currentMatchId, youKey, opponentKey, gameMode,
          timerMax, timerInterval, setTimerInterval,
          onDisconnectRef, setOnDisconnectRef,
@@ -43,6 +57,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         const playerPresenceRef = ref(db, `matches/${currentMatchId}/players/${youKey}`);
         
         // Obtient l'objet OnDisconnect pour cette référence
+        // C'est ICI que l'erreur se produit si playerPresenceRef n'est pas un objet Reference valide
         const currentOnDisconnect = playerPresenceRef.onDisconnect();
         
         // Stocke cet objet OnDisconnect globalement pour pouvoir l'annuler plus tard
@@ -202,6 +217,7 @@ async function performAction(actionType) {
     try {
         // Envoie l'action du joueur à Firebase
         const playerActionRef = ref(db, `matches/${currentMatchId}/players/${youKey}/action`);
+        // set doit être importé de firebase-database.js
         await set(playerActionRef, actionType);
         showMessage("action-msg", `Vous avez choisi : ${actionType}`);
         disableActionButtons();
@@ -236,6 +252,7 @@ async function performAIAction(matchId, matchData) {
     try {
         // Envoie l'action de l'IA à Firebase
         const aiActionRef = ref(db, `matches/${matchId}/players/${opponentKey}/action`);
+        // set doit être importé de firebase-database.js
         await set(aiActionRef, aiAction);
         console.log(`L'IA a choisi : ${aiAction}`);
     } catch (error) {
@@ -476,7 +493,7 @@ async function handleForfeit() {
         const matchHistoryRef = ref(db, `matches/${currentMatchId}/history`);
         const historyEntry = `${currentUser.pseudo} a abandonné le match.`;
         // Récupère l'historique actuel pour le mettre à jour correctement
-        // You also need 'get' imported from firebase-database.js
+        // 'get' doit être importé de firebase-database.js
         const snapshot = await get(matchHistoryRef); 
         const currentHistory = snapshot.val() || [];
         const newHistory = [...currentHistory, historyEntry];
