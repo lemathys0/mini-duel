@@ -7,16 +7,16 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https:/
 import { db } from "./firebaseConfig.js";
 import { ref, push, set, onValue, update, remove, serverTimestamp, get } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { startMatchMonitoring } from "./game.js";
-import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons } from "./utils.js";
+import { showMessage } from "./utils.js"; // Pas besoin d'importer updateHealthBar, updateTimerUI, clearHistory, disableActionButtons ici, ils sont utilisés dans game.js ou utils.js directement.
 
 const auth = getAuth(app);
 
 // Variables globales pour le match
 export let currentUser = null;
 export let currentMatchId = null;
-export let youKey = null; // 'p1' or 'p2'
-export let opponentKey = null; // 'p1' or 'p2'
-export let gameMode = null; // 'PvAI' or 'PvP'
+export let youKey = null; // 'p1' ou 'p2'
+export let opponentKey = null; // 'p1' ou 'p2'
+export let gameMode = null; // 'PvAI' ou 'PvP'
 
 // Variables de contrôle du timer et de déconnexion
 export const timerMax = 30; // 30 secondes par tour
@@ -39,7 +39,7 @@ export function setMatchVariables(id, user, playerKey, mode) {
     youKey = playerKey;
     opponentKey = (playerKey === 'p1') ? 'p2' : 'p1';
     gameMode = mode;
-    console.log(`Match variables set: ID=${currentMatchId}, YouKey=${youKey}, OpponentKey=${opponentKey}, Mode=${gameMode}`);
+    console.log(`Variables de match définies : ID=${currentMatchId}, YouKey=${youKey}, OpponentKey=${opponentKey}, Mode=${gameMode}`);
 }
 
 
@@ -78,7 +78,7 @@ async function authenticateAnonymously() {
     try {
         const userCredential = await signInAnonymously(auth);
         currentUser = userCredential.user;
-        console.log("Authenticated anonymously:", currentUser.uid);
+        console.log("Authentifié anonymement :", currentUser.uid);
 
         const userRef = ref(db, `users/${currentUser.uid}`);
         const snapshot = await get(userRef);
@@ -98,7 +98,7 @@ async function authenticateAnonymously() {
         setupGameModeSelection();
         setupLogoutButton();
     } catch (error) {
-        console.error("Authentication error:", error);
+        console.error("Erreur d'authentification :", error);
         showMessage("auth-msg", "Échec de l'authentification. Veuillez réessayer.");
     }
 }
@@ -117,7 +117,7 @@ function setupLogoutButton() {
                 document.getElementById("main-menu").style.display = "none";
                 document.getElementById("auth").style.display = "block";
             } catch (error) {
-                console.error("Error signing out:", error);
+                console.error("Erreur lors de la déconnexion :", error);
                 showMessage("auth-msg", "Erreur lors de la déconnexion.");
             }
         }
@@ -218,7 +218,7 @@ async function createMatch(mode) {
             startMatchMonitoring(newMatchId, currentUser, 'p1', mode);
         }
     } catch (error) {
-        console.error("Error creating match:", error);
+        console.error("Erreur lors de la création du match :", error);
         showMessage("match-msg", "Erreur lors de la création du match.");
     }
 }
@@ -280,7 +280,7 @@ async function findOrCreatePvPMatch() {
                         }
                         return;
                     } catch (error) {
-                        console.error("Error joining match:", error);
+                        console.error("Erreur lors de la jonction du match :", error);
                         showMessage("match-msg", "Erreur lors de la tentative de rejoindre un match.");
                         foundAndJoinedMatch = false;
                         matchFound = false;
@@ -301,7 +301,7 @@ async function findOrCreatePvPMatch() {
             }
         }
     }, (error) => {
-        console.error("Error listening for matches:", error);
+        console.error("Erreur d'écoute pour les matchs :", error);
         showMessage("match-msg", "Erreur lors de la recherche de matchs.");
     });
 }
@@ -310,7 +310,7 @@ async function findOrCreatePvPMatch() {
 // --- GESTION DE LA FIN DE MATCH ET DU RETOUR AU MENU ---
 
 export function backToMenu(fromGame = false) { // <-- Ajout de 'export' ici
-    console.log("Retour au menu demandé. From game:", fromGame);
+    console.log("Retour au menu demandé. Provient du jeu :", fromGame);
     if (fromGame) {
         document.getElementById("game").style.display = "none";
         document.getElementById("main-menu").style.display = "block";
@@ -325,7 +325,7 @@ export function backToMenu(fromGame = false) { // <-- Ajout de 'export' ici
         gameMode = null;
 
         if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
-        if (onDisconnectRef) { onDisconnectRef.cancel().catch(err => console.error("Error cancelling old onDisconnect:", err)); setOnDisconnectRef(null); }
+        if (onDisconnectRef) { onDisconnectRef.cancel().catch(err => console.error("Erreur lors de l'annulation de l'ancienne opération onDisconnect :", err)); setOnDisconnectRef(null); }
         if (matchDeletionTimeout) { clearTimeout(matchDeletionTimeout); setMatchDeletionTimeout(null); }
         setHasPlayedThisTurn(false);
 
@@ -362,8 +362,8 @@ export async function updateUserStats(result) {
 
     try {
         await update(userStatsRef, updates);
-        console.log("User stats updated:", updates);
+        console.log("Statistiques utilisateur mises à jour :", updates);
     } catch (error) {
-        console.error("Error updating user stats:", error);
+        console.error("Erreur lors de la mise à jour des statistiques utilisateur :", error);
     }
 }
