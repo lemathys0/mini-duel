@@ -1,3 +1,5 @@
+// main.js
+
 import { app } from "./firebaseConfig.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 import { db } from "./firebaseConfig.js";
@@ -254,7 +256,7 @@ async function findOrCreatePvPMatch() {
             const match = matchesData[matchId];
             // Vérifier si le match est en attente, en mode PvP, et n'a qu'un seul joueur (p1)
             if (match.status === 'waiting' && match.mode === 'PvP' && match.players && match.players.p1 && !match.players.p2) {
-                // S'assurer que le joueur actuel n'est pas déjà p1 de ce match (cas de rechargement/multi-onglets du même joueur)
+                // S'assurer que le joueur actuel n'est pas déjà p1 de ce match (cas de rechargement/multi-onglet du même joueur)
                 if (match.players.p1.pseudo !== currentUser.pseudo) {
                     foundAndJoinedMatch = true; // Définir le flag pour éviter de rejoindre d'autres matchs
                     matchFound = true; // Indique qu'un match a été trouvé
@@ -296,16 +298,16 @@ async function findOrCreatePvPMatch() {
         // Si aucun match n'a été trouvé après avoir parcouru tous les matchs
         // ET si on n'est pas déjà en train de créer/rejoindre un match
         if (!matchFound && !foundAndJoinedMatch && !currentMatchId) { 
-             showMessage("match-msg", "Aucun match disponible. Création d'un nouveau match PvP...");
-             document.getElementById("matchmaking-message").textContent = "Aucun match disponible. Création d'un nouveau match...";
-             createMatch('PvP'); // Crée un nouveau match PvP en attente
-             foundAndJoinedMatch = true; // Pour éviter une boucle de création de match dans onValue
-             
-             // Annuler le listener de recherche de match après avoir créé le match
-             if (pvpMatchFinderUnsubscribe) {
-                 pvpMatchFinderUnsubscribe();
-                 pvpMatchFinderUnsubscribe = null;
-             }
+            showMessage("match-msg", "Aucun match disponible. Création d'un nouveau match PvP...");
+            document.getElementById("matchmaking-message").textContent = "Aucun match disponible. Création d'un nouveau match...";
+            createMatch('PvP'); // Crée un nouveau match PvP en attente
+            foundAndJoinedMatch = true; // Pour éviter une boucle de création de match dans onValue
+            
+            // Annuler le listener de recherche de match après avoir créé le match
+            if (pvpMatchFinderUnsubscribe) {
+                pvpMatchFinderUnsubscribe();
+                pvpMatchFinderUnsubscribe = null;
+            }
         }
     }, (error) => {
         console.error("Error listening for matches:", error);
