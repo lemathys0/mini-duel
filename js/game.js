@@ -228,9 +228,17 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 // --- LOGIQUE SPÉCIFIQUE POUR L'IA APRÈS QUE LE JOUEUR A JOUÉ EN PvAI ---
                 // Si c'est un match PvAI, que le joueur vient de soumettre son action,
                 // ET que l'IA n'a PAS encore soumis son action, on déclenche l'IA.
+                console.log("DEBUG IA: Vérification pour déclencher l'IA après action du joueur.");
+                console.log("DEBUG IA: gameMode:", gameMode, ", youKey:", youKey, ", opponentKey:", opponentKey);
+                console.log("DEBUG IA: matchData.players[opponentKey].action (IA action):", matchData.players[opponentKey].action);
+
                 if (gameMode === 'PvAI' && !matchData.players[opponentKey].action) {
-                    console.log("Détection PvAI: Joueur a joué, IA n'a pas encore joué. Déclenchement de processAITurn.");
+                    console.log("DEBUG IA: Conditions remplies. Déclenchement de processAITurn.");
                     await processAITurn(matchData);
+                } else {
+                    console.log("DEBUG IA: Conditions NON remplies pour déclencher l'IA après action du joueur.");
+                    if (gameMode !== 'PvAI') console.log("DEBUG IA: -> Pas un match PvAI.");
+                    if (matchData.players[opponentKey].action) console.log("DEBUG IA: -> L'IA a déjà une action.");
                 }
             }
         }
@@ -244,18 +252,34 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
             // Cette logique est toujours valide si l'IA doit jouer son tour car le joueur a temporisé,
             // mais le bloc ci-dessus (dans le 'if (matchData.turn === youKey)') gérera le cas le plus courant.
+            console.log("DEBUG IA: Vérification pour déclencher l'IA pendant le tour de l'adversaire.");
+            console.log("DEBUG IA: gameMode:", gameMode, ", matchData.turn:", matchData.turn, ", opponentKey:", opponentKey);
+            console.log("DEBUG IA: matchData.players[opponentKey].action (IA action):", matchData.players[opponentKey].action);
+
             if (gameMode === 'PvAI' && !matchData.players[opponentKey].action) {
-                console.log("C'est le tour de l'IA et elle n'a pas encore choisi d'action (déclenchement via tour de l'IA). Appel de processAITurn.");
+                console.log("DEBUG IA: Conditions remplies. Déclenchement de processAITurn (via tour adversaire).");
                 await processAITurn(matchData);
+            } else {
+                console.log("DEBUG IA: Conditions NON remplies pour déclencher l'IA pendant le tour de l'adversaire.");
+                if (gameMode !== 'PvAI') console.log("DEBUG IA: -> Pas un match PvAI.");
+                if (matchData.players[opponentKey].action) console.log("DEBUG IA: -> L'IA a déjà une action.");
             }
         }
 
         // --- Condition pour déclencher processTurn ---
         // Cette condition se déclenchera une fois que les actions de P1 et P2 sont présentes et que le match est en cours.
         // C'est crucial pour faire avancer le jeu après que les deux parties aient agi.
+        console.log("DEBUG PROCESS TURN: Vérification pour déclencher processTurn.");
+        console.log("DEBUG PROCESS TURN: P1 action:", matchData.players.p1.action, ", P2 action:", matchData.players.p2.action, ", Match Status:", matchData.status);
+
         if (matchData.players.p1.action && matchData.players.p2.action && matchData.status === 'playing') {
-            console.log("Les deux joueurs ont soumis leurs actions. Traitement du tour.");
+            console.log("DEBUG PROCESS TURN: Les deux joueurs ont soumis leurs actions et le match est en cours. Traitement du tour.");
             await processTurn(matchData);
+        } else {
+            console.log("DEBUG PROCESS TURN: Conditions NON remplies pour déclencher processTurn.");
+            if (!matchData.players.p1.action) console.log("DEBUG PROCESS TURN: -> P1 n'a pas d'action.");
+            if (!matchData.players.p2.action) console.log("DEBUG PROCESS TURN: -> P2 n'a pas d'action.");
+            if (matchData.status !== 'playing') console.log("DEBUG PROCESS TURN: -> Le statut du match n'est pas 'playing'.");
         }
     }, (error) => { // Fin de onValue
         console.error("Erreur d'écoute sur le match :", error);
@@ -306,7 +330,7 @@ async function processAITurn(matchData) {
 
     // Si l'IA a déjà une action soumise, ne rien faire.
     if (matchData.players[aiPlayerKey].action) {
-        console.log("IA a déjà une action soumise, ne pas la re-traiter.");
+        console.log("processAITurn: IA a déjà une action soumise, ne pas la re-traiter.");
         return;
     }
 
@@ -316,21 +340,28 @@ async function processAITurn(matchData) {
     const playerCurrentPv = matchData.players[youKey].pv;
     const aiHealCooldown = matchData.players[aiPlayerKey].healCooldown || 0;
 
+    console.log(`processAITurn: Décision de l'IA pour ${aiPlayerKey}. PV IA: ${aiCurrentPv}, PV Joueur: ${playerCurrentPv}, Cooldown Soin IA: ${aiHealCooldown}`);
+
     if (aiHealCooldown > 0) {
-        // Si l'IA est en cooldown de soin
+        console.log("processAITurn: IA en cooldown de soin.");
         if (aiCurrentPv < 30 && playerCurrentPv > 50) {
             aiAction = Math.random() < 0.5 ? 'defend' : 'attack'; // 50/50 défense ou attaque
+            console.log("processAITurn: IA PV faibles et joueur fort, choisit aléatoirement 'defend' ou 'attack'.");
         } else {
             aiAction = 'attack';
+            console.log("processAITurn: IA pas en danger critique, choisit 'attack'.");
         }
     } else {
         // L'IA peut soigner
         if (aiCurrentPv < 40 && Math.random() < 0.7) { // 70% de chance de soigner si PV faibles
             aiAction = 'heal';
+            console.log("processAITurn: IA PV faibles et peut soigner, choisit 'heal'.");
         } else if (playerCurrentPv > aiCurrentPv && Math.random() < 0.3) { // 30% de chance de défendre si le joueur est plus fort
             aiAction = 'defend';
+            console.log("processAITurn: Joueur plus fort, IA a une chance de choisir 'defend'.");
         } else {
             aiAction = 'attack'; // Sinon, attaque
+            console.log("processAITurn: Conditions par défaut, IA choisit 'attack'.");
         }
     }
 
@@ -339,7 +370,7 @@ async function processAITurn(matchData) {
 
     try {
         await update(matchRef, { [`players/${aiPlayerKey}/action`]: aiAction });
-        console.log(`IA a choisi l'action : ${aiAction}`); // DEBUG
+        console.log(`IA a choisi l'action : ${aiAction} et l'a enregistrée dans Firebase.`); // DEBUG
         showMessage("history", `L'IA a choisi son action.`); // Ajoute un message générique à l'historique
     } catch (error) {
         console.error("Erreur lors de l'enregistrement de l'action de l'IA :", error);
