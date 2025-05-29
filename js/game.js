@@ -18,7 +18,7 @@ import {
 
 // Autres imports de votre projet
 import { currentUser, currentMatchId, youKey, opponentKey, gameMode,
-         timerMax, timerInterval, setTimerInterval,
+         timerMax, timerInterval, setTimerInterval, // timerInterval devrait maintenant être utilisé uniquement pour le timer du joueur
          onDisconnectRef, setOnDisconnectRef,
          matchDeletionTimeout, setMatchDeletionTimeout,
          hasPlayedThisTurn, setHasPlayedThisTurn, setMatchVariables, backToMenu, updateUserStats } from "./main.js";
@@ -26,6 +26,8 @@ import { showMessage, updateHealthBar, updateTimerUI, clearHistory, appendToHist
 
 
 let currentMatchUnsubscribe = null; // Pour stocker la fonction d'unsubscribe du listener de match
+let playerTurnTimerId = null; // Chronomètre spécifique pour le compte à rebours du tour du joueur
+let aiTurnTimeoutId = null;   // Timeout spécifique pour le délai d'action de l'IA
 
 export function startMatchMonitoring(matchId, user, playerKey, mode) {
     // Met à jour les variables globales du match dans main.js
@@ -46,7 +48,12 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     clearHistory();
     appendToHistory(`Début du match ${matchId} en mode ${gameMode}.`);
     showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
-    enableActionButtons(); // S'assure que les boutons sont activés au début
+    enableActionButtons();
+
+    // Efface tous les chronomètres précédents d'éventuels matchs abandonnés
+    if (playerTurnTimerId) clearInterval(playerTurnTimerId);
+    if (aiTurnTimeoutId) clearTimeout(aiTurnTimeoutId);
+
 
     const matchRef = ref(db, `matches/${currentMatchId}`);
 
@@ -54,19 +61,17 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     // Ceci doit être fait une seule fois lors de la connexion du joueur à un match
     if (!onDisconnectRef) { // S'assure que ce n'est pas configuré plusieurs fois
         console.log("--- DEBUGGING onDisconnect ---");
-        console.log("1. Value of db:", db);
+        console.log("1. Valeur de db:", db);
 
         // Obtient une référence à la présence du joueur actuel
         const playerPresenceRef = ref(db, `matches/${currentMatchId}/players/${youKey}`);
-        console.log("2. Value of playerPresenceRef:", playerPresenceRef);
+        console.log("2. Valeur de playerPresenceRef:", playerPresenceRef);
 
         // C'est ICI que l'erreur se produit si playerPresenceRef n'est pas un objet Reference valide
         // Utilisons la fonction onDisconnect() importée directement
         console.log("Tentative d'utilisation de onDisconnect comme appel de fonction direct.");
         try {
             const currentOnDisconnect = onDisconnect(playerPresenceRef); // <--- MODIFICATION CRUCIALE ICI
-
-            // Stocke cet objet OnDisconnect globalement pour pouvoir l'annuler plus tard
             setOnDisconnectRef(currentOnDisconnect);
 
             // Définit les mises à jour à effectuer en cas de déconnexion
@@ -139,40 +144,47 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
         // --- Gestion des Tours ---
         const currentTurnPlayerKey = matchData.turn;
-        const turnCount = matchData.turnCount || 1; // Commence à 1
+        const turnCount = matchData.turnCount || 1;
 
-        // Met à jour l'interface du timer uniquement si un timer est actif
-        // ou si un tour vient de commencer
         const timeElapsed = Math.floor((Date.now() - new Date(matchData.lastTurnProcessedAt).getTime()) / 1000);
         const timeLeft = Math.max(0, timerMax - timeElapsed);
         updateTimerUI(timeLeft, timerMax);
 
 
         if (currentTurnPlayerKey === youKey) {
-            // Votre Tour
+            // C'est votre tour
             enableActionButtons();
             showMessage("action-msg", `Tour ${turnCount} : C'est votre tour ! Choisissez une action.`);
-            document.getElementById("opponent-action-status").textContent = ""; // Efface le statut de l'action de l'adversaire
-            setHasPlayedThisTurn(false); // Réinitialise pour le joueur actuel
+            document.getElementById("opponent-action-status").textContent = "";
 
-            // Démarre ou réinitialise le timer pour votre tour
-            if (timerInterval) clearInterval(timerInterval);
-            let countdown = timeLeft; // Commence le compte à rebours là où il est
+            // Important: Réinitialise hasPlayedThisTurn uniquement si aucune action n'est en attente
+            // et si ce n'est pas déjà marqué comme joué par une action précédente du même tour
+            if (!youData.action && !hasPlayedThisTurn) {
+                setHasPlayedThisTurn(false);
+            }
+
+            // Arrête le timer AI s'il était actif
+            if (aiTurnTimeoutId) {
+                clearTimeout(aiTurnTimeoutId);
+                aiTurnTimeoutId = null;
+            }
+
+            // Démarre ou réinitialise le chronomètre pour votre tour
+            if (playerTurnTimerId) clearInterval(playerTurnTimerId);
+            let countdown = timeLeft;
             updateTimerUI(countdown, timerMax);
-            setTimerInterval(setInterval(() => {
+            playerTurnTimerId = setInterval(() => {
                 countdown--;
                 updateTimerUI(countdown, timerMax);
                 if (countdown <= 0) {
-                    clearInterval(timerInterval);
-                    setTimerInterval(null);
-                    // Si le temps est écoulé et le joueur n'a pas joué
-                    if (!hasPlayedThisTurn) {
+                    clearInterval(playerTurnTimerId);
+                    playerTurnTimerId = null;
+                    if (!hasPlayedThisTurn) { // Si le joueur n'a pas agi
                         appendToHistory(`${currentUser.pseudo} n'a pas agi à temps. Action par défaut: Défense.`);
-                        // Action par défaut : défense
                         performAction('defend'); // Utilise la fonction performAction pour mettre à jour Firebase
                     }
                 }
-            }, 1000));
+            }, 1000);
 
         } else {
             // Tour de l'adversaire (ou de l'IA)
@@ -180,11 +192,11 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             showMessage("action-msg", `Tour ${turnCount} : C'est le tour de ${opponentData.pseudo}...`);
             setHasPlayedThisTurn(true); // Le joueur ne peut pas agir pendant le tour de l'adversaire
 
-            // Efface votre timer s'il est actif
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                setTimerInterval(null);
-                updateTimerUI(timerMax, timerMax); // Réinitialise l'interface du timer
+            // Efface votre chronomètre s'il est actif
+            if (playerTurnTimerId) {
+                clearInterval(playerTurnTimerId);
+                playerTurnTimerId = null;
+                updateTimerUI(timerMax, timerMax); // Réinitialise l'interface du chronomètre
             }
 
             if (opponentData.action) {
@@ -197,13 +209,13 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 if (gameMode === 'PvAI' && opponentData.pseudo === 'IA') {
                     // C'est le tour de l'IA et elle n'a pas encore agi
                     // Ajoute un léger délai pour le réalisme
-                    if (!timerInterval) { // Empêche les actions multiples de l'IA
+                    // Empêche les actions multiples de l'IA pour le même tour
+                    if (!aiTurnTimeoutId) {
                          console.log("Tour de l'IA. En attente de l'action de l'IA.");
-                         // Utilise un setTimeout pour un délai simple pour l'IA
-                         setTimerInterval(setTimeout(() => {
+                         aiTurnTimeoutId = setTimeout(() => {
                              performAIAction(matchId, matchData);
-                             setTimerInterval(null); // Efface ce timeout spécifique à l'IA
-                         }, 1500)); // Délai de 1.5 seconde pour l'IA
+                             aiTurnTimeoutId = null; // Efface ce timeout après l'action de l'IA
+                         }, 1500); // Délai de 1.5 seconde pour l'IA
                     }
                 }
             }
@@ -218,18 +230,21 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 }
 
 async function performAction(actionType) {
-    // Vérifie si c'est le tour du joueur et s'il n'a pas déjà joué
     if (!currentMatchId || !currentUser || !youKey || hasPlayedThisTurn) {
-        if (!hasPlayedThisTurn) { // Si le joueur n'a pas joué, mais qu'une autre condition est fausse
+        if (!hasPlayedThisTurn) {
             showMessage("action-msg", "Ce n'est pas votre tour ou le match n'est pas prêt.");
         }
         return;
     }
 
+    // Arrête le chronomètre du joueur immédiatement lorsqu'une action est effectuée
+    if (playerTurnTimerId) {
+        clearInterval(playerTurnTimerId);
+        playerTurnTimerId = null;
+    }
+
     try {
-        // Envoie l'action du joueur à Firebase
         const playerActionRef = ref(db, `matches/${currentMatchId}/players/${youKey}/action`);
-        // set doit être importé de firebase-database.js
         await set(playerActionRef, actionType);
         showMessage("action-msg", `Vous avez choisi : ${actionType}`);
         disableActionButtons();
@@ -242,13 +257,12 @@ async function performAction(actionType) {
 
 // Fonction clé pour la logique de l'IA
 async function performAIAction(matchId, matchData) {
-    // Ne fait rien si le match ou les données sont invalides, ou si l'IA a déjà agi
     if (!matchId || !matchData || matchData.players[opponentKey].action) {
         return;
     }
 
-    const aiPlayer = matchData.players[opponentKey]; // opponentKey est 'p2' pour l'IA
-    const player1 = matchData.players[youKey]; // youKey est 'p1' pour le joueur
+    const aiPlayer = matchData.players[opponentKey];
+    const player1 = matchData.players[youKey];
 
     let aiAction = 'attack'; // Action par défaut de l'IA
 
@@ -264,7 +278,6 @@ async function performAIAction(matchId, matchData) {
     try {
         // Envoie l'action de l'IA à Firebase
         const aiActionRef = ref(db, `matches/${matchId}/players/${opponentKey}/action`);
-        // set doit être importé de firebase-database.js
         await set(aiActionRef, aiAction);
         console.log(`L'IA a choisi : ${aiAction}`);
     } catch (error) {
@@ -280,13 +293,18 @@ async function processTurn(matchData) {
         return;
     }
 
-    // Arrête le timer s'il est en cours
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        setTimerInterval(null);
+    // Efface tous les chronomètres actifs pour le joueur et l'IA avant de traiter le tour
+    if (playerTurnTimerId) {
+        clearInterval(playerTurnTimerId);
+        playerTurnTimerId = null;
+    }
+    if (aiTurnTimeoutId) {
+        clearTimeout(aiTurnTimeoutId);
+        aiTurnTimeoutId = null;
     }
 
-    disableActionButtons(); // Désactive les boutons pendant le traitement
+
+    disableActionButtons();
 
     const p1 = matchData.players.p1;
     const p2 = matchData.players.p2;
@@ -295,8 +313,8 @@ async function processTurn(matchData) {
 
     let p1Damage = 10;
     let p2Damage = 10;
-    const p1HealValue = 15; // Valeur de soin
-    const p2HealValue = 15; // Valeur de soin
+    const p1HealValue = 15;
+    const p2HealValue = 15;
 
     let historyUpdates = [];
     historyUpdates.push(`--- Tour ${matchData.turnCount || 1} ---`);
@@ -426,17 +444,23 @@ function handleGameEnd(matchData, customMessage = null) {
         currentMatchUnsubscribe(); // Arrête d'écouter ce match
         currentMatchUnsubscribe = null;
     }
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        setTimerInterval(null);
+    // Efface tous les chronomètres à la fin du jeu
+    if (playerTurnTimerId) {
+        clearInterval(playerTurnTimerId);
+        playerTurnTimerId = null;
     }
-    disableActionButtons(); // S'assure que les boutons sont désactivés
+    if (aiTurnTimeoutId) {
+        clearTimeout(aiTurnTimeoutId);
+        aiTurnTimeoutId = null;
+    }
+
+    disableActionButtons();
 
     let resultMessage = customMessage;
     if (!resultMessage) {
         const youPv = matchData.players[youKey].pv;
         const opponentPv = matchData.players[opponentKey].pv;
-        const result = matchData.result; // Récupère le résultat final
+        const result = matchData.result;
 
         if (result === 'win') {
             resultMessage = "Vous avez gagné le match !";
@@ -458,8 +482,7 @@ function handleGameEnd(matchData, customMessage = null) {
         if (matchDeletionTimeout) clearTimeout(matchDeletionTimeout);
         setMatchDeletionTimeout(setTimeout(async () => {
             try {
-                // remove(ref(db), `matches/${currentMatchId}`); // Ancienne syntaxe qui ne fonctionnait pas
-                await remove(ref(db, `matches/${currentMatchId}`)); // Corrected: remove takes a ref object
+                await remove(ref(db, `matches/${currentMatchId}`));
                 console.log(`Match PvP ${currentMatchId} supprimé.`);
                 backToMenu(true);
             } catch (error) {
@@ -471,8 +494,7 @@ function handleGameEnd(matchData, customMessage = null) {
         if (matchDeletionTimeout) clearTimeout(matchDeletionTimeout);
         setMatchDeletionTimeout(setTimeout(async () => {
             try {
-                // remove(ref(db), `matches/${currentMatchId}`); // Ancienne syntaxe qui ne fonctionnait pas
-                await remove(ref(db, `matches/${currentMatchId}`)); // Corrected: remove takes a ref object
+                await remove(ref(db, `matches/${currentMatchId}`));
                 console.log(`Match IA ${currentMatchId} supprimé.`);
                 backToMenu(true);
             } catch (error) {
@@ -485,7 +507,7 @@ function handleGameEnd(matchData, customMessage = null) {
 
 async function handleForfeit() {
     if (!currentMatchId || !currentUser || !youKey) {
-        backToMenu(true); // Retourne simplement au menu si pas de contexte de match
+        backToMenu(true);
         return;
     }
 
@@ -501,11 +523,8 @@ async function handleForfeit() {
         await set(playerStatusRef, 'forfeited');
 
         // Ajoute l'événement à l'historique du match
-        // Utilise un timestamp comme clé pour éviter d'écraser des entrées existantes
         const matchHistoryRef = ref(db, `matches/${currentMatchId}/history`);
         const historyEntry = `${currentUser.pseudo} a abandonné le match.`;
-        // Récupère l'historique actuel pour le mettre à jour correctement
-        // 'get' doit être importé de firebase-database.js
         const snapshot = await get(matchHistoryRef);
         const currentHistory = snapshot.val() || [];
         const newHistory = [...currentHistory, historyEntry];
@@ -521,6 +540,4 @@ async function handleForfeit() {
     }
 }
 
-// Assure-toi que cet écouteur est bien configuré (peut-être mieux à l'intérieur de startMatchMonitoring
-// ou après que le DOM soit chargé pour éviter des problèmes de référence d'éléments)
 document.getElementById("back-to-menu-btn").addEventListener("click", handleForfeit);
