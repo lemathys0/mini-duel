@@ -170,22 +170,32 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
             updateTimerUI(timerMax); 
         }
 
-        // --- LOGIQUE DE DÉCLENCHEMENT DE L'IA (MODE PvAI UNIQUEMENT) ---
+       // --- LOGIQUE DE DÉCLENCHEMENT DE L'IA (MODE PvAI UNIQUEMENT) ---
         if (gameMode === 'PvAI' && data.status === 'playing') {
-            // L'IA agit si c'est son tour (data.turn === opponentKey) ET si elle n'a pas encore agi pour ce tour.
-            // OU si c'est le tour du joueur (P1) et que P1 a déjà agi, mais l'IA n'a pas encore réagi.
-            if ((data.turn === opponentKey && !data.players[opponentKey]?.action) || 
-                (data.turn === youKey && data.players[youKey]?.action && !data.players[opponentKey]?.action)) {
-                
-                console.log("Triggering AI action.");
+            // L'IA agit si c'est le tour de l'IA et qu'elle n'a pas encore soumis d'action,
+            // OU si c'est le tour du joueur, le joueur a soumis son action, ET l'IA n'a pas encore réagi.
+            const shouldAiAct = 
+                (data.turn === opponentKey && !data.players[opponentKey]?.action) || 
+                (data.turn === youKey && data.players[youKey]?.action && !data.players[opponentKey]?.action);
+
+            if (shouldAiAct) {
+                console.log("Triggering AI action based on current turn state.");
                 disableActionButtons(true); // Assurer que les boutons sont désactivés pendant le tour de l'IA
                 showMessage("action-msg", `L'IA réfléchit...`);
                 setTimeout(async () => {
                     const latestSnapshot = await get(matchRef);
                     const latestData = latestSnapshot.val();
-                    // Double vérification avant de déclencher l'IA pour éviter les doublons ou si l'état a changé
-                    if (latestData && latestData.status === 'playing' && !latestData.players[opponentKey]?.action &&
-                        ((latestData.turn === opponentKey) || (latestData.turn === youKey && latestData.players[youKey]?.action))) {
+                    
+                    // Double vérification AVANT de déclencher l'IA pour éviter les doublons ou si l'état a changé
+                    // L'IA doit jouer si elle n'a pas d'action ET que les conditions de tour sont toujours valides
+                    const aiStillNeedsToAct = 
+                        latestData && latestData.status === 'playing' && !latestData.players[opponentKey]?.action &&
+                        (
+                            (latestData.turn === opponentKey) || 
+                            (latestData.turn === youKey && latestData.players[youKey]?.action)
+                        );
+
+                    if (aiStillNeedsToAct) {
                         aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef);
                     } else {
                         console.log("AI action skipped: State changed, or AI already played.");
@@ -194,6 +204,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
                 return; // L'IA va soumettre une action, ce qui redéclenchera onValue
             }
         }
+        // --- FIN DE LA LOGIQUE DE DÉCLENCHEMENT DE L'IA ---
         // --- FIN DE LA LOGIQUE DE DÉCLENCHEMENT DE L'IA ---
 
 
