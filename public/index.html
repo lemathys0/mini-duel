@@ -9,13 +9,16 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #2c3e50, #4a6a8c);
             color: #ecf0f1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            /* Corrections pour le défilement */
             min-height: 100vh;
             margin: 0;
-            overflow: hidden;
+            overflow-y: auto; /* Permet le défilement vertical si le contenu dépasse */
             position: relative;
+            padding: 20px; /* Ajoute un peu de padding pour ne pas coller les bords */
+            box-sizing: border-box; /* Assurez-vous que le padding est inclus dans la largeur/hauteur */
+            display: flex; /* Garde le flex pour le centrage horizontal du container */
+            justify-content: center; /* Centre horizontalement */
+            /* align-items: center; /* COMMENTÉ pour permettre le défilement vertical */
         }
 
         .container {
@@ -30,6 +33,8 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
             z-index: 1;
+            margin: 0 auto; /* Centre le conteneur horizontalement */
+            margin-bottom: 50px; /* Pour un peu d'espace en bas si l'écran est petit */
         }
 
         h1 {
@@ -374,7 +379,7 @@
         
         // --- CONFIGURATION FIREBASE ---
         const firebaseConfig = {
-            apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA", // REMPLACEZ PAR VOTRE VRAIE CLÉ API
+            apiKey: "YOUR_FIREBASE_API_KEY", // REMPLACEZ PAR VOTRE VRAIE CLÉ API
             authDomain: "mini-duel-de-cartes.firebaseapp.com",
             databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
             projectId: "mini-duel-de-cartes",
@@ -843,7 +848,7 @@
 
                     if (youKey === 'p1') { // Seul P1 traite le tour
                         console.log("P1 detected both actions, will process turn.");
-                        setTimeout(() => {
+                        setTimeout(() => { // Augmenté le délai pour la stabilité
                             get(matchRef).then(latestSnapshot => {
                                 const latestData = latestSnapshot.val();
                                 if (latestData && latestData.players.p1.action && latestData.players.p2.action) {
@@ -853,7 +858,7 @@
                                     console.log("Actions already processed or not present for P1 processing (after timeout).");
                                 }
                             }).catch(err => console.error("Error getting latest match data for processing:", err));
-                        }, 50); 
+                        }, 200); // Délai de 200 ms pour la propagation Firebase
                     } else {
                         console.log("P2 detected both actions, P1 is responsible for processing. Waiting for P1's update.");
                     }
@@ -1336,7 +1341,8 @@
                             updates[`players/${quitterKey}/status`] = 'forfeited';
                             updates.status = 'forfeited';
                             updates.winner = opponentKeyForForfeit; 
-                            updates.history = [...(matchData.history || []), `${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForForfeit].pseudo} gagne par forfait.`];
+                            updates.history = [...(matchData.history || [])]; // Copie l'historique existant
+                            updates.history.push(`${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForForfeit].pseudo} gagne par forfait.`);
                             
                             update(matchRef, updates)
                                 .then(() => console.log(`${currentUser.pseudo} left and forfeited match ${currentMatchId}`))
