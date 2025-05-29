@@ -241,14 +241,6 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             }
         }
 
-        // **Déclenchement immédiat de l'IA après l'action du joueur en mode PvAI**
-        // Ceci est crucial : Si le joueur vient de soumettre son action (son action est présente)
-        // ET que l'IA n'a pas encore joué (son action est null), alors on déclenche l'IA IMMÉDIATEMENT.
-        if (gameMode === 'PvAI' && matchData.players[youKey].action && !matchData.players[opponentKey].action) {
-            console.log("Détection : Joueur a joué en PvAI et IA n'a pas encore joué. Déclenchement IMMÉDIAT de processAITurn.");
-            await processAITurn(matchData);
-        }
-
         // --- Condition pour déclencher processTurn ---
         // Cette condition se déclenchera une fois que les actions de P1 et P2 sont présentes et que le match est en cours.
         if (matchData.players.p1.action && matchData.players.p2.action && matchData.status === 'playing') {
