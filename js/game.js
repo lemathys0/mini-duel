@@ -27,6 +27,9 @@ import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActio
 // Variable pour annuler l'écouteur onValue principal du match
 let currentMatchUnsubscribe = null;
 
+// NOUVELLE VARIABLE : Verrou pour empêcher l'IA de jouer plusieurs fois d'affilée sur le même tour
+let isAIProcessingTurn = false;
+
 /**
  * Exécute une action choisie par le joueur.
  * @param {string} actionType - Le type d'action ('attack', 'defend', 'heal').
@@ -338,9 +341,18 @@ async function processAITurn(matchData) {
     const matchRef = ref(db, `matches/${currentMatchId}`);
     const aiPlayerKey = opponentKey; // L'IA est toujours l'adversaire
 
+    // NOUVELLE VÉRIFICATION DE VERROUILLAGE
+    if (isAIProcessingTurn) {
+        console.log("processAITurn: Un traitement de l'IA est déjà en cours ou vient d'être terminé. Abandon.");
+        return;
+    }
+    // Déclenche le verrouillage
+    isAIProcessingTurn = true;
+
     // Si l'IA a déjà une action soumise, ne rien faire.
     if (matchData.players[aiPlayerKey].action) {
-        console.log("processAITurn: IA a déjà une action soumise, ne pas la re-traiter.");
+        console.log("processAITurn: IA a déjà une action soumise, ne pas la re-traiter (même après verrou).");
+        isAIProcessingTurn = false; // Relâche le verrou si cette condition est vraie
         return;
     }
 
@@ -384,6 +396,8 @@ async function processAITurn(matchData) {
         showMessage("history", `L'IA a choisi son action.`); // Ajoute un message générique à l'historique
     } catch (error) {
         console.error("Erreur lors de l'enregistrement de l'action de l'IA :", error);
+    } finally {
+        isAIProcessingTurn = false; // NOUVEAU : Relâche le verrou une fois le traitement terminé
     }
 }
 
