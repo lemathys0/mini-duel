@@ -304,44 +304,39 @@
     </div>
 
     <script type="module">
-        // Embedded JavaScript from user input
         // Import Firebase (corrected paths)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
         import { getDatabase, ref, set, get, onValue, update, push, child, remove, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-        // Analytics can be optional if not used, but kept as per original code
-        // import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics.js";
-
+        
         // --- CONFIGURATION FIREBASE ---
-        // IMPORTANT: This is the user-provided Firebase configuration.
-        // For production, ensure this is secured and properly set up.
         const firebaseConfig = {
-            apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA", // Replace with your actual API key if this is a placeholder
+            apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA", // REMPLACEZ PAR VOTRE VRAIE CLÉ API
             authDomain: "mini-duel-de-cartes.firebaseapp.com",
             databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
             projectId: "mini-duel-de-cartes",
-            storageBucket: "mini-duel-de-cartes.appspot.com", // Corrected common typo: .firebasestorage.app or .appspot.com
+            storageBucket: "mini-duel-de-cartes.appspot.com", 
             messagingSenderId: "1084207708579",
             appId: "1:1084207708579:web:f1312b68b7eb08f9d44216",
-            measurementId: "G-7YW3J41XZF" // Optional, for Google Analytics
+            measurementId: "G-7YW3J41XZF" 
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
-        // const analytics = getAnalytics(app); // Uncomment if you use analytics
         const db = getDatabase(app);
 
         // --- VARIABLES GLOBALES ---
         let currentUser = null; // { pseudo, code }
-        let currentMatchId = null; // Renamed for clarity
-        let hasPlayedThisTurn = false;
+        let currentMatchId = null; 
+        let hasPlayedThisTurn = false; // Vrai si le joueur a soumis son action pour le tour actuel
         let timerInterval = null;
-        const timerMax = 30; // secondes
+        const timerMax = 20; // secondes (réduit le temps pour un jeu plus rapide)
         let timerCount = timerMax;
+        let youKey = null; // 'p1' or 'p2' for the current user in the match
+        let opponentKey = null; // 'p1' or 'p2' for the opponent
 
-        // Variables pour gérer les timeouts/intervals de nettoyage des matchs
         let unsubscribeMatchCreationListener = null; 
-        let matchDeletionTimeout = null; // Renamed for clarity (used for finished/forfeited matches)
-        let currentMatchUnsubscribe = null; // To store the unsubscribe function for the main match listener
+        let matchDeletionTimeout = null; 
+        let currentMatchUnsubscribe = null; 
+        let onDisconnectRef = null; // To store the onDisconnect reference for proper cancellation
 
         // --- DOM Elements Cache ---
         const pseudoInput = document.getElementById("pseudo");
@@ -369,6 +364,12 @@
             if (el) {
                 el.style.color = isSuccess ? "#00ff88" : "#ff4d6d";
                 el.textContent = message;
+                // Efface le message après un court délai s'il s'agit d'un message temporaire
+                if (!isSuccess) {
+                    setTimeout(() => {
+                        if (el.textContent === message) el.textContent = "";
+                    }, 5000); 
+                }
             }
         }
 
@@ -378,17 +379,33 @@
             healBtn.disabled = disabled;
         }
         
-        function updateHealthBar(healthBarElement, pvDisplayElement, currentPV) {
+        function updateHealthBar(healthBarElement, pvDisplayElement, currentPV, isOpponent = false) {
             const percentage = Math.max(0, Math.min(100, currentPV));
             healthBarElement.style.width = `${percentage}%`;
-            healthBarElement.textContent = `${percentage}%`; // Show percentage on bar
+            healthBarElement.textContent = `${Math.round(percentage)}%`; // Arrondi le pourcentage
+
+            // Ajout d'une animation si les PV ont changé (visuel)
+            const oldPV = parseInt(pvDisplayElement.textContent);
+            if (currentPV < oldPV) { // Dégâts
+                healthBarElement.classList.add('damage-effect');
+                setTimeout(() => healthBarElement.classList.remove('damage-effect'), 500);
+            } else if (currentPV > oldPV) { // Soin
+                healthBarElement.classList.add('heal-effect');
+                setTimeout(() => healthBarElement.classList.remove('heal-effect'), 1000);
+            }
+
             pvDisplayElement.textContent = currentPV;
 
             healthBarElement.classList.remove('low', 'critical');
-            if (currentPV < 10) {
+            // Gérer les couleurs pour sa propre barre de vie et celle de l'adversaire
+            if (isOpponent) {
+                healthBarElement.style.backgroundColor = `var(--danger)`; // Rouge pour l'adversaire
+            } else if (currentPV < 10) {
                 healthBarElement.classList.add('critical');
             } else if (currentPV < 30) {
                 healthBarElement.classList.add('low');
+            } else {
+                healthBarElement.style.backgroundColor = `var(--heal)`; // Vert par défaut
             }
         }
 
@@ -396,7 +413,10 @@
             timerValueEl.textContent = value;
             const progress = (value / timerMax) * 100;
             timerProgressBarEl.style.width = `${progress}%`;
-            timerProgressBarEl.style.backgroundColor = `hsl(${progress * 1.2}, 100%, 50%)`; // Green to Red
+            // Interpolation de couleur du vert au rouge
+            const r = Math.min(255, Math.floor((100 - progress) * 2.55 * 2)); 
+            const g = Math.min(255, Math.floor(progress * 2.55 * 2)); 
+            timerProgressBarEl.style.backgroundColor = `rgb(${r}, ${g}, 0)`; 
         }
 
 
@@ -495,42 +515,44 @@
                 } else {
                     const initialMatchData = {
                         players: {
-                            p1: { pseudo: currentUser.pseudo, pv: 100, defending: false, status: 'connected', lastSeen: serverTimestamp() },
+                            p1: { pseudo: currentUser.pseudo, pv: 100, status: 'connected', lastSeen: serverTimestamp(), action: null },
                             p2: null
                         },
-                        turn: "p1",
-                        actions: {}, // Consider if this is used or can be removed
+                        turn: "p1", // Initial turn
                         history: [`Match ${matchId} créé par ${currentUser.pseudo}. En attente d'un adversaire...`],
                         status: "waiting", // waiting, playing, finished, forfeited
-                        createdAt: serverTimestamp()
+                        createdAt: serverTimestamp(),
+                        lastTurnProcessedAt: serverTimestamp() // Timestamp to help sync timer across clients
                     };
                     set(matchRef, initialMatchData).then(() => {
                         showMessage("match-msg", "Match créé. En attente de l'adversaire...", true);
-                        startMatchMonitoring(matchId); // Changed function name
+                        startMatchMonitoring(matchId); 
 
-                        // Cleanup listener for unjoined match
+                        // Cleanup listener for unjoined match - improved
                         if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener(); // Clear previous
                         unsubscribeMatchCreationListener = onValue(matchRef, (matchSnapshot) => {
                             const matchData = matchSnapshot.val();
-                            if (matchData && matchData.status === 'waiting' && !matchData.players.p2 && typeof matchData.createdAt === 'number') {
+                            if (!matchData) { // Match was deleted
+                                if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener();
+                                unsubscribeMatchCreationListener = null;
+                                return;
+                            }
+                            if (matchData.status === 'waiting' && !matchData.players.p2 && matchData.createdAt) {
                                 const timeElapsed = Date.now() - matchData.createdAt;
-                                if (timeElapsed > 60000) { // 1 minute
+                                if (timeElapsed > 60000) { // 1 minute timeout for waiting match
                                     console.log(`Match ${matchId} non rejoint après 1 minute, suppression.`);
                                     remove(matchRef)
                                         .then(() => {
                                             showMessage("match-msg", "Match expiré et supprimé (aucun adversaire).");
-                                            if (currentMatchId === matchId) { // If this was the current match for the creator
-                                                backToMenu(true); // true indicates an unexpected end
+                                            if (currentMatchId === matchId) { 
+                                                backToMenu(true); 
                                             }
                                         })
                                         .catch(err => console.error("Error removing expired match:", err));
-                                    if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener(); // Self-unsubscribe
+                                    if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener(); 
                                     unsubscribeMatchCreationListener = null;
                                 }
-                            } else if (matchData && matchData.players.p2) { // Opponent joined
-                                if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener();
-                                unsubscribeMatchCreationListener = null;
-                            } else if (!matchData) { // Match was deleted elsewhere
+                            } else if (matchData.players.p2 && matchData.status === 'playing') { // Opponent joined
                                 if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener();
                                 unsubscribeMatchCreationListener = null;
                             }
@@ -566,9 +588,9 @@
                 }
 
                 const matchData = snapshot.val();
-                if (matchData.players.p1.pseudo === currentUser.pseudo) {
-                    showMessage("match-msg", "Vous ne pouvez pas rejoindre votre propre match en tant qu'adversaire. Si vous l'avez créé, attendez un joueur.");
-                    startMatchMonitoring(matchId); // Allow creator to re-enter monitoring if they left and came back
+                if (matchData.players.p1 && matchData.players.p1.pseudo === currentUser.pseudo) {
+                    showMessage("match-msg", "Vous êtes déjà le créateur de ce match. Attendez un joueur.");
+                    startMatchMonitoring(matchId); 
                     return;
                 }
                 if (matchData.players.p2) {
@@ -581,10 +603,10 @@
                 }
                 
                 const updates = {};
-                updates[`players/p2`] = { pseudo: currentUser.pseudo, pv: 100, defending: false, status: 'connected', lastSeen: serverTimestamp() };
+                updates[`players/p2`] = { pseudo: currentUser.pseudo, pv: 100, status: 'connected', lastSeen: serverTimestamp(), action: null };
                 updates[`status`] = 'playing';
                 updates[`history`] = [...(matchData.history || []), `${currentUser.pseudo} a rejoint le match ! Le duel commence.`];
-
+                updates[`lastTurnProcessedAt`] = serverTimestamp(); // Sync timer on join
 
                 update(matchRef, updates).then(() => {
                     showMessage("match-msg", "Vous avez rejoint le match !", true);
@@ -601,10 +623,28 @@
         
         // --- DÉBUT ET SUIVI DU MATCH ---
         function startMatchMonitoring(id) {
+            // Nettoyage des listeners précédents
             if (currentMatchUnsubscribe) {
-                currentMatchUnsubscribe(); // Unsubscribe from any previous match listener
+                currentMatchUnsubscribe(); 
+                currentMatchUnsubscribe = null;
             }
-            
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            if (onDisconnectRef) {
+                onDisconnectRef.cancel().catch(err => console.error("Error canceling old onDisconnect:", err));
+                onDisconnectRef = null;
+            }
+            if (matchDeletionTimeout) {
+                clearTimeout(matchDeletionTimeout);
+                matchDeletionTimeout = null;
+            }
+            if (unsubscribeMatchCreationListener) {
+                unsubscribeMatchCreationListener();
+                unsubscribeMatchCreationListener = null;
+            }
+
             currentMatchId = id;
             const matchRef = ref(db, `matches/${id}`);
 
@@ -615,14 +655,15 @@
             document.getElementById("history").innerHTML = ""; // Clear history on new match start
 
             hasPlayedThisTurn = false;
-            disableActionButtons(true); // Initially disable until turn is confirmed
+            disableActionButtons(true); // Initialisation: boutons désactivés
             actionMsgEl.textContent = "Chargement du match...";
 
-            currentMatchUnsubscribe = onValue(matchRef, async (snapshot) => { // Added async keyword
+            currentMatchUnsubscribe = onValue(matchRef, async (snapshot) => {
+                console.log("onValue triggered:", snapshot.val()); // Pour le débogage
                 const data = snapshot.val();
                 if (!data) {
-                    // Match deleted or non-existent
-                    if (currentMatchId === id) { // Check if this is still the active match for the client
+                    // Match supprimé ou inexistant
+                    if (currentMatchId === id) { 
                         showMessage("action-msg", "Le match a été terminé ou supprimé.");
                         if (currentMatchUnsubscribe) currentMatchUnsubscribe();
                         currentMatchUnsubscribe = null;
@@ -631,8 +672,8 @@
                     return;
                 }
 
-                // Determine player roles
-                let you, opponent, youKey, opponentKey;
+                // Déterminer le rôle du joueur actuel (p1 ou p2)
+                let you, opponent;
                 if (data.players.p1 && data.players.p1.pseudo === currentUser.pseudo) {
                     you = data.players.p1; youKey = "p1";
                     opponent = data.players.p2; opponentKey = "p2";
@@ -640,7 +681,7 @@
                     you = data.players.p2; youKey = "p2";
                     opponent = data.players.p1; opponentKey = "p1";
                 } else {
-                    // Not a player in this match (e.g., if kicked or error)
+                    // N'est pas un joueur dans ce match (ex: a été déconnecté/kické)
                     actionMsgEl.textContent = "Vous n'êtes pas un joueur dans ce match.";
                     disableActionButtons(true);
                     if (timerInterval) clearInterval(timerInterval);
@@ -648,33 +689,25 @@
                     return;
                 }
                 
-                // Handle onDisconnect for the current player
-                // This should ideally be set once when the player is confirmed in the match.
-                // Be careful about re-setting it on every onValue update.
-                // A simple approach: set it if 'you' is defined and status is 'connected'.
-                if (you && you.status === 'connected') {
-                    const yourPlayerRef = ref(db, `matches/${id}/players/${youKey}`);
-                    // Only set onDisconnect once when the player connects to the match
-                    if (!you._onDisconnectSet) { // Use a flag to avoid re-setting
-                        onDisconnect(yourPlayerRef).update({
-                            pv: 0, // Or some indicator of forfeit
-                            status: 'disconnected',
-                            lastSeen: serverTimestamp() 
-                        }).catch(error => console.error("Error setting onDisconnect:", error));
-                        // Mark the flag as set
-                        if (you) you._onDisconnectSet = true;
-                    }
-                    // Also update 'lastSeen' periodically while connected (not implemented here for brevity)
-                    update(yourPlayerRef, { lastSeen: serverTimestamp(), status: 'connected' }); // Mark as seen now
+                // Mettre à jour lastSeen et définir onDisconnect
+                const yourPlayerRef = ref(db, `matches/${id}/players/${youKey}`);
+                if (!onDisconnectRef) { // Set onDisconnect only once per match
+                    onDisconnectRef = onDisconnect(yourPlayerRef);
+                    onDisconnectRef.update({
+                        pv: 0, 
+                        status: 'disconnected',
+                        lastSeen: serverTimestamp() 
+                    }).catch(error => console.error("Error setting onDisconnect:", error));
                 }
+                // Mise à jour régulière de lastSeen pour signaler la présence
+                update(yourPlayerRef, { lastSeen: serverTimestamp(), status: 'connected' }); 
 
-
-                // Update UI with player data
+                // Mettre à jour l'interface avec les données des joueurs
                 updateHealthBar(youHealthBarEl, youPvDisplayEl, you.pv);
                 document.getElementById("you-name").textContent = `${you.pseudo} (Vous)`;
 
                 if (opponent) {
-                    updateHealthBar(opponentHealthBarEl, opponentPvDisplayEl, opponent.pv);
+                    updateHealthBar(opponentHealthBarEl, opponentPvDisplayEl, opponent.pv, true); // true pour l'adversaire
                     document.getElementById("opponent-name").textContent = opponent.pseudo;
                 } else {
                     opponentPvDisplayEl.textContent = "N/A";
@@ -683,9 +716,14 @@
                     document.getElementById("opponent-name").textContent = "En attente...";
                 }
                 
-                // If waiting for P2
-                if (data.status === "waiting" || !opponent) {
-                    actionMsgEl.textContent = "En attente de l'adversaire...";
+                // Si en attente du P2 ou si P2 est déconnecté/forfait
+                if (data.status === "waiting" || !opponent || opponent.status === 'disconnected' || opponent.status === 'forfeited') {
+                    if (opponent && (opponent.status === 'disconnected' || opponent.status === 'forfeited')) {
+                        actionMsgEl.textContent = `L'adversaire (${opponent.pseudo}) est déconnecté. Le match est terminé.`;
+                        handleGameEnd(data, youKey, opponentKey, 'win'); // You win by forfeit
+                    } else {
+                        actionMsgEl.textContent = "En attente de l'adversaire...";
+                    }
                     disableActionButtons(true);
                     if (timerInterval) clearInterval(timerInterval);
                     timerInterval = null;
@@ -693,187 +731,88 @@
                     return;
                 }
                 
-                // Check for opponent disconnect/forfeit explicitly
-                let opponentDisconnected = opponent.status === 'disconnected' || opponent.status === 'forfeited';
-
-
-                // Game End Conditions
-                if (you.pv <= 0 || opponent.pv <= 0 || data.status === 'finished' || data.status === 'forfeited' || opponentDisconnected) {
-                    disableActionButtons(true);
-                    if (timerInterval) clearInterval(timerInterval);
-                    timerInterval = null;
-
-                    // Cancel onDisconnect for this player since match is ending
-                    const playerRefToCancel = ref(db, `matches/${id}/players/${youKey}`);
-                    onDisconnect(playerRefToCancel).cancel().catch(error => console.error("Error cancelling onDisconnect:", error));
-                    
-                    let finalMessage = "";
-                    let yourResult = "draw"; // draw, win, loss
-
-                    if (opponentDisconnected && you.pv > 0) {
-                        finalMessage = `L'adversaire (${opponent.pseudo}) a quitté. Vous avez gagné par forfait !`;
-                        yourResult = "win";
-                    } else if (you.pv <= 0 && opponent.pv <= 0) {
-                        finalMessage = "Match Nul !";
-                    } else if (you.pv <= 0) {
-                        finalMessage = `Vous avez perdu contre ${opponent.pseudo}...`;
-                        yourResult = "loss";
-                    } else if (opponent.pv <= 0) {
-                        finalMessage = `Vous avez gagné contre ${opponent.pseudo} !`;
-                        yourResult = "win";
-                    } else if (data.status === 'forfeited') { // General forfeit status
-                        if (data.winner === youKey) {
-                            finalMessage = `Victoire par forfait !`;
-                            yourResult = "win";
-                        } else {
-                            finalMessage = `Défaite par forfait.`;
-                            yourResult = "loss";
-                        }
+                // Conditions de fin de jeu (après avoir géré l'attente)
+                if (data.status === 'finished' || you.pv <= 0 || opponent.pv <= 0) {
+                    // Unsubscribe onDisconnect as match is ending
+                    if (onDisconnectRef) {
+                        onDisconnectRef.cancel().catch(error => console.error("Error cancelling onDisconnect:", error));
+                        onDisconnectRef = null;
                     }
-                    
-                    actionMsgEl.textContent = finalMessage;
-                    updateUserStats(yourResult);
 
-                    // Schedule match deletion
-                    if (!matchDeletionTimeout) { // Prevent multiple timeouts
-                        actionMsgEl.textContent += " Retour au menu dans 10 secondes...";
-                        matchDeletionTimeout = setTimeout(() => {
-                            console.log(`Match ${id} terminé/forfait, tentative de suppression.`);
-                            // Only p1 (creator) should ideally delete the match to avoid race conditions
-                            // Or, implement a cloud function for cleanup.
-                            // For simplicity here, any player can trigger if they are the last one.
-                            // A better check would be if (youKey === 'p1' || opponent.status !== 'connected')
-                            remove(matchRef)
-                                .then(() => console.log(`Match ${id} supprimé.`))
-                                .catch(err => console.error("Error removing finished match:", err));
-                            backToMenu(true); // true indicates an unexpected end or forced return
-                            matchDeletionTimeout = null;
-                        }, 10000); // 10 seconds
+                    let finalResult = "draw";
+                    if (you.pv > 0 && opponent.pv <= 0) {
+                        finalResult = "win";
+                    } else if (you.pv <= 0 && opponent.pv > 0) {
+                        finalResult = "loss";
                     }
-                    return; // End processing for this update
+                    handleGameEnd(data, youKey, opponentKey, finalResult);
+                    return; 
                 }
 
-                // Process actions if available and it's the current turn
-                // This section assumes actions are processed at the start of a turn by the current player
-                if (data.turn === youKey && data.actions && Object.keys(data.actions).length === 2) {
-                    // Both players have submitted actions
-                    const player1Action = data.actions.p1;
-                    const player2Action = data.actions.p2;
-
-                    let p1PV = data.players.p1.pv;
-                    let p2PV = data.players.p2.pv;
-                    let historyUpdates = [...(data.history || [])];
-
-                    // Reset defending status for both players
-                    let p1Defending = false;
-                    let p2Defending = false;
-
-                    // Apply actions
-                    historyUpdates.push(`--- Début du tour ---`);
-                    
-                    // Player 1's action
-                    if (player1Action === 'attack') {
-                        historyUpdates.push(`${data.players.p1.pseudo} attaque !`);
-                        if (player2Action === 'defend') {
-                            p2PV -= 5; // Reduced damage if defending
-                            historyUpdates.push(`${data.players.p2.pseudo} se défend, subit 5 PV de dégâts.`);
-                        } else {
-                            p2PV -= 10; // Full damage
-                            historyUpdates.push(`${data.players.p2.pseudo} subit 10 PV de dégâts.`);
-                        }
-                    } else if (player1Action === 'defend') {
-                        p1Defending = true;
-                        historyUpdates.push(`${data.players.p1.pseudo} se prépare à défendre.`);
-                    } else if (player1Action === 'heal') {
-                        p1PV = Math.min(100, p1PV + 15);
-                        historyUpdates.push(`${data.players.p1.pseudo} se soigne et récupère 15 PV.`);
+                // Gérer les actions si c'est le tour actuel et que les deux actions sont là
+                // SEULEMENT le joueur P1 (le créateur du match) est désigné pour traiter les actions
+                // pour éviter les courses et les boucles de mise à jour.
+                if (data.players.p1.action && data.players.p2.action) {
+                    if (youKey === 'p1') { // Seul P1 traite le tour
+                        console.log("P1 détecte les deux actions, va traiter le tour.");
+                        // Ajoutez une petite temporisation pour s'assurer que les données sont bien propagées
+                        // avant que P1 ne tente de lire et de traiter.
+                        // Cela peut aussi aider à éviter la saturation de la pile d'appels.
+                        setTimeout(() => {
+                            // Re-vérifiez l'état juste avant de traiter pour éviter les doublons
+                            get(matchRef).then(latestSnapshot => {
+                                const latestData = latestSnapshot.val();
+                                if (latestData && latestData.players.p1.action && latestData.players.p2.action) {
+                                    processTurn(latestData, youKey, opponentKey, matchRef);
+                                } else {
+                                    console.log("Actions déjà traitées ou non présentes au moment du traitement par P1.");
+                                }
+                            }).catch(err => console.error("Error getting latest match data for processing:", err));
+                        }, 50); // Petite pause de 50ms
+                    } else {
+                        console.log("P2 détecte les deux actions, P1 est responsable du traitement.");
+                        // P2 va simplement attendre que P1 mette à jour le match
                     }
-
-                    // Player 2's action (only if not defending or attacking)
-                    if (player2Action === 'attack') {
-                        historyUpdates.push(`${data.players.p2.pseudo} attaque !`);
-                        if (player1Action === 'defend') {
-                            p1PV -= 5; // Reduced damage if defending
-                            historyUpdates.push(`${data.players.p1.pseudo} se défend, subit 5 PV de dégâts.`);
-                        } else {
-                            p1PV -= 10; // Full damage
-                            historyUpdates.push(`${data.players.p1.pseudo} subit 10 PV de dégâts.`);
-                        }
-                    } else if (player2Action === 'defend') {
-                        p2Defending = true;
-                        historyUpdates.push(`${data.players.p2.pseudo} se prépare à défendre.`);
-                    } else if (player2Action === 'heal') {
-                        p2PV = Math.min(100, p2PV + 15);
-                        historyUpdates.push(`${data.players.p2.pseudo} se soigne et récupère 15 PV.`);
-                    }
-                    historyUpdates.push(`--- Fin du tour ---`);
-
-                    // Ensure PV don't go below 0
-                    p1PV = Math.max(0, p1PV);
-                    p2PV = Math.max(0, p2PV);
-
-                    // Determine next turn
-                    let nextTurn = (data.turn === 'p1') ? 'p2' : 'p1';
-                    if (p1PV <= 0 || p2PV <= 0) {
-                        nextTurn = "finished"; // Mark as finished if game over
-                    }
-
-                    const updates = {
-                        [`players/p1/pv`]: p1PV,
-                        [`players/p2/pv`]: p2PV,
-                        [`players/p1/defending`]: p1Defending, // Reset defending status for next turn
-                        [`players/p2/defending`]: p2Defending, // Reset defending status for next turn
-                        history: historyUpdates,
-                        actions: {}, // Clear actions for next turn
-                        turn: nextTurn,
-                        lastTurnProcessedAt: serverTimestamp() // To help with timer synchronization
-                    };
-
-                    // Set game status if finished
-                    if (nextTurn === "finished") {
-                        updates.status = "finished";
-                        if (p1PV > 0 && p2PV <= 0) { updates.winner = "p1"; updates.loser = "p2"; }
-                        else if (p2PV > 0 && p1PV <= 0) { updates.winner = "p2"; updates.loser = "p1"; }
-                        else { updates.winner = "draw"; } // Both 0 or equal and game ended
-                    }
-
-                    await update(matchRef, updates).catch(error => console.error("Error updating match after actions:", error));
-                    hasPlayedThisTurn = false; // Reset for the next turn
+                    hasPlayedThisTurn = false; // Réinitialiser pour le prochain tour après traitement
+                    return; // Sortir pour ne pas refaire la logique de tour
                 }
 
 
-                // Turn Management
+                // Gestion du Tour
                 if (data.turn === youKey) {
-                    if (hasPlayedThisTurn) {
+                    if (hasPlayedThisTurn) { // Si le joueur a déjà cliqué pour ce tour
                         disableActionButtons(true);
                         actionMsgEl.textContent = "Action jouée. En attente de l'adversaire...";
-                        if (timerInterval) clearInterval(timerInterval); // Stop timer if already played
+                        if (timerInterval) clearInterval(timerInterval); 
                         timerInterval = null;
-                    } else {
+                    } else { // C'est votre tour et vous n'avez pas encore joué
                         disableActionButtons(false);
                         actionMsgEl.textContent = "C'est votre tour ! Choisissez une action.";
-                        if (!timerInterval) { // Start timer only if not already running for this turn
-                            resetTimerAndStart(youKey, opponentKey);
+                        if (!timerInterval) { 
+                             // Synchroniser le timer avec la base de données
+                            const elapsedSinceLastTurn = data.lastTurnProcessedAt ? (Date.now() - data.lastTurnProcessedAt) : 0;
+                            const initialTimerValue = Math.max(0, timerMax - Math.floor(elapsedSinceLastTurn / 1000));
+                            resetTimerAndStart(youKey, opponentKey, initialTimerValue);
                         }
                     }
-                } else { // Opponent's turn
+                } else { // Tour de l'adversaire
                     disableActionButtons(true);
                     actionMsgEl.textContent = `Tour de ${opponent ? opponent.pseudo : 'l\'adversaire'}. Veuillez patienter...`;
-                    if (timerInterval) clearInterval(timerInterval); // Stop your timer
+                    if (timerInterval) clearInterval(timerInterval); 
                     timerInterval = null;
-                    hasPlayedThisTurn = false; // Reset for your next turn
-                    updateTimerUI(timerMax); // Show full timer for opponent visually
+                    hasPlayedThisTurn = false; // Important: Réinitialiser pour votre prochain tour
+                    updateTimerUI(timerMax); // Afficher le timer plein pour l'adversaire (visuellement)
                 }
 
-                // Update History
+                // Mettre à jour l'historique
                 const histEl = document.getElementById("history");
-                histEl.innerHTML = ""; // Clear and redraw
+                histEl.innerHTML = ""; 
                 (data.history || []).forEach(entry => {
                     const p = document.createElement("p");
                     p.textContent = entry;
                     histEl.appendChild(p);
                 });
-                histEl.scrollTop = histEl.scrollHeight; // Auto-scroll
+                histEl.scrollTop = histEl.scrollHeight; 
 
             }, (error) => {
                 console.error("Error listening to match data:", error);
@@ -884,10 +823,131 @@
             });
         }
 
+        // --- RESOLUTION DU TOUR (Nouvelle Fonction) ---
+        async function processTurn(data, youKeyCurrentListener, opponentKeyCurrentListener, matchRef) {
+            console.log("Processing turn (by P1 if logic is followed)...");
+            // Vérifiez encore une fois que les actions sont non-nulles pour éviter le double traitement
+            if (!data.players.p1.action || !data.players.p2.action) {
+                console.log("One or both actions are null, turn already processed or not ready.");
+                return; // Ne rien faire si les actions sont déjà effacées
+            }
+
+            if (timerInterval) {
+                clearInterval(timerInterval); // Stop timer immediately when processing
+                timerInterval = null;
+            }
+            disableActionButtons(true); // Disable buttons during processing
+
+            const p1Action = data.players.p1.action;
+            const p2Action = data.players.p2.action;
+
+            let p1PV = data.players.p1.pv;
+            let p2PV = data.players.p2.pv;
+            let historyUpdates = [...(data.history || [])];
+
+            historyUpdates.push(`--- Début du tour ${data.turn} ---`);
+            
+            // Logique d'application des actions
+            // Attaque
+            if (p1Action === 'attack') {
+                historyUpdates.push(`${data.players.p1.pseudo} attaque !`);
+                if (p2Action === 'defend') {
+                    p2PV -= 5; 
+                    historyUpdates.push(`${data.players.p2.pseudo} se défend, subit 5 PV de dégâts.`);
+                } else {
+                    p2PV -= 10; 
+                    historyUpdates.push(`${data.players.p2.pseudo} subit 10 PV de dégâts.`);
+                }
+            }
+            if (p2Action === 'attack') {
+                historyUpdates.push(`${data.players.p2.pseudo} attaque !`);
+                if (p1Action === 'defend') {
+                    p1PV -= 5; 
+                    historyUpdates.push(`${data.players.p1.pseudo} se défend, subit 5 PV de dégâts.`);
+                } else {
+                    p1PV -= 10; 
+                    historyUpdates.push(`${data.players.p1.pseudo} subit 10 PV de dégâts.`);
+                }
+            }
+
+            // Soin
+            if (p1Action === 'heal') {
+                p1PV = Math.min(100, p1PV + 15);
+                historyUpdates.push(`${data.players.p1.pseudo} se soigne et récupère 15 PV.`);
+            }
+            if (p2Action === 'heal') {
+                p2PV = Math.min(100, p2PV + 15);
+                historyUpdates.push(`${data.players.p2.pseudo} se soigne et récupère 15 PV.`);
+            }
+
+            // Défense (déjà géré dans l'attaque, mais on peut loguer pour la clarté)
+            if (p1Action === 'defend' && p2Action !== 'attack') {
+                historyUpdates.push(`${data.players.p1.pseudo} se met en position défensive.`);
+            }
+            if (p2Action === 'defend' && p1Action !== 'attack') {
+                historyUpdates.push(`${data.players.p2.pseudo} se met en position défensive.`);
+            }
+
+            historyUpdates.push(`--- Fin du tour ---`);
+
+            // S'assurer que les PV ne sont pas négatifs
+            p1PV = Math.max(0, p1PV);
+            p2PV = Math.max(0, p2PV);
+
+            // Déterminer le prochain tour ou la fin du match
+            let nextTurn = (data.turn === 'p1') ? 'p2' : 'p1';
+            let gameStatus = 'playing';
+            let winner = null;
+            let loser = null;
+
+            if (p1PV <= 0 && p2PV <= 0) {
+                gameStatus = "finished";
+                winner = "draw";
+                historyUpdates.push("Les deux joueurs sont à terre. C'est un match nul !");
+            } else if (p1PV <= 0) {
+                gameStatus = "finished";
+                winner = "p2";
+                loser = "p1";
+                historyUpdates.push(`${data.players.p1.pseudo} est vaincu ! ${data.players.p2.pseudo} gagne le match.`);
+            } else if (p2PV <= 0) {
+                gameStatus = "finished";
+                winner = "p1";
+                loser = "p2";
+                historyUpdates.push(`${data.players.p2.pseudo} est vaincu ! ${data.players.p1.pseudo} gagne le match.`);
+            }
+
+            const updates = {
+                [`players/p1/pv`]: p1PV,
+                [`players/p2/pv`]: p2PV,
+                [`players/p1/action`]: null, // Réinitialise l'action du joueur 1 pour le prochain tour
+                [`players/p2/action`]: null, // Réinitialise l'action du joueur 2 pour le prochain tour
+                history: historyUpdates,
+                turn: nextTurn,
+                status: gameStatus,
+                lastTurnProcessedAt: serverTimestamp() // Mettre à jour le timestamp pour le timer
+            };
+
+            if (winner) {
+                updates.winner = winner;
+                if (loser) updates.loser = loser;
+            }
+
+            try {
+                // Utiliser une mise à jour atomique pour garantir la cohérence
+                await update(matchRef, updates);
+                console.log("Match updated after turn processing.");
+                // Le onValue listener va détecter ce changement et mettre à jour l'UI
+                // et potentiellement déclencher le timer pour le prochain tour.
+            } catch (error) {
+                console.error("Error updating match after processing turn:", error);
+            }
+        }
+
+
         // --- GESTION DU TIMER ---
-        function resetTimerAndStart(currentPlayerKey, opponentPlayerKey) {
-            if (timerInterval) clearInterval(timerInterval);
-            timerCount = timerMax;
+        function resetTimerAndStart(currentPlayerKey, opponentPlayerKey, initialCount = timerMax) {
+            if (timerInterval) clearInterval(timerInterval); // Arrête le timer précédent
+            timerCount = initialCount;
             updateTimerUI(timerCount);
 
             timerInterval = setInterval(async () => {
@@ -897,44 +957,47 @@
                 if (timerCount <= 0) {
                     clearInterval(timerInterval);
                     timerInterval = null;
-                    disableActionButtons(true); // Disable actions if time runs out
+                    disableActionButtons(true); 
 
-                    // Record an automatic action (e.g., defend) if no action was chosen
-                    if (!hasPlayedThisTurn) {
-                        const matchRef = ref(db, `matches/${currentMatchId}`);
-                        const matchSnapshot = await get(matchRef);
-                        const matchData = matchSnapshot.val();
+                    // Vérifier si le joueur a réellement joué avant de forcer une action
+                    const matchRef = ref(db, `matches/${currentMatchId}`);
+                    const matchSnapshot = await get(matchRef);
+                    const matchData = matchSnapshot.val();
 
-                        if (matchData && matchData.turn === currentPlayerKey) {
-                            // If player hasn't played and it's their turn (and still their turn according to data)
-                            const playerAction = 'defend'; // Default action on timeout
-                            const updates = {};
-                            updates[`actions/${currentPlayerKey}`] = playerAction;
-                            
-                            // Log the auto-action in history
-                            const newHistory = [...(matchData.history || []), 
-                                `${currentUser.pseudo} n'a pas agi à temps et s'est automatiquement défendu.`
-                            ];
-                            updates.history = newHistory;
+                    if (matchData && matchData.turn === currentPlayerKey && !matchData.players[currentPlayerKey].action) {
+                        // Le joueur n'a pas joué à temps, enregistrer une action par défaut
+                        console.log(`${currentUser.pseudo} a expiré son tour, action par défaut: Défense.`);
+                        const defaultAction = 'defend'; 
+                        const updates = {};
+                        updates[`players/${currentPlayerKey}/action`] = defaultAction;
+                        
+                        const newHistory = [...(matchData.history || [])];
+                        newHistory.push(`${currentUser.pseudo} n'a pas agi à temps et s'est automatiquement défendu.`);
+                        updates.history = newHistory;
 
-                            await update(matchRef, updates).catch(error => console.error("Error updating match with timeout action:", error));
-                            hasPlayedThisTurn = true; // Mark as played
+                        try {
+                            await update(matchRef, updates);
+                            hasPlayedThisTurn = true; // Marquer comme joué
                             actionMsgEl.textContent = "Temps écoulé ! Votre action a été automatiquement choisie (Défense).";
+                        } catch (error) {
+                            console.error("Error updating match with timeout action:", error);
                         }
                     }
-                    // The main onValue listener will handle processing actions and switching turns once both actions are recorded.
                 }
-            }, 1000); // Update every second
+            }, 1000); // Mise à jour chaque seconde
         }
 
         // --- ACTIONS DU JOUEUR ---
         async function performAction(actionType) {
             if (!currentMatchId || !currentUser || hasPlayedThisTurn) {
-                showMessage("action-msg", "Action impossible pour le moment.");
+                // message déjà affiché ou action déjà jouée
                 return;
             }
+            console.log(`Performing action: ${actionType}`);
 
             const matchRef = ref(db, `matches/${currentMatchId}`);
+            // Pas besoin de get() ici si le onValue est rapide et que l'on vérifie l'état local du `data`
+            // Mais pour la robustesse et éviter les conditions de course, on peut faire un get ponctuel.
             const matchSnapshot = await get(matchRef);
             const matchData = matchSnapshot.val();
 
@@ -944,42 +1007,48 @@
                 return;
             }
 
-            let youKey;
+            // Vérifier le rôle du joueur actuel dans le match
+            let playerKeyInMatch;
             if (matchData.players.p1 && matchData.players.p1.pseudo === currentUser.pseudo) {
-                youKey = "p1";
+                playerKeyInMatch = "p1";
             } else if (matchData.players.p2 && matchData.players.p2.pseudo === currentUser.pseudo) {
-                youKey = "p2";
+                playerKeyInMatch = "p2";
             } else {
-                showMessage("action-msg", "Vous n'êtes pas un joueur dans ce match.");
+                showMessage("action-msg", "Erreur: Votre rôle dans le match est indéterminé.");
                 return;
             }
 
-            if (matchData.turn !== youKey) {
+            if (matchData.turn !== playerKeyInMatch) {
                 showMessage("action-msg", "Ce n'est pas votre tour !");
                 return;
             }
 
-            // Record action in Firebase
+            // Vérifier si l'action a déjà été enregistrée pour ce tour (prévention de double-clic)
+            if (matchData.players[playerKeyInMatch].action) {
+                 showMessage("action-msg", "Vous avez déjà soumis une action pour ce tour.");
+                 return;
+            }
+
+            // Enregistrer l'action dans Firebase
             const updates = {};
-            updates[`actions/${youKey}`] = actionType;
-            
-            // Add a temporary message to history (actual turn resolution will add detailed messages)
+            updates[`players/${playerKeyInMatch}/action`] = actionType; // Modifier pour stocker l'action directement sous le joueur
+
             const actionDisplayName = {
                 'attack': 'Attaque',
                 'defend': 'Défense',
                 'heal': 'Soin'
             }[actionType];
-            const newHistory = [...(matchData.history || [])];
-            newHistory.push(`${currentUser.pseudo} a choisi : ${actionDisplayName}.`);
-            updates.history = newHistory;
+            
+            actionMsgEl.textContent = `Vous avez choisi : ${actionDisplayName}. En attente de l'adversaire...`;
+
 
             try {
                 await update(matchRef, updates);
-                hasPlayedThisTurn = true;
+                hasPlayedThisTurn = true; // Marquer comme joué pour ce tour
                 disableActionButtons(true);
-                actionMsgEl.textContent = `Vous avez choisi : ${actionDisplayName}. En attente de l'adversaire...`;
-                if (timerInterval) clearInterval(timerInterval);
-                timerInterval = null; // Stop timer once action is made
+                if (timerInterval) clearInterval(timerInterval); // Arrêter le timer une fois l'action soumise
+                timerInterval = null; 
+                console.log(`Action '${actionType}' submitted by ${currentUser.pseudo}.`);
             } catch (error) {
                 console.error("Error performing action:", error);
                 showMessage("action-msg", "Erreur lors de l'envoi de votre action.");
@@ -1008,7 +1077,7 @@
                     } else if (result === 'loss') {
                         losses++;
                     }
-                    // No change for 'draw' or 'disconnected' (handled by forfeit win)
+                    // 'draw' n'affecte pas les wins/losses ici
 
                     await update(userStatsRef, { wins, losses });
                     console.log(`Stats for ${currentUser.pseudo} updated: Wins=${wins}, Losses=${losses}`);
@@ -1018,51 +1087,108 @@
             }
         }
 
-
-        // --- RETOUR AU MENU ---
-        function backToMenu(force = false) {
-            // Unsubscribe from current match listener if it exists
-            if (currentMatchUnsubscribe) {
-                currentMatchUnsubscribe();
-                currentMatchUnsubscribe = null;
-            }
-            // Clear any active timers
+        // --- GESTION DE LA FIN DE PARTIE (Nouvelle fonction) ---
+        async function handleGameEnd(data, youKeyPlayed, opponentKeyPlayed, finalResult) {
+            disableActionButtons(true);
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
             }
-            // Clear any match deletion timeouts
+            if (onDisconnectRef) {
+                onDisconnectRef.cancel().catch(error => console.error("Error cancelling onDisconnect:", error));
+                onDisconnectRef = null;
+            }
+
+            let finalMessage = "";
+            let yourResultForStats = finalResult;
+
+            if (finalResult === 'win') {
+                finalMessage = `Victoire ! Vous avez gagné le match contre ${data.players[opponentKeyPlayed] ? data.players[opponentKeyPlayed].pseudo : 'l\'adversaire'} !`;
+            } else if (finalResult === 'loss') {
+                finalMessage = `Défaite... Vous avez perdu contre ${data.players[opponentKeyPlayed] ? data.players[opponentKeyPlayed].pseudo : 'l\'adversaire'}.`;
+            } else if (finalResult === 'draw') {
+                finalMessage = "Match Nul ! Personne n'a gagné.";
+            } else { 
+                finalMessage = "Le match est terminé.";
+            }
+
+            actionMsgEl.textContent = finalMessage;
+            updateUserStats(yourResultForStats); // Mettre à jour les stats
+
+            if (!matchDeletionTimeout) { 
+                actionMsgEl.textContent += " Retour au menu dans 10 secondes...";
+                matchDeletionTimeout = setTimeout(async () => {
+                    console.log(`Match ${currentMatchId} terminé, tentative de suppression.`);
+                    // Seul P1 (le créateur) ou un client avec la certitude que l'adversaire est parti
+                    // devrait tenter de supprimer le match. Pour un duel, P1 est un bon candidat.
+                    if (youKeyPlayed === 'p1') {
+                        try {
+                            const matchRef = ref(db, `matches/${currentMatchId}`);
+                            const snapshot = await get(matchRef);
+                            // Vérifier si le match existe toujours et n'a pas été supprimé par l'autre client entre temps
+                            if (snapshot.exists() && snapshot.val().status === 'finished') { 
+                                 await remove(matchRef);
+                                 console.log(`Match ${currentMatchId} supprimé.`);
+                            }
+                        } catch (err) {
+                            console.error("Error removing finished match:", err);
+                        }
+                    }
+                    backToMenu(true); 
+                    matchDeletionTimeout = null;
+                }, 10000); 
+            }
+        }
+
+
+        // --- RETOUR AU MENU ---
+        function backToMenu(force = false) {
+            // Nettoyage complet
+            if (currentMatchUnsubscribe) {
+                currentMatchUnsubscribe();
+                currentMatchUnsubscribe = null;
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
             if (matchDeletionTimeout) {
                 clearTimeout(matchDeletionTimeout);
                 matchDeletionTimeout = null;
             }
-            // Clear match creation listener if pending
             if (unsubscribeMatchCreationListener) {
                 unsubscribeMatchCreationListener();
                 unsubscribeMatchCreationListener = null;
             }
+            if (onDisconnectRef) { // Annuler onDisconnect si défini
+                onDisconnectRef.cancel().catch(err => console.error("Error canceling onDisconnect on backToMenu:", err));
+                onDisconnectRef = null;
+            }
 
-            // Remove player from the match if they are leaving voluntarily and match is not ended
+            // Gérer le forfait si le joueur quitte un match en cours volontairement
             if (currentMatchId && currentUser && !force) {
                 const matchRef = ref(db, `matches/${currentMatchId}`);
                 get(matchRef).then(snapshot => {
                     const matchData = snapshot.val();
+                    // Vérifier si le match est toujours "playing" et que le joueur y est
                     if (matchData && matchData.status === 'playing') {
-                        let youKey = null;
+                        let quitterKey = null;
+                        let opponentKeyForForfeit = null;
+
                         if (matchData.players.p1 && matchData.players.p1.pseudo === currentUser.pseudo) {
-                            youKey = "p1";
+                            quitterKey = "p1"; opponentKeyForForfeit = "p2";
                         } else if (matchData.players.p2 && matchData.players.p2.pseudo === currentUser.pseudo) {
-                            youKey = "p2";
+                            quitterKey = "p2"; opponentKeyForForfeit = "p1";
                         }
 
-                        if (youKey) {
-                            const opponentKey = youKey === 'p1' ? 'p2' : 'p1';
+                        // S'assurer que le joueur est bien dans le match et qu'il y a un adversaire actif
+                        if (quitterKey && matchData.players[opponentKeyForForfeit] && matchData.players[opponentKeyForForfeit].status === 'connected') { 
                             const updates = {};
-                            updates[`players/${youKey}/pv`] = 0; // Set PV to 0 for forfeit
-                            updates[`players/${youKey}/status`] = 'forfeited';
+                            updates[`players/${quitterKey}/pv`] = 0; 
+                            updates[`players/${quitterKey}/status`] = 'forfeited';
                             updates.status = 'forfeited';
-                            updates.winner = opponentKey; // Opponent wins by forfeit
-                            updates.history = [...(matchData.history || []), `${currentUser.pseudo} a quitté le match et a perdu par forfait. ${matchData.players[opponentKey].pseudo} gagne.`];
+                            updates.winner = opponentKeyForForfeit; 
+                            updates.history = [...(matchData.history || []), `${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForForfeit].pseudo} gagne par forfait.`];
                             
                             update(matchRef, updates)
                                 .then(() => console.log(`${currentUser.pseudo} left and forfeited match ${currentMatchId}`))
@@ -1074,22 +1200,19 @@
 
             currentMatchId = null;
             hasPlayedThisTurn = false;
-            showMessage("action-msg", ""); // Clear game messages
-            showMessage("match-msg", ""); // Clear matchmaking messages
+            youKey = null; // Réinitialiser
+            opponentKey = null; // Réinitialiser
 
-            // Hide game and show matchmaking
+            showMessage("action-msg", ""); 
+            showMessage("match-msg", ""); 
+
             document.getElementById("game").style.display = "none";
             document.getElementById("match").style.display = "block";
             
-            // Re-enable matchmaking buttons and clear match ID input
             matchIdInput.value = "";
         }
 
-        backToMenuBtn.onclick = () => backToMenu(); // Attach event listener
-
-        // Initial setup on page load (if user was previously logged in, maybe local storage?)
-        // For this example, we assume fresh start, so nothing specific on load.
-        // You might want to implement a check for currentUser in localStorage here.
+        backToMenuBtn.onclick = () => backToMenu(); 
     </script>
 </body>
 </html>
