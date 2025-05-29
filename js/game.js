@@ -1,5 +1,5 @@
 import { db } from "./firebaseConfig.js";
-import { ref, get, update, onValue, onDisconnect, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+import { ref, get, update, onValue, onDisconnect, remove, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { showMessage, disableActionButtons, updateHealthBar, updateTimerUI, clearHistory } from "./utils.js";
 import { backToMenu, currentUser, currentMatchId, youKey, opponentKey, gameMode, setMatchVariables, timerMax, timerInterval, setTimerInterval, setOnDisconnectRef, onDisconnectRef, matchDeletionTimeout, setMatchDeletionTimeout, hasPlayedThisTurn, setHasPlayedThisTurn, updateUserStats } from "./main.js";
 
@@ -301,8 +301,8 @@ async function processTurn(data, matchRef) {
     const updates = {
         [`players/p1/pv`]: p1PV,
         [`players/p2/pv`]: p2PV,
-        [`players/p1/action`]: null, // Reset P1's action
-        [`players/p2/action`]: null, // Reset P2's action
+        [`players/p1/action`]: deleteField(), // Reset P1's action
+        [`players/p2/action`]: deleteField(), // Reset P2's action
         history: historyUpdates,
         turn: nextTurn, // <--- This is where the next turn is set
         status: gameStatus,
