@@ -125,6 +125,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     // Annule l'ancien écouteur si existant pour éviter les doublons
     if (currentMatchUnsubscribe) {
         currentMatchUnsubscribe();
+        console.log("Ancien écouteur onValue annulé."); // DEBUG
     }
 
     // Écouteur principal pour les changements dans les données du match
@@ -177,7 +178,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             // Supprime le match après un délai pour que les deux joueurs voient le résultat
             // Seul le joueur 1 ou le mode IA gère la suppression pour éviter les conflits
             if (youKey === 'p1' || gameMode === 'PvAI') {
-                 setMatchDeletionTimeout(setTimeout(async () => {
+                setMatchDeletionTimeout(setTimeout(async () => {
                     try {
                         await remove(matchRef);
                         console.log(`Match ${currentMatchId} supprimé.`);
@@ -200,10 +201,10 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
         // VÉRIFICATION TRÈS ROBUSTE : S'assurer que c'est un nombre et qu'il n'est pas NaN
         if (typeof currentTurnStartTime === 'number' && !isNaN(currentTurnStartTime)) {
-             validStartTimeForTimer = currentTurnStartTime;
+            validStartTimeForTimer = currentTurnStartTime;
         } else {
-             // Si ce n'est pas un nombre, ou si c'est NaN (par ex. pour le placeholder serverTimestamp())
-             console.warn("turnStartTime n'est pas encore un timestamp numérique valide de Firebase. Le timer ne sera pas démarré pour l'instant.", { currentTurnStartTime, type: typeof currentTurnStartTime, isNaN: isNaN(currentTurnStartTime) });
+            // Si ce n'est pas un nombre, ou si c'est NaN (par ex. pour le placeholder serverTimestamp())
+            console.warn("turnStartTime n'est pas encore un timestamp numérique valide de Firebase. Le timer ne sera pas démarré pour l'instant.", { currentTurnStartTime, type: typeof currentTurnStartTime, isNaN: isNaN(currentTurnStartTime) });
         }
 
         console.log("Tour actuel selon Firebase :", matchData.turn, " | Votre clé de joueur :", youKey); // DEBUG CLÉ
@@ -253,13 +254,12 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
             // --- DÉCLENCHEMENT DE L'IA AU DÉBUT DE SON TOUR (PvAI UNIQUEMENT) ---
             // L'IA joue si c'est un match PvAI, c'est son tour, et son action est null.
-            // (La vérification !matchData.players.p1.action n'est pas nécessaire ici car on est au début du tour de l'IA)
             if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
-                 console.log("DEBUG IA (DEBUT TOUR IA): Conditions remplies. Déclenchement de processAITurn.");
-                 await processAITurn(matchData);
+                console.log("DEBUG IA (DEBUT TOUR IA): Conditions remplies. Déclenchement de processAITurn.");
+                await processAITurn(matchData);
             } else if (gameMode === 'PvAI') {
-                 console.log("DEBUG IA (DEBUT TOUR IA): Conditions NON remplies pour déclencher l'IA.");
-                 if (matchData.players[opponentKey].action) console.log("DEBUG IA (DEBUT TOUR IA): -> L'IA a déjà une action en attente.");
+                console.log("DEBUG IA (DEBUT TOUR IA): Conditions NON remplies pour déclencher l'IA.");
+                if (matchData.players[opponentKey].action) console.log("DEBUG IA (DEBUT TOUR IA): -> L'IA a déjà une action en attente.");
             }
         }
 
@@ -333,9 +333,10 @@ async function processAITurn(matchData) {
     }
     isAIProcessingTurn = true; // Déclenche le verrouillage
 
-    // Une double vérification pour le cas où l'action serait déjà là (suite à une race condition très rapide)
+    // Double vérification pour le cas où l'action serait déjà là (suite à une race condition très rapide)
+    // Nous récupérons les données de l'IA directement de matchData pour être sûr de l'état actuel
     if (matchData.players[aiPlayerKey].action) {
-        console.log("processAITurn: IA a déjà une action soumise. Relâche le verrou et abandonne.");
+        console.log("processAITurn: L'IA a déjà une action soumise. Relâche le verrou et abandonne.");
         isAIProcessingTurn = false; // Relâche le verrou si cette condition est vraie
         return;
     }
@@ -375,6 +376,14 @@ async function processAITurn(matchData) {
     await new Promise(resolve => setTimeout(resolve, 4000));
 
     try {
+        // Nouvelle vérification de l'action de l'IA juste avant la mise à jour pour éviter une race condition
+        // Récupère l'état le plus récent de l'action de l'IA
+        const currentAiActionSnapshot = await get(ref(db, `matches/${currentMatchId}/players/${aiPlayerKey}/action`));
+        if (currentAiActionSnapshot.exists() && currentAiActionSnapshot.val() !== null) {
+            console.warn("processAITurn: Action de l'IA déjà définie juste avant la mise à jour. Annulation pour éviter un écrasement.");
+            return; // Sortir si l'action est déjà là
+        }
+
         await update(matchRef, { [`players/${aiPlayerKey}/action`]: aiAction });
         console.log(`IA a choisi l'action : ${aiAction} et l'a enregistrée dans Firebase.`); // DEBUG
         showMessage("history", `L'IA a choisi son action.`); // Ajoute un message générique à l'historique
@@ -395,6 +404,7 @@ async function processTurn(matchData) {
     disableActionButtons(); // S'assure que les boutons sont désactivés
 
     // Empêche le double traitement si le match n'est plus en état 'playing' ou si les actions sont déjà null
+    // Cette condition est très importante pour éviter de traiter deux fois le même tour
     if (matchData.status !== 'playing' || !matchData.players.p1.action || !matchData.players.p2.action) {
         console.warn("processTurn : Annulé, les conditions ne sont pas remplies ou déjà traité.");
         return;
