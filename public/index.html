@@ -390,7 +390,10 @@
         // --- VARIABLES GLOBALES ---
         let currentUser = null; // { pseudo, code }
         let currentMatchId = null; 
-        let hasPlayedThisTurn = false; // Vrai si le joueur a soumis son action pour le tour actuel
+        // hasPlayedThisTurn : Vrai si le joueur a soumis son action pour le tour ACTUEL.
+        // Cette variable est essentielle pour éviter de soumettre plusieurs actions par tour.
+        // Elle sera réinitialisée uniquement lorsque le tour est processé par le P1.
+        let hasPlayedThisTurn = false; 
         let timerInterval = null;
         const timerMax = 20; // secondes (réduit le temps pour un jeu plus rapide)
         let timerCount = timerMax;
@@ -721,7 +724,8 @@
             document.getElementById("history").innerHTML = ""; // Clear history on new match start
             if (opponentActionStatusEl) opponentActionStatusEl.textContent = ""; // Clear opponent status
 
-            hasPlayedThisTurn = false;
+            // IMPORTANT : Réinitialiser hasPlayedThisTurn au début d'un nouveau match
+            hasPlayedThisTurn = false; 
             disableActionButtons(true); // Initialisation: boutons désactivés
             actionMsgEl.textContent = "Chargement du match...";
 
@@ -777,14 +781,18 @@
                 if (opponent) {
                     updateHealthBar(opponentHealthBarEl, opponentPvDisplayEl, opponent.pv, true); // true pour l'adversaire
                     document.getElementById("opponent-name").textContent = opponent.pseudo;
+                    // Afficher si l'adversaire a soumis son action
                     if (opponent.action) {
                         opponentActionStatus = "Action soumise !";
+                    } else {
+                        opponentActionStatus = "En attente d'action...";
                     }
                 } else {
                     opponentPvDisplayEl.textContent = "N/A";
                     opponentHealthBarEl.style.width = "0%";
                     opponentHealthBarEl.textContent = "0%";
                     document.getElementById("opponent-name").textContent = "En attente...";
+                    opponentActionStatus = "En attente d'un adversaire...";
                 }
                 if (opponentActionStatusEl) opponentActionStatusEl.textContent = opponentActionStatus;
                 
@@ -829,13 +837,13 @@
                 // pour éviter les courses et les boucles de mise à jour.
                 if (data.players.p1.action && data.players.p2.action) {
                     console.log("Both actions are present.");
+                    // Réinitialiser hasPlayedThisTurn pour les deux joueurs quand les deux actions sont là
+                    // car cela signifie que le tour va être traité.
+                    hasPlayedThisTurn = false; 
+
                     if (youKey === 'p1') { // Seul P1 traite le tour
                         console.log("P1 detected both actions, will process turn.");
-                        // Ajoutez une petite temporisation pour s'assurer que les données sont bien propagées
-                        // avant que P1 ne tente de lire et de traiter.
-                        // Cela peut aussi aider à éviter la saturation de la pile d'appels.
                         setTimeout(() => {
-                            // Re-vérifiez l'état juste avant de traiter pour éviter les doublons
                             get(matchRef).then(latestSnapshot => {
                                 const latestData = latestSnapshot.val();
                                 if (latestData && latestData.players.p1.action && latestData.players.p2.action) {
@@ -845,28 +853,24 @@
                                     console.log("Actions already processed or not present for P1 processing (after timeout).");
                                 }
                             }).catch(err => console.error("Error getting latest match data for processing:", err));
-                        }, 50); // Petite pause de 50ms
+                        }, 50); 
                     } else {
                         console.log("P2 detected both actions, P1 is responsible for processing. Waiting for P1's update.");
-                        // P2 va simplement attendre que P1 mette à jour le match
                     }
-                    hasPlayedThisTurn = false; // Réinitialiser pour le prochain tour après traitement
-                    // Ne pas 'return' ici, le reste du onValue doit s'exécuter pour mettre à jour l'UI après le traitement du tour
-                    // La réinitialisation des actions et le changement de tour par processTurn déclencheront un nouveau onValue
+                    // Le reste du onValue DOIT s'exécuter pour mettre à jour l'UI
                 }
 
 
                 // Gestion du Tour
-                // Après le bloc de traitement des actions, si les actions ne sont pas encore toutes là, on gère le tour.
-                // Cela s'applique aussi après le traitement du tour, lorsque les actions sont à nouveau null.
                 if (data.turn === youKey) {
-                    if (hasPlayedThisTurn) { // Si le joueur a déjà cliqué pour ce tour
+                    // Si le joueur a déjà soumis son action, il attend l'adversaire
+                    if (data.players[youKey].action) { // Vérifier l'état de l'action dans Firebase
                         disableActionButtons(true);
                         actionMsgEl.textContent = "Action jouée. En attente de l'adversaire...";
                         if (timerInterval) clearInterval(timerInterval); 
                         timerInterval = null;
                         console.log("Your turn, action played. Waiting for opponent.");
-                    } else { // C'est votre tour et vous n'avez pas encore joué
+                    } else { // C'est votre tour et vous n'avez PAS encore joué
                         disableActionButtons(false);
                         actionMsgEl.textContent = "C'est votre tour ! Choisissez une action.";
                         if (!timerInterval) { 
@@ -878,13 +882,17 @@
                         } else {
                             console.log("Your turn, timer already running.");
                         }
+                        // Important : Réinitialiser hasPlayedThisTurn ici aussi,
+                        // car un nouveau tour vient de commencer pour ce joueur.
+                        hasPlayedThisTurn = false; 
                     }
                 } else { // Tour de l'adversaire
                     disableActionButtons(true);
                     actionMsgEl.textContent = `Tour de ${opponent ? opponent.pseudo : 'l\'adversaire'}. Veuillez patienter...`;
                     if (timerInterval) clearInterval(timerInterval); 
                     timerInterval = null;
-                    hasPlayedThisTurn = false; // Important: Réinitialiser pour votre prochain tour
+                    // Ne pas réinitialiser hasPlayedThisTurn ici, il doit rester à false ou true
+                    // jusqu'à ce que le tour du joueur revienne ou que le tour soit traité.
                     updateTimerUI(timerMax); // Afficher le timer plein pour l'adversaire (visuellement)
                     console.log("Opponent's turn. Waiting.");
                 }
@@ -923,6 +931,10 @@
                 timerInterval = null;
             }
             disableActionButtons(true); // Disable buttons during processing
+
+            // IMPORTANT : Réinitialiser hasPlayedThisTurn ici car le tour est sur le point d'être traité
+            // Cela garantit que lorsque le nouveau tour commencera, le joueur pourra de nouveau jouer.
+            hasPlayedThisTurn = false; 
 
             const p1Action = data.players.p1.action;
             const p2Action = data.players.p2.action;
@@ -1068,7 +1080,8 @@
 
                         try {
                             await update(matchRef, updates);
-                            hasPlayedThisTurn = true; // Marquer comme joué
+                            // hasPlayedThisTurn reste à true jusqu'au prochain tour pour éviter le double envoi
+                            // mais le timer s'arrête.
                             actionMsgEl.textContent = "Temps écoulé ! Votre action a été automatiquement choisie (Défense).";
                             console.log("Default action (Defend) submitted due to timeout.");
                         } catch (error) {
@@ -1084,16 +1097,20 @@
 
         // --- ACTIONS DU JOUEUR ---
         async function performAction(actionType) {
-            if (!currentMatchId || !currentUser || hasPlayedThisTurn) {
-                // message déjà affiché ou action déjà jouée
-                console.log("Action blocked: No match, no user, or already played this turn.");
+            // Vérifier d'abord si hasPlayedThisTurn est VRAI avant de faire le get.
+            // Si c'est déjà true, c'est que le joueur a déjà soumis son action pour ce tour.
+            if (hasPlayedThisTurn) {
+                showMessage("action-msg", "Vous avez déjà soumis une action pour ce tour.");
+                console.log("Action blocked: already played this turn (hasPlayedThisTurn is true).");
+                return;
+            }
+            if (!currentMatchId || !currentUser) {
+                console.log("Action blocked: No match or no user.");
                 return;
             }
             console.log(`Attempting to perform action: ${actionType}`);
 
             const matchRef = ref(db, `matches/${currentMatchId}`);
-            // Pas besoin de get() ici si le onValue est rapide et que l'on vérifie l'état local du `data`
-            // Mais pour la robustesse et éviter les conditions de course, on peut faire un get ponctuel.
             const matchSnapshot = await get(matchRef);
             const matchData = matchSnapshot.val();
 
@@ -1104,7 +1121,6 @@
                 return;
             }
 
-            // Vérifier le rôle du joueur actuel dans le match
             let playerKeyInMatch;
             if (matchData.players.p1 && matchData.players.p1.pseudo === currentUser.pseudo) {
                 playerKeyInMatch = "p1";
@@ -1122,16 +1138,19 @@
                 return;
             }
 
-            // Vérifier si l'action a déjà été enregistrée pour ce tour (prévention de double-clic)
+            // Vérifier si l'action a déjà été enregistrée dans Firebase pour ce tour
+            // C'est une double-vérification avec hasPlayedThisTurn, mais importante pour la robustesse.
             if (matchData.players[playerKeyInMatch].action) {
-                 showMessage("action-msg", "Vous avez déjà soumis une action pour ce tour.");
-                 console.log("Action already submitted for this turn.");
+                 showMessage("action-msg", "Vous avez déjà soumis une action pour ce tour (vérification Firebase).");
+                 console.log("Action already submitted for this turn (Firebase check).");
+                 hasPlayedThisTurn = true; // S'assurer que hasPlayedThisTurn est à true
+                 disableActionButtons(true); // Et les boutons désactivés
                  return;
             }
 
             // Enregistrer l'action dans Firebase
             const updates = {};
-            updates[`players/${playerKeyInMatch}/action`] = actionType; // Modifier pour stocker l'action directement sous le joueur
+            updates[`players/${playerKeyInMatch}/action`] = actionType; 
 
             const actionDisplayName = {
                 'attack': 'Attaque',
@@ -1144,7 +1163,7 @@
 
             try {
                 await update(matchRef, updates);
-                hasPlayedThisTurn = true; // Marquer comme joué pour ce tour
+                hasPlayedThisTurn = true; // Marquer comme joué pour ce tour sur le client
                 disableActionButtons(true);
                 if (timerInterval) clearInterval(timerInterval); // Arrêter le timer une fois l'action soumise
                 timerInterval = null; 
