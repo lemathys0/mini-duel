@@ -158,7 +158,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             console.log("Match terminé."); // DEBUG
             setTimerInterval(clearInterval(setTimerInterval)); // Arrête le timer
             disableActionButtons();
-            const lastHistoryEntry = matchData.history[matchData.history.length - 1];
+            const lastHistoryEntry = matchData.history[matchData.history[matchData.history.length - 1]];
             showMessage("match-msg", lastHistoryEntry);
 
             // Met à jour les statistiques de l'utilisateur en fonction du résultat
@@ -190,41 +190,48 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
         // --- Logique de gestion du flux du tour ---
 
-        // Cas 1: C'est le tour de ce joueur et il n'a pas encore soumis son action
-        if (matchData.turn === youKey && !matchData.players[youKey].action) {
-            console.log("C'est votre tour. Vous n'avez pas encore soumis d'action."); // DEBUG
-            showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
-            setHasPlayedThisTurn(false); // Réinitialise l'état pour permettre au joueur de jouer
-            enableActionButtons(); // Active les boutons d'action
-            startTimer(matchData.turnStartTime || serverTimestamp()); // Redémarre le timer
+        // Cas général: Si c'est le tour de votre joueur
+        if (matchData.turn === youKey) {
+            // Si votre joueur n'a pas encore soumis son action
+            if (!matchData.players[youKey].action) {
+                console.log("C'est votre tour. Vous n'avez pas encore soumis d'action.");
+                showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
+                setHasPlayedThisTurn(false); // Réinitialise l'état pour permettre au joueur de jouer
+                enableActionButtons();
+                startTimer(matchData.turnStartTime || serverTimestamp());
+            } else {
+                // Votre action a été soumise, attendez l'adversaire
+                console.log("C'est votre tour. Votre action a été soumise. En attente de l'adversaire.");
+                showMessage("action-msg", "Action soumise. En attente de l'adversaire...");
+                disableActionButtons();
+                setTimerInterval(clearInterval(setTimerInterval)); // Arrête votre timer
+                updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
+            }
         }
-        // Cas 2: C'est le tour de l'adversaire OU le vôtre mais vous avez déjà soumis votre action
-        else if (matchData.turn !== youKey || (matchData.turn === youKey && matchData.players[youKey].action)) {
-            console.log("C'est le tour de l'adversaire ou votre action a été soumise."); // DEBUG
+        // Cas général: Si c'est le tour de l'adversaire
+        else { // matchData.turn === opponentKey
+            console.log("C'est le tour de l'adversaire.");
             showMessage("action-msg", `C'est le tour de ${opponent.pseudo}.`);
-            disableActionButtons(); // Désactive les boutons d'action
-            setTimerInterval(clearInterval(setTimerInterval)); // Arrête votre timer s'il était actif
+            disableActionButtons();
+            setTimerInterval(clearInterval(setTimerInterval)); // Arrête votre timer
             updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
+
+            // Si c'est un match PvAI et l'IA n'a pas encore soumis son action
+            if (gameMode === 'PvAI' && !matchData.players[opponentKey].action) {
+                console.log("C'est le tour de l'IA et elle n'a pas encore choisi d'action, appel de processAITurn.");
+                await processAITurn(matchData);
+            }
         }
         
-        // Gérer le tour de l'IA (si c'est un match PvAI et c'est le tour de l'IA et qu'elle n'a pas encore choisi d'action)
-        if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
-            console.log("C'est le tour de l'IA et elle n'a pas encore choisi d'action, appel de processAITurn."); // DEBUG
-            await processAITurn(matchData);
-        }
-
-        // Si les deux joueurs (ou joueur et IA) ont soumis leur action, traiter le tour
+        // --- Condition pour déclencher processTurn ---
+        // Cette condition doit être vérifiée APRÈS que les actions des deux joueurs sont potentiellement soumises.
+        // Elle se déclenchera après que l'IA a joué (si c'était son tour), ou après que le joueur 2 a joué (en PvP).
         if (matchData.players.p1.action && matchData.players.p2.action && matchData.status === 'playing') {
-            console.log("Les deux joueurs ont soumis leurs actions. Traitement du tour."); // DEBUG
-            // Le timer est arrêté au début de processTurn
+            console.log("Les deux joueurs ont soumis leurs actions. Traitement du tour.");
             await processTurn(matchData);
         }
-    }, (error) => {
-        console.error("Erreur d'écoute sur le match :", error);
-        showMessage("match-msg", "Erreur de connexion au match.");
-        backToMenu(true);
-    });
-
+    }); // Fin de onValue
+    
     // Attache les écouteurs d'événements aux boutons d'action
     const attackBtn = document.getElementById("action-attack");
     const defendBtn = document.getElementById("action-defend");
