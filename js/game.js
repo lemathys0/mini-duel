@@ -21,7 +21,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
     setMatchVariables(id, user, playerKey, mode); // Met à jour les variables globales dans main.js
 
     // Initialisation de l'UI
-    document.getElementById("match").style.display = "none";
+    document.getElementById("main-menu").style.display = "none"; // Corrected ID
     document.getElementById("game").style.display = "block";
     document.getElementById("current-match").textContent = id;
     document.getElementById("you-name").textContent = user.pseudo;
