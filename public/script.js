@@ -116,15 +116,16 @@ document.getElementById("create-match-btn").onclick = () => {
             showMessage("match-msg", "Match déjà existant");
         } else {
             // Créer match avec currentUser comme joueur 1
+            // Modification: Ajout de 'status: connected' pour le p1
             set(matchRef, {
                 players: {
-                    p1: { pseudo: currentUser.pseudo, pv: 100, defending: false },
-                    p2: null // En attente du joueur 2
+                    p1: { pseudo: currentUser.pseudo, pv: 100, defending: false, status: 'connected' },
+                    p2: null
                 },
                 turn: "p1",
                 actions: {},
                 history: [],
-                status: "waiting" // Nouveau champ pour gérer l'état du match
+                status: "waiting"
             }).then(() => {
                 showMessage("match-msg", "Match créé, en attente adversaire...", true);
                 startMatch(matchId, true);
@@ -154,8 +155,9 @@ document.getElementById("join-match-btn").onclick = () => {
         }
 
         // Ajouter currentUser en p2
+        // Modification: Ajout de 'status: connected' pour le p2
         update(child(matchRef, "players"), {
-            p2: { pseudo: currentUser.pseudo, pv: 100, defending: false }
+            p2: { pseudo: currentUser.pseudo, pv: 100, defending: false, status: 'connected' }
         }).then(() => {
             showMessage("match-msg", "Rejoint le match !", true);
             // Mettre à jour le statut du match une fois que le second joueur rejoint
@@ -181,7 +183,8 @@ function startMatch(id, isCreator) {
     disableActionButtons(false);
     document.getElementById("action-msg").textContent = "";
 
-    startTimer(); // Démarre ou réinitialise le timer
+    // Le timer ne sera démarré qu'une fois les deux joueurs connectés
+    // startTimer(); // Commenté ici, car le timer sera démarré dans le onValue
 
     // Listener onDisconnect pour le joueur actuel
     // Ceci est crucial pour la robustesse du jeu en cas de déconnexion inattendue
@@ -202,8 +205,22 @@ function startMatch(id, isCreator) {
 
         if (!p1 || !p2) {
             document.getElementById("action-msg").textContent = "En attente de l'adversaire...";
-            return;
+            // S'assurer que le timer est bien arrêté tant qu'il manque un joueur
+            clearInterval(timerInterval);
+            timerInterval = null;
+            return; // Ne pas continuer tant que p2 n'est pas là
         }
+
+        // --- NOUVEAU: Vérifier le statut de connexion des deux joueurs ---
+        const bothPlayersReady = (p1.status === 'connected' && p2.status === 'connected');
+
+        if (!bothPlayersReady) {
+            document.getElementById("action-msg").textContent = "En attente de l'adversaire pour commencer le duel...";
+            clearInterval(timerInterval);
+            timerInterval = null;
+            return; // Attendre que les deux joueurs soient marqués comme 'connected'
+        }
+
 
         let you, opponent, youKey, opponentKey;
         if (p1.pseudo === currentUser.pseudo) {
@@ -233,6 +250,31 @@ function startMatch(id, isCreator) {
         document.getElementById("you-pv").textContent = you.pv;
         document.getElementById("opponent-name").textContent = opponent.pseudo;
         document.getElementById("opponent-pv").textContent = opponent.pv;
+
+        // --- Mise à jour des barres de vie visuelles ---
+        const youHealthBar = document.getElementById("you-health-bar");
+        const opponentHealthBar = document.getElementById("opponent-health-bar");
+
+        youHealthBar.style.width = `${you.pv}%`;
+        opponentHealthBar.style.width = `${opponent.pv}%`;
+
+        // Optionnel: Changer la couleur de la barre de vie si les PV sont bas
+        if (you.pv < 30) {
+            youHealthBar.style.backgroundColor = "#ff7700"; // Orange
+        } else if (you.pv < 10) {
+            youHealthBar.style.backgroundColor = "#ff0000"; // Rouge
+        } else {
+            youHealthBar.style.backgroundColor = "#00ff88"; // Vert par défaut
+        }
+
+        if (opponent.pv < 30) {
+            opponentHealthBar.style.backgroundColor = "#ff7700";
+        } else if (opponent.pv < 10) {
+            opponentHealthBar.style.backgroundColor = "#ff0000";
+        } else {
+            opponentHealthBar.style.backgroundColor = "#ff4d6d"; // Rouge par défaut pour l'adversaire
+        }
+
 
         // Gestion tour
         if (data.turn !== youKey) {
@@ -268,7 +310,7 @@ function startMatch(id, isCreator) {
         histEl.scrollTop = histEl.scrollHeight; // Scroll vers le bas pour voir le dernier message
 
         // Fin de partie
-        if (you.pv <= 0 || opponent.pv <= 0 || data.status === 'finished') { // Vérifie aussi le statut du match
+        if (you.pv <= 0 || opponent.pv <= 0 || data.status === 'finished' || data.status === 'forfeited') { // Vérifie aussi le statut du match
             disableActionButtons(true);
             clearInterval(timerInterval);
             timerInterval = null;
@@ -310,7 +352,9 @@ function startMatch(id, isCreator) {
             }).catch(error => console.error("Error updating user stats:", error));
 
             // Marquer le match comme terminé
-            update(matchRef, { status: 'finished' }).catch(error => console.error("Error setting match status to finished:", error));
+            if (data.status !== 'forfeited') { // Si ce n'est pas un forfait, le marquer comme 'finished'
+                update(matchRef, { status: 'finished' }).catch(error => console.error("Error setting match status to finished:", error));
+            }
             // Optionnel : un bouton pour "Retour au menu" après la fin du match
         }
     }, (error) => {
@@ -376,6 +420,15 @@ function doAction(action) {
                 newOpponentPV = Math.max(0, opponent.pv - damage);
                 historyEntry = `${you.pseudo} attaque et inflige ${damage} dégâts à ${opponent.pseudo}.`;
                 newPlayers[opponentKey].pv = newOpponentPV;
+
+                // --- Animation de dégâts ---
+                const opponentPVEl = document.getElementById("opponent-pv");
+                if (opponentPVEl) {
+                    opponentPVEl.classList.add('damage-effect');
+                    setTimeout(() => {
+                        opponentPVEl.classList.remove('damage-effect');
+                    }, 500);
+                }
                 break;
 
             case "defend":
@@ -390,6 +443,15 @@ function doAction(action) {
                 newYouPV = Math.min(100, you.pv + healAmount);
                 historyEntry = `${you.pseudo} se soigne et récupère ${healAmount} PV.`;
                 newPlayers[youKey].pv = newYouPV;
+
+                // --- Animation de soin ---
+                const youPVEl = document.getElementById("you-pv");
+                if (youPVEl) {
+                    youPVEl.classList.add('heal-effect');
+                    setTimeout(() => {
+                        youPVEl.classList.remove('heal-effect');
+                    }, 1000);
+                }
                 break;
 
             default:
@@ -503,8 +565,8 @@ function backToMenu(matchEndedUnexpectedly = false) {
                 }
             }
 
-            // Si le match n'était pas déjà marqué comme 'finished' et que tu le quittes (pas une fin normale)
-            if (!matchEndedUnexpectedly && data && data.status !== 'finished') {
+            // Si le match n'était pas déjà marqué comme 'finished' ou 'forfeited' et que tu le quittes (pas une fin normale)
+            if (!matchEndedUnexpectedly && data && data.status !== 'finished' && data.status !== 'forfeited') {
                 // Notifier l'adversaire que tu as quitté
                 const opponentKey = youKey === "p1" ? "p2" : "p1";
                 const opponentPlayerRef = ref(db, `matches/${currentMatch}/players/${opponentKey}`);
