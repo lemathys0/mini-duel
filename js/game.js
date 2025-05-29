@@ -13,7 +13,7 @@ import {
     gameMode,
     setMatchVariables,
     timerMax,
-    timerInterval,
+    timerInterval, // Make sure timerInterval is imported so we can check its value
     setTimerInterval,
     setOnDisconnectRef,
     setMatchDeletionTimeout,
@@ -161,7 +161,11 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         // Gestion de la fin du match
         if (matchData.status === 'finished') {
             console.log("Match terminé."); // DEBUG
-            setTimerInterval(clearInterval(timerInterval)); // Arrête le timer
+            // FIX: Arrête l'intervalle correctement
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                setTimerInterval(null); // Réinitialise dans main.js
+            }
             disableActionButtons();
             const lastHistoryEntry = matchData.history[matchData.history.length - 1];
             showMessage("match-msg", lastHistoryEntry);
@@ -228,7 +232,11 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 console.log("C'est votre tour. Votre action a été soumise. En attente de l'adversaire.");
                 showMessage("action-msg", "Action soumise. En attente de l'adversaire...");
                 disableActionButtons();
-                setTimerInterval(clearInterval(timerInterval)); // Arrête votre timer
+                // FIX: Arrête l'intervalle correctement
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    setTimerInterval(null); // Réinitialise dans main.js
+                }
                 updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
 
                 // --- DÉCLENCHEMENT DE L'IA QUAND LE JOUEUR A JOUÉ (PvAI UNIQUEMENT) ---
@@ -249,7 +257,11 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             console.log("C'est le tour de l'adversaire.");
             showMessage("action-msg", `C'est le tour de ${opponent.pseudo}.`);
             disableActionButtons();
-            setTimerInterval(clearInterval(timerInterval)); // Arrête votre timer
+            // FIX: Arrête l'intervalle correctement
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                setTimerInterval(null); // Réinitialise dans main.js
+            }
             updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
 
             // --- DÉCLENCHEMENT DE L'IA AU DÉBUT DE SON TOUR (PvAI UNIQUEMENT) ---
@@ -315,8 +327,6 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         console.error("ERREUR : Bouton 'back-to-menu-btn' non trouvé !");
     }
 }
-
----
 
 /**
  * Traite le tour de l'IA dans un match PvAI.
@@ -399,15 +409,17 @@ async function processAITurn(matchData) {
     }
 }
 
----
-
 /**
  * Traite les actions des deux joueurs et met à jour l'état du match.
  * @param {object} matchData - Les données actuelles du match.
  */
 async function processTurn(matchData) {
     console.log("processTurn lancé."); // DEBUG
-    setTimerInterval(clearInterval(timerInterval)); // Arrête le timer pendant le traitement du tour
+    // FIX: Arrête l'intervalle correctement
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        setTimerInterval(null); // Réinitialise dans main.js
+    }
     disableActionButtons(); // S'assure que les boutons sont désactivés
 
     // Empêche le double traitement si le match n'est plus en état 'playing' ou si les actions sont déjà null
@@ -540,8 +552,6 @@ async function processTurn(matchData) {
     }
 }
 
----
-
 /**
  * Gère le décompte du temps pour un tour.
  * @param {number} startTime - Le timestamp de début du tour.
@@ -549,13 +559,21 @@ async function processTurn(matchData) {
 function startTimer(startTime) {
     console.log("Timer démarré avec startTime :", startTime, " (type:", typeof startTime, ")"); // DEBUG TRÈS IMPORTANT
     // IMPORTANT : Arrêter TOUS les intervalles précédents pour éviter des timers multiples
-    setTimerInterval(clearInterval(timerInterval));
+    // FIX: Arrête l'intervalle correctement
+    if (timerInterval) {
+        clearInterval(timerInterval);
+    }
 
+    // Ensuite, affecte le nouvel intervalle via setTimerInterval
     setTimerInterval(setInterval(() => {
         // Ces vérifications sont très importantes. Elles arrêtent le timer si la valeur est corrompue en cours de route.
         if (typeof startTime !== 'number' || isNaN(startTime)) {
             console.error("startTimer: startTime est invalide. Arrêt du timer interne.", { startTime, type: typeof startTime, isNaN: isNaN(startTime) });
-            setTimerInterval(clearInterval(timerInterval));
+            // FIX: Arrête l'intervalle correctement
+            if (timerInterval) { // Vérifie à nouveau car il pourrait avoir été nettoyé par une autre condition
+                clearInterval(timerInterval);
+                setTimerInterval(null);
+            }
             updateTimerUI(timerMax); // Réinitialise l'affichage
             return; // Sort de cette itération de setInterval pour éviter d'autres erreurs
         }
@@ -566,7 +584,11 @@ function startTimer(startTime) {
         // Vérifie si la conversion Date().getTime() a échoué (cela peut arriver si startTime était juste un objet ou null)
         if (isNaN(startTimestampMillis)) {
             console.error("startTimer: Conversion de startTime en timestamp a échoué. Arrêt du timer interne.", { startTime, startTimestampMillis });
-            setTimerInterval(clearInterval(timerInterval));
+            // FIX: Arrête l'intervalle correctement
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                setTimerInterval(null);
+            }
             updateTimerUI(timerMax); // Réinitialise l'affichage
             return; // Sort de cette itération de setInterval
         }
@@ -576,7 +598,11 @@ function startTimer(startTime) {
         updateTimerUI(timeLeft);
 
         if (timeLeft <= 0) {
-            setTimerInterval(clearInterval(timerInterval));
+            // FIX: Arrête l'intervalle correctement
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                setTimerInterval(null);
+            }
             // Si le temps est écoulé et que le joueur n'a pas encore joué, soumet une action par défaut
             if (!hasPlayedThisTurn && currentMatchId && currentUser && youKey) {
                 console.log("Temps écoulé, le joueur n'a pas joué. Soumission automatique de 'defend'."); // DEBUG
@@ -585,8 +611,6 @@ function startTimer(startTime) {
         }
     }, 1000));
 }
-
----
 
 /**
  * Gère l'abandon du match par le joueur.
@@ -637,7 +661,11 @@ async function handleForfeit() {
             currentMatchUnsubscribe();
             currentMatchUnsubscribe = null;
         }
-        setTimerInterval(clearInterval(timerInterval));
+        // FIX: Arrête l'intervalle correctement
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            setTimerInterval(null);
+        }
         if (onDisconnectRef) { // Annule l'opération onDisconnect si elle a été configurée
             onDisconnectRef.cancel().catch(err => console.error("Erreur lors de l'annulation de l'ancienne opération onDisconnect :", err));
         }
