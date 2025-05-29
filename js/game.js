@@ -262,7 +262,9 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
             // C'est LA condition critique pour éviter le double déclenchement.
             // L'IA ne joue QUE si c'est son tour ET qu'elle n'a pas encore soumis d'action.
-            if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
+            // La condition sur l'action du joueur est nécessaire ici pour éviter de déclencher l'IA
+            // quand le joueur vient de soumettre son action et que processTurn n'a pas encore eu lieu.
+            if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players[opponentKey].action && !matchData.players[youKey].action) {
                  console.log("DEBUG IA (TOUR IA): Conditions remplies (début de tour IA). Déclenchement de processAITurn.");
                  await processAITurn(matchData);
             } else {
@@ -270,6 +272,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                  if (gameMode !== 'PvAI') console.log("DEBUG IA (TOUR IA): -> Pas un match PvAI.");
                  if (matchData.turn !== opponentKey) console.log("DEBUG IA (TOUR IA): -> Ce n'est pas le tour de l'IA.");
                  if (matchData.players[opponentKey].action) console.log("DEBUG IA (TOUR IA): -> L'IA a déjà une action.");
+                 if (matchData.players[youKey].action) console.log("DEBUG IA (TOUR IA): -> Le joueur a une action en attente (le tour n'est pas encore traité).");
             }
         }
 
@@ -372,8 +375,8 @@ async function processAITurn(matchData) {
         }
     }
 
-    // Simule un petit délai pour le "temps de réflexion" de l'IA
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Simule un délai pour le "temps de réflexion" de l'IA (4 secondes)
+    await new Promise(resolve => setTimeout(resolve, 4000));
 
     try {
         await update(matchRef, { [`players/${aiPlayerKey}/action`]: aiAction });
