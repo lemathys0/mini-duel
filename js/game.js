@@ -6,6 +6,9 @@ import { backToMenu, currentUser, currentMatchId, youKey, opponentKey, gameMode,
 let currentMatchUnsubscribe = null;
 let aiActionSubmittedForThisRound = false; // Drapeau pour l'IA PvAI
 
+// Constante pour le cooldown de soin (déclarée une seule fois ici pour une meilleure gestion)
+const HEAL_COOLDOWN_TURNS = 3; 
+
 export async function startMatchMonitoring(id, user, playerKey, mode) {
     // Nettoyage des listeners et timers précédents
     if (currentMatchUnsubscribe) { currentMatchUnsubscribe(); currentMatchUnsubscribe = null; }
@@ -114,6 +117,10 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         }
         document.getElementById("opponent-action-status").textContent = opponentActionStatus;
 
+        // Mise à jour visuelle du bouton de soin du joueur
+        const healButton = document.getElementById("action-heal");
+        updateHealButtonUI(healButton, you.healCooldown, HEAL_COOLDOWN_TURNS);
+
         // 5. Conditions de fin de jeu
         if (data.status === 'finished' || you.pv <= 0 || (opponent && opponent.pv <= 0)) {
             if (onDisconnectRef) { onDisconnectRef.cancel().catch(error => console.error("Error cancelling onDisconnect:", error)); setOnDisconnectRef(null); }
@@ -149,6 +156,13 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         // ET si P1 n'a pas encore soumis son action pour ce round.
         if (data.turn === youKey && !data.players[youKey]?.action) {
             disableActionButtons(false);
+            // Gérer l'état du bouton de soin séparément de disableActionButtons
+            if (you.healCooldown < HEAL_COOLDOWN_TURNS || you.lastAction === 'heal') {
+                document.getElementById("action-heal").disabled = true;
+            } else {
+                document.getElementById("action-heal").disabled = false;
+            }
+
             showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
             
             setTimerInterval(setInterval(() => {
@@ -165,7 +179,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
                 }
             }, 1000));
         } else {
-            disableActionButtons(true);
+            disableActionButtons(true); // Désactive tous les boutons
             if (data.players[youKey]?.action && !data.players[opponentKey]?.action) {
                 showMessage("action-msg", "Action jouée. En attente de l'adversaire...");
             } else if (data.turn === opponentKey && !data.players[opponentKey]?.action) {
@@ -258,7 +272,7 @@ async function processTurn(data, matchRef) {
     if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
     disableActionButtons(true);
     setHasPlayedThisTurn(false); 
-    aiActionSubmittedForThisRound = false; // Réinitialiser le drapeau de l'IA pour le prochain tour
+    aiActionSubmittedForThisRound = false; 
 
     const p1Action = data.players.p1.action;
     const p2Action = data.players.p2.action;
@@ -266,6 +280,10 @@ async function processTurn(data, matchRef) {
     let p1PV = data.players.p1.pv;
     let p2PV = data.players.p2.pv;
     let historyUpdates = [...(data.history || [])];
+
+    // Récupérer les cooldowns actuels et les incrémenter ou réinitialiser
+    let p1HealCooldown = data.players.p1.healCooldown || 0;
+    let p2HealCooldown = data.players.p2.healCooldown || 0;
 
     historyUpdates.push(`--- Début du tour ---`);
 
@@ -280,8 +298,20 @@ async function processTurn(data, matchRef) {
         if (p1Action === 'defend') { p1PV -= 5; historyUpdates.push(`${data.players.p1.pseudo} se défend, subit 5 PV de dégâts.`); }
         else { p1PV -= 10; historyUpdates.push(`${data.players.p1.pseudo} subit 10 PV de dégâts.`); }
     }
-    if (p1Action === 'heal') { p1PV = Math.min(100, p1PV + 15); historyUpdates.push(`${data.players.p1.pseudo} se soigne et récupère 15 PV.`); }
-    if (p2Action === 'heal') { p2PV = Math.min(100, p2PV + 15); historyUpdates.push(`${data.players.p2.pseudo} se soigne et récupère 15 PV.`); }
+    if (p1Action === 'heal') { 
+        p1PV = Math.min(100, p1PV + 15); 
+        historyUpdates.push(`${data.players.p1.pseudo} se soigne et récupère 15 PV.`); 
+        p1HealCooldown = 0; // Réinitialise si le joueur 1 a soigné
+    } else {
+        p1HealCooldown++; // Incrémente si le joueur 1 n'a PAS soigné
+    }
+    if (p2Action === 'heal') { 
+        p2PV = Math.min(100, p2PV + 15); 
+        historyUpdates.push(`${data.players.p2.pseudo} se soigne et récupère 15 PV.`); 
+        p2HealCooldown = 0; // Réinitialise si le joueur 2 a soigné
+    } else {
+        p2HealCooldown++; // Incrémente si le joueur 2 n'a PAS soigné
+    }
     if (p1Action === 'defend' && p2Action !== 'attack') { historyUpdates.push(`${data.players.p1.pseudo} se met en position défensive.`); }
     if (p2Action === 'defend' && p1Action !== 'attack') { historyUpdates.push(`${data.players.p2.pseudo} se met en position défensive.`); }
 
@@ -304,15 +334,15 @@ async function processTurn(data, matchRef) {
     const updates = {
         [`players/p1/pv`]: p1PV,
         [`players/p2/pv`]: p2PV,
-        [`players/p1/action`]: null, // Réinitialise l'action de P1
-        [`players/p2/action`]: null, // Réinitialise l'action de P2
-        // NE PAS réinitialiser players/p1/lastAction ou players/p2/lastAction ici
+        [`players/p1/action`]: null, 
+        [`players/p2/action`]: null, 
+        [`players/p1/healCooldown`]: p1HealCooldown, // <-- MISE À JOUR DU COOLDOWN
+        [`players/p2/healCooldown`]: p2HealCooldown, // <-- MISE À JOUR DU COOLDOWN
         history: historyUpdates,
         status: gameStatus,
-        lastTurnProcessedAt: serverTimestamp() // Met à jour le timestamp du traitement du tour
+        lastTurnProcessedAt: serverTimestamp() 
     };
     
-    // En mode PvAI, le "turn" reste toujours `p1` car c'est le joueur humain qui initie chaque round.
     if (gameStatus === 'playing') {
         updates.turn = 'p1'; 
     } else {
@@ -365,11 +395,6 @@ export async function aiTurn(playerPV, aiPV, matchRef) {
     const snapshot = await get(matchRef);
     const currentMatchData = snapshot.val();
 
-    // L'IA ne joue que si :
-    // - Le match est 'playing'
-    // - C'est le tour du joueur (P1)
-    // - Le joueur (P1) a bien soumis son action
-    // - L'IA (P2) n'a PAS encore soumis son action pour ce tour
     const isAITurnToAct = 
         currentMatchData && 
         currentMatchData.status === 'playing' && 
@@ -382,30 +407,46 @@ export async function aiTurn(playerPV, aiPV, matchRef) {
         return;
     }
 
-    // Récupérer la dernière action de l'IA pour la nouvelle règle
     const aiLastAction = currentMatchData.players.p2?.lastAction; 
-
+    const aiHealCooldown = currentMatchData.players.p2?.healCooldown || 0; // Récupérer le cooldown de l'IA
+    
     let aiAction = 'defend';
     
-    // Logique de décision de l'IA basée sur les PV actuels et la nouvelle règle
-    if (aiPV < 30 && playerPV > 0 && aiLastAction !== 'heal') { // Condition pour ne pas soigner deux fois d'affilée
-        aiAction = 'heal'; 
-    } else if (playerPV < 40 && aiPV > 0) { // Si le joueur a peu de PV, l'IA attaque
-        aiAction = 'attack'; 
-    } else { 
-        const actions = ['attack', 'defend']; 
-        // Si la dernière action était "heal", l'IA ne peut pas se soigner à nouveau
-        if (aiLastAction === 'heal') {
-            aiAction = actions[Math.floor(Math.random() * actions.length)]; // Choisir entre attack ou defend
-        } else {
-            actions.push('heal'); // Sinon, l'IA peut choisir soin aussi
-            aiAction = actions[Math.floor(Math.random() * actions.length)];
-        }
+    // --- NOUVELLE LOGIQUE DE DÉCISION DE L'IA AVEC COOLDOWN ---
+
+    // Priorité 1: Tenter de finir le joueur si ses PV sont très bas, même si l'IA est blessée.
+    if (playerPV <= 10 && aiPV > 0) { 
+        aiAction = 'attack';
+    } 
+    // Priorité 2: Se soigner si les PV sont critiques, si cooldown disponible, ET pas de soin au tour précédent
+    else if (aiPV <= 25 && aiHealCooldown >= HEAL_COOLDOWN_TURNS && aiLastAction !== 'heal') { 
+        aiAction = 'heal';
     }
+    // Priorité 3: Si l'IA a des PV "raisonnables" (au-dessus de 50), elle peut être plus agressive.
+    else if (aiPV > 50 && playerPV > 20) { 
+        const actions = ['attack', 'defend']; 
+        aiAction = actions[Math.floor(Math.random() * actions.length)]; 
+    }
+    // Priorité 4: Comportement par défaut (aléatoire)
+    else { 
+        const actions = ['attack', 'defend']; 
+        // Si soin est possible (cooldown ok et pas fait au tour précédent), on l'ajoute comme option
+        if (aiHealCooldown >= HEAL_COOLDOWN_TURNS && aiLastAction !== 'heal') {
+            actions.push('heal');
+        }
+        aiAction = actions[Math.floor(Math.random() * actions.length)];
+    }
+
+    // --- FIN DE LA NOUVELLE LOGIQUE DE DÉCISION DE L'IA ---
 
     const updates = {};
     updates[`players/p2/action`] = aiAction;
-    updates[`players/p2/lastAction`] = aiAction; // <-- AJOUTEZ CETTE LIGNE
+    updates[`players/p2/lastAction`] = aiAction; 
+
+    // Réinitialiser le cooldown si l'IA a choisi de se soigner
+    if (aiAction === 'heal') {
+        updates[`players/p2/healCooldown`] = 0;
+    }
 
     const newHistory = [...(currentMatchData.history || [])];
     newHistory.push(`L'IA a choisi : ${aiAction === 'attack' ? 'Attaque' : (aiAction === 'defend' ? 'Défense' : 'Soin')}.`);
@@ -436,17 +477,21 @@ export async function performAction(actionType) {
     
     console.log("Attempting to perform action. Current turn in DB:", matchData.turn, "Your key:", youKey);
 
-    // Récupérer les données du joueur actuel pour vérifier la dernière action
     const you = matchData.players[youKey];
-
-    // Vérification de la nouvelle règle : pas de soin deux fois d'affilée
-    if (actionType === 'heal' && you.lastAction === 'heal') {
-        showMessage("action-msg", "Vous ne pouvez pas vous soigner deux fois d'affilée !");
-        return;
+    
+    // --- RÈGLES DE SOIN (1 fois tous les 3 tours et pas deux fois d'affilée) ---
+    if (actionType === 'heal') {
+        if (you.lastAction === 'heal') {
+            showMessage("action-msg", "Vous ne pouvez pas vous soigner deux fois d'affilée !");
+            return;
+        }
+        if (you.healCooldown < HEAL_COOLDOWN_TURNS) {
+            showMessage("action-msg", `Vous ne pouvez pas vous soigner pour le moment. Attendez ${HEAL_COOLDOWN_TURNS - you.healCooldown} tours.`);
+            return;
+        }
     }
+    // --- FIN DES RÈGLES DE SOIN ---
 
-    // En mode PvAI, le tour est toujours 'p1' (vous).
-    // Vous pouvez agir si c'est votre tour (p1) ET vous n'avez pas encore soumis votre action.
     if (matchData.turn !== youKey || matchData.players[youKey]?.action) {
         showMessage("action-msg", "Ce n'est pas votre tour ou vous avez déjà joué !");
         return;
@@ -454,7 +499,12 @@ export async function performAction(actionType) {
 
     const updates = {};
     updates[`players/${youKey}/action`] = actionType;
-    updates[`players/${youKey}/lastAction`] = actionType; // <-- ENREGISTRE LA DERNIÈRE ACTION
+    updates[`players/${youKey}/lastAction`] = actionType; 
+    
+    // Réinitialiser le cooldown si l'action est un soin
+    if (actionType === 'heal') {
+        updates[`players/${youKey}/healCooldown`] = 0; // Réinitialise le compteur après un soin
+    }
 
     const actionDisplayName = { 'attack': 'Attaquer', 'defend': 'Défendre', 'heal': 'Soigner' }[actionType];
     showMessage("action-msg", `Vous avez choisi : ${actionDisplayName}. En attente de l'adversaire...`);
@@ -464,9 +514,32 @@ export async function performAction(actionType) {
         setHasPlayedThisTurn(true); 
         disableActionButtons(true);
         if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
+        
+        // Mise à jour visuelle du bouton de soin immédiatement après avoir joué si c'était un soin
+        if (actionType === 'heal') {
+            const healButton = document.getElementById("action-heal");
+            updateHealButtonUI(healButton, 0, HEAL_COOLDOWN_TURNS);
+        }
     } catch (error) {
         console.error("Error performing action:", error);
         showMessage("action-msg", "Erreur lors de l'envoi de votre action.");
+    }
+}
+
+// Nouvelle fonction pour mettre à jour l'état visuel du bouton de soin
+function updateHealButtonUI(button, currentCooldown, maxCooldown) {
+    if (!button) return;
+
+    if (currentCooldown >= maxCooldown) {
+        button.disabled = false;
+        button.style.backgroundColor = ''; // Revert to default or blue color
+        button.style.color = ''; // Revert to default or white color
+        button.textContent = `Soigner (+15 PV)`;
+    } else {
+        button.disabled = true;
+        button.style.backgroundColor = '#cccccc'; // Gris
+        button.style.color = '#666666'; // Texte gris foncé
+        button.textContent = `Soin (${maxCooldown - currentCooldown} tours)`;
     }
 }
 
