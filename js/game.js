@@ -193,7 +193,8 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
                 aiActionSubmittedForThisRound = true; // Empêche les multiples déclenchements
 
                 // Utiliser un await pour un délai forcé avant que l'IA ne soumette son action
-                await new Promise(resolve => setTimeout(resolve, 7000)); // Délai de 1.5 secondes pour l'IA
+                // Vous pouvez ajuster ce délai (en millisecondes) pour un rythme de jeu confortable.
+                await new Promise(resolve => setTimeout(resolve, 3000)); // Délai de 3 secondes pour l'IA
                 
                 const latestSnapshot = await get(matchRef);
                 const latestData = latestSnapshot.val();
@@ -305,6 +306,7 @@ async function processTurn(data, matchRef) {
         [`players/p2/pv`]: p2PV,
         [`players/p1/action`]: null, // Réinitialise l'action de P1
         [`players/p2/action`]: null, // Réinitialise l'action de P2
+        // NE PAS réinitialiser players/p1/lastAction ou players/p2/lastAction ici
         history: historyUpdates,
         status: gameStatus,
         lastTurnProcessedAt: serverTimestamp() // Met à jour le timestamp du traitement du tour
@@ -343,6 +345,7 @@ async function submitDefaultAction(playerKey, matchRef, currentMatchData) {
     const defaultAction = 'defend';
     const updates = {};
     updates[`players/${playerKey}/action`] = defaultAction;
+    updates[`players/${playerKey}/lastAction`] = defaultAction; // <-- Mise à jour de lastAction pour l'action par défaut
 
     const newHistory = [...(data.history || [])]; 
     const pseudo = data.players[playerKey]?.pseudo || "Un joueur";
@@ -370,22 +373,39 @@ export async function aiTurn(playerPV, aiPV, matchRef) {
     const isAITurnToAct = 
         currentMatchData && 
         currentMatchData.status === 'playing' && 
-        currentMatchData.turn === 'p1' && // L'IA réagit au tour de P1
-        currentMatchData.players.p1?.action && // P1 a soumis son action
-        !currentMatchData.players.p2?.action; // L'IA n'a pas encore agi ce tour
+        currentMatchData.turn === 'p1' && 
+        currentMatchData.players.p1?.action && 
+        !currentMatchData.players.p2?.action;
 
     if (!isAITurnToAct) {
         console.log("AI skip (aiTurn): Not the correct state for AI to play or AI already played.");
         return;
     }
 
+    // Récupérer la dernière action de l'IA pour la nouvelle règle
+    const aiLastAction = currentMatchData.players.p2?.lastAction; 
+
     let aiAction = 'defend';
-    if (aiPV < 30 && playerPV > 0) { aiAction = 'heal'; }
-    else if (playerPV < 40 && aiPV > 0) { aiAction = 'attack'; }
-    else { const actions = ['attack', 'defend']; aiAction = actions[Math.floor(Math.random() * actions.length)]; }
+    
+    // Logique de décision de l'IA basée sur les PV actuels et la nouvelle règle
+    if (aiPV < 30 && playerPV > 0 && aiLastAction !== 'heal') { // Condition pour ne pas soigner deux fois d'affilée
+        aiAction = 'heal'; 
+    } else if (playerPV < 40 && aiPV > 0) { // Si le joueur a peu de PV, l'IA attaque
+        aiAction = 'attack'; 
+    } else { 
+        const actions = ['attack', 'defend']; 
+        // Si la dernière action était "heal", l'IA ne peut pas se soigner à nouveau
+        if (aiLastAction === 'heal') {
+            aiAction = actions[Math.floor(Math.random() * actions.length)]; // Choisir entre attack ou defend
+        } else {
+            actions.push('heal'); // Sinon, l'IA peut choisir soin aussi
+            aiAction = actions[Math.floor(Math.random() * actions.length)];
+        }
+    }
 
     const updates = {};
     updates[`players/p2/action`] = aiAction;
+    updates[`players/p2/lastAction`] = aiAction; // <-- AJOUTEZ CETTE LIGNE
 
     const newHistory = [...(currentMatchData.history || [])];
     newHistory.push(`L'IA a choisi : ${aiAction === 'attack' ? 'Attaque' : (aiAction === 'defend' ? 'Défense' : 'Soin')}.`);
@@ -416,6 +436,15 @@ export async function performAction(actionType) {
     
     console.log("Attempting to perform action. Current turn in DB:", matchData.turn, "Your key:", youKey);
 
+    // Récupérer les données du joueur actuel pour vérifier la dernière action
+    const you = matchData.players[youKey];
+
+    // Vérification de la nouvelle règle : pas de soin deux fois d'affilée
+    if (actionType === 'heal' && you.lastAction === 'heal') {
+        showMessage("action-msg", "Vous ne pouvez pas vous soigner deux fois d'affilée !");
+        return;
+    }
+
     // En mode PvAI, le tour est toujours 'p1' (vous).
     // Vous pouvez agir si c'est votre tour (p1) ET vous n'avez pas encore soumis votre action.
     if (matchData.turn !== youKey || matchData.players[youKey]?.action) {
@@ -425,6 +454,7 @@ export async function performAction(actionType) {
 
     const updates = {};
     updates[`players/${youKey}/action`] = actionType;
+    updates[`players/${youKey}/lastAction`] = actionType; // <-- ENREGISTRE LA DERNIÈRE ACTION
 
     const actionDisplayName = { 'attack': 'Attaquer', 'defend': 'Défendre', 'heal': 'Soigner' }[actionType];
     showMessage("action-msg", `Vous avez choisi : ${actionDisplayName}. En attente de l'adversaire...`);
