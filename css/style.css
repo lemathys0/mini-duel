@@ -1,0 +1,446 @@
+ 
+/* Base Styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #2c3e50, #4a6a8c);
+    color: #ecf0f1;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px 10px; /* Adjusted padding for smaller screens */
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Align at the top for better scrolling on mobile */
+    overflow-y: auto;
+}
+
+.container {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 25px 15px; /* Adjusted padding */
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    width: 100%; /* Full width on smaller screens */
+    max-width: 600px;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+    z-index: 1;
+    margin: 0 auto 30px auto; /* More margin at the bottom */
+}
+
+h1 {
+    color: #e74c3c;
+    margin-bottom: 20px;
+    font-size: 2.2em; /* Slightly smaller for mobile */
+    text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.7);
+}
+
+h2 {
+    color: #f1c40f;
+    margin-top: 15px;
+    margin-bottom: 10px;
+    font-size: 1.6em; /* Slightly smaller for mobile */
+}
+
+input[type="text"],
+input[type="password"] {
+    width: calc(100% - 20px); /* Account for padding */
+    padding: 10px; /* Smaller padding */
+    margin-bottom: 12px; /* Smaller margin */
+    border: 1px solid #34495e;
+    border-radius: 8px;
+    background-color: #1a252f;
+    color: #ecf0f1;
+    font-size: 0.95em;
+    box-sizing: border-box;
+}
+
+button {
+    background-color: #3498db;
+    color: white;
+    padding: 10px 20px; /* Adjusted padding */
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1em; /* Adjusted font size */
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    margin: 4px; /* Smaller margin */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    flex-grow: 1; /* Allow buttons to grow in action group */
+}
+
+button:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+button:disabled {
+    background-color: #5d6d7e;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.message {
+    margin-top: 10px; /* Adjusted margin */
+    font-weight: bold;
+    min-height: 20px;
+    color: #ff4d6d;
+    font-size: 0.95em; /* Adjusted font size */
+}
+.message[style*="00ff88"] {
+    color: #00ff88;
+}
+
+#auth, #match, #game {
+    display: none;
+}
+
+#game {
+    text-align: left;
+}
+
+.player-info {
+    display: flex;
+    flex-direction: column; /* Stack on mobile */
+    align-items: flex-start; /* Align text left */
+    margin-bottom: 15px; /* Adjusted margin */
+    background: rgba(44, 62, 80, 0.6);
+    padding: 12px; /* Adjusted padding */
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.player-info.you {
+    background: rgba(39, 174, 96, 0.3);
+}
+
+.player-info.opponent {
+    background: rgba(231, 76, 60, 0.3);
+}
+
+.player-name {
+    font-size: 1.3em; /* Adjusted font size */
+    font-weight: bold;
+    color: #ecf0f1;
+    margin-bottom: 5px; /* Space between name and health */
+}
+
+.health-bar-container {
+    width: 100%; /* Full width */
+    height: 18px; /* Slightly smaller height */
+    background-color: #34495e;
+    border-radius: 9px; /* Adjusted border radius */
+    overflow: hidden;
+    position: relative;
+    margin-left: 0; /* No margin-left on mobile */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.health-bar {
+    height: 100%;
+    width: 100%;
+    background-color: #2ecc71; /* Default green */
+    transition: width 0.5s ease-out, background-color 0.5s ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75em; /* Adjusted font size */
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Specific colors for health bars based on state/player */
+.health-bar.opponent-bar {
+    background-color: #e74c3c; /* Red for opponent */
+}
+
+.health-bar.low {
+    background-color: #e67e22; /* Orange for low health */
+}
+
+.health-bar.critical {
+    background-color: #c0392b; /* Dark red for critical health */
+}
+
+.pv-display {
+    margin-left: 0; /* No margin-left on mobile */
+    margin-top: 5px; /* Space between health bar and PV */
+    font-weight: bold;
+    color: #ecf0f1;
+    font-size: 1em; /* Adjusted font size */
+    text-align: right;
+    width: 100%; /* Full width for text alignment */
+}
+
+#opponent-action-status {
+    margin-top: 8px; /* Space below opponent health */
+    font-size: 0.8em;
+    color: #bbb;
+    text-align: center;
+    width: 100%;
+}
+
+.game-controls {
+    margin-top: 15px; /* Adjusted margin */
+    padding: 12px; /* Adjusted padding */
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex; /* Flexbox for buttons */
+    flex-wrap: wrap; /* Wrap buttons on small screens */
+    justify-content: center; /* Center buttons */
+}
+
+.game-controls p {
+    font-size: 1.1em; /* Adjusted font size */
+    margin-bottom: 12px;
+    color: #ecf0f1;
+    min-height: 20px;
+    width: 100%; /* Full width for messages */
+}
+
+.timer-container {
+    display: flex;
+    flex-direction: column; /* Stack timer elements */
+    align-items: center;
+    margin-top: 12px; /* Adjusted margin */
+    margin-bottom: 15px;
+    background-color: #1a252f;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.timer-label {
+    font-weight: bold;
+    margin-right: 0; /* No margin-right on mobile */
+    margin-bottom: 5px; /* Space below label */
+    color: #f39c12;
+    font-size: 0.95em;
+}
+
+.timer-bar-wrapper {
+    width: 100%; /* Full width */
+    height: 12px; /* Smaller height */
+    background-color: #5d6d7e;
+    border-radius: 6px; /* Adjusted border radius */
+    overflow: hidden;
+    position: relative;
+}
+
+.timer-progress-bar {
+    height: 100%;
+    width: 100%;
+    background-color: #2ecc71; /* Default green, will change with JS */
+    transition: width 0.5s ease-out, background-color 0.5s ease-out;
+}
+
+.timer-value {
+    margin-left: 0; /* No margin-left on mobile */
+    margin-top: 5px; /* Space above value */
+    font-weight: bold;
+    color: #ecf0f1;
+    font-size: 0.9em;
+}
+
+.history-section {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 12px; /* Adjusted padding */
+    border-radius: 10px;
+    max-height: 120px; /* Smaller height */
+    overflow-y: auto;
+    margin-top: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.history-section h3 {
+    font-size: 1.1em; /* Adjusted font size */
+    margin-bottom: 8px;
+}
+
+.history-section p {
+    margin: 4px 0; /* Adjusted margin */
+    font-size: 0.85em; /* Adjusted font size */
+    color: #bdc3c7;
+}
+
+.history-section p:last-child {
+    font-weight: bold;
+    color: #ecf0f1;
+}
+
+/* Background animation (optional) */
+.bg-shapes {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.bg-shapes div {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+    animation: moveShape 10s infinite alternate;
+}
+
+.bg-shapes div:nth-child(1) { width: 60px; height: 60px; top: 10%; left: 20%; animation-duration: 12s; }
+.bg-shapes div:nth-child(2) { width: 100px; height: 100px; top: 50%; left: 80%; animation-duration: 15s; }
+.bg-shapes div:nth-child(3) { width: 40px; height: 40px; top: 80%; left: 40%; animation-duration: 10s; }
+.bg-shapes div:nth-child(4) { width: 80px; height: 80px; top: 30%; left: 10%; animation-duration: 13s; }
+.bg-shapes div:nth-child(5) { width: 70px; height: 70px; top: 60%; left: 60%; animation-duration: 11s; }
+
+@keyframes moveShape {
+    0% { transform: translate(0, 0) scale(1); opacity: 0.05; }
+    100% { transform: translate(20px, 30px) scale(1.1); opacity: 0.08; }
+}
+
+/* Health bar animation effects */
+.health-bar.damage-effect {
+    animation: flashRed 0.5s ease-out;
+}
+.health-bar.heal-effect {
+    animation: flashGreen 1s ease-out;
+}
+@keyframes flashRed {
+    0% { background-color: #e74c3c; } /* Current danger red */
+    50% { background-color: #f06292; } /* Brighter red */
+    100% { background-color: #e74c3c; } /* Back to danger red */
+}
+
+@keyframes flashGreen {
+    0% { background-color: #2ecc71; } /* Current heal green */
+    50% { background-color: #a7f7b7; } /* Lighter green */
+    100% { background-color: #2ecc71; } /* Back to heal green */
+}
+
+
+/* Desktop/Tablet Styles (min-width 768px) */
+@media (min-width: 768px) {
+    body {
+        padding: 20px;
+        align-items: center; /* Center vertically on larger screens */
+    }
+
+    .container {
+        padding: 30px;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    h1 {
+        font-size: 2.5em;
+    }
+
+    h2 {
+        font-size: 1.8em;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+        padding: 12px;
+        margin-bottom: 15px;
+        font-size: 1em;
+    }
+
+    button {
+        padding: 12px 25px;
+        font-size: 1.1em;
+        margin: 5px;
+    }
+
+    .message {
+        margin-top: 15px;
+        font-size: 1em;
+    }
+
+    .player-info {
+        flex-direction: row; /* Row on larger screens */
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 15px;
+    }
+
+    .player-name {
+        font-size: 1.5em;
+        margin-bottom: 0;
+        flex-grow: 1; /* Takes remaining space */
+    }
+
+    .health-bar-container {
+        width: 150px; /* Fixed width */
+        height: 20px;
+        margin-left: 20px; /* Restore margin */
+    }
+
+    .health-bar {
+        font-size: 0.8em;
+    }
+
+    .pv-display {
+        margin-left: 10px; /* Restore margin */
+        margin-top: 0;
+        width: auto;
+    }
+
+    #opponent-action-status {
+        margin-top: 0;
+        margin-left: 20px;
+        font-size: 0.9em;
+        text-align: left;
+        width: auto;
+    }
+
+    .game-controls {
+        margin-top: 20px;
+        padding: 15px;
+        flex-wrap: nowrap; /* No wrap on larger screens */
+    }
+
+    .game-controls p {
+        font-size: 1.2em;
+        margin-bottom: 15px;
+    }
+
+    .timer-container {
+        flex-direction: row; /* Row on larger screens */
+        margin-top: 15px;
+        margin-bottom: 20px;
+    }
+
+    .timer-label {
+        margin-right: 10px;
+        margin-bottom: 0;
+        font-size: 1em;
+    }
+
+    .timer-bar-wrapper {
+        flex-grow: 1; /* Takes remaining space */
+        height: 15px;
+    }
+
+    .timer-value {
+        margin-left: 10px;
+        margin-top: 0;
+        font-size: 1em;
+    }
+
+    .history-section {
+        padding: 15px;
+        max-height: 150px;
+        margin-top: 20px;
+    }
+
+    .history-section p {
+        font-size: 0.9em;
+    }
+}
