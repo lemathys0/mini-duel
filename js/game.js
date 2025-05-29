@@ -347,6 +347,7 @@ async function processAITurn(matchData) {
         return;
     }
     isAIProcessingTurn = true; // Déclenche le verrouillage
+    console.log("processAITurn: Verrou isAIProcessingTurn activé."); // NOUVEAU LOG À DÉBOGUER
 
     // Double vérification pour le cas où l'action serait déjà là (suite à une race condition très rapide)
     // Vérifie avant le délai de l'IA pour s'assurer qu'aucune autre instance n'a déjà écrit
@@ -354,6 +355,7 @@ async function processAITurn(matchData) {
     if (initialAiActionSnapshot.exists() && initialAiActionSnapshot.val() !== null) {
         console.warn("processAITurn: L'IA a déjà une action soumise (d'après matchData). Relâche le verrou et abandonne.");
         isAIProcessingTurn = false; // Relâche le verrou si cette condition est vraie
+        console.log("processAITurn: Verrou isAIProcessingTurn relâché suite à action existante (avant délai)."); // NOUVEAU LOG À DÉBOGUER
         return;
     }
 
@@ -384,11 +386,11 @@ async function processAITurn(matchData) {
             console.log("processAITurn: Joueur plus fort, IA a une chance de choisir 'defend'.");
         } else {
             aiAction = 'attack'; // Sinon, attaque
-            console.log("processAITurn: Conditions par défaut, IA choisit 'attack'."); // Correction de console.ol en console.log
+            console.log("processAITurn: Conditions par défaut, IA choisit 'attack'.");
         }
     }
 
-    console.log(`processAITurn: L'IA a déterminé son action potentielle : ${aiAction}`); // NOUVEAU LOG : Action déterminée
+    console.log(`processAITurn: L'IA a déterminé son action potentielle : ${aiAction}`);
 
     // Simule un délai pour le "temps de réflexion" de l'IA (4 secondes)
     await new Promise(resolve => setTimeout(resolve, 4000));
@@ -398,15 +400,17 @@ async function processAITurn(matchData) {
         // Nouvelle vérification de l'action de l'IA juste avant la mise à jour pour éviter une race condition
         // Récupère l'état le plus récent de l'action de l'IA directement de Firebase pour éviter les caches locaux
         const currentAiActionAfterDelaySnapshot = await get(ref(db, `matches/${currentMatchId}/players/${aiPlayerKey}/action`));
+        console.log("processAITurn: Vérification de l'action de l'IA après délai. Valeur actuelle:", currentAiActionAfterDelaySnapshot.val()); // NOUVEAU LOG À DÉBOGUER
         if (currentAiActionAfterDelaySnapshot.exists() && currentAiActionAfterDelaySnapshot.val() !== null) {
-            console.warn("processAITurn: Action de l'IA déjà définie dans Firebase juste avant la mise à jour après le délai. Annulation pour éviter un écrasement."); // NOUVEAU LOG
+            console.warn("processAITurn: Action de l'IA déjà définie dans Firebase juste avant la mise à jour après le délai. Annulation pour éviter un écrasement.");
             isAIProcessingTurn = false; // Important de relâcher le verrou ici aussi
+            console.log("processAITurn: Verrou isAIProcessingTurn relâché suite à action existante (après délai)."); // NOUVEAU LOG À DÉBOGUER
             return; // Sortir si l'action est déjà là
         }
 
         await update(matchRef, { [`players/${aiPlayerKey}/action`]: aiAction });
-        console.log(`IA a choisi et enregistré l'action : ${aiAction} dans Firebase.`); // NOUVEAU LOG : Action enregistrée
-        showMessage("history", `L'IA a choisi son action.`); // Ajoute un message générique à l'historique
+        console.log(`IA a choisi et enregistré l'action : ${aiAction} dans Firebase.`);
+        showMessage("history", `L'IA a choisi son action.`);
 
         // --- DÉCLENCHEMENT EXPLICITE DE PROCESS TURN APRÈS L'ACTION DE L'IA ---
         // Après que l'IA ait soumis son action, nous devons vérifier si le joueur a également soumis la sienne
@@ -414,15 +418,16 @@ async function processAITurn(matchData) {
         const latestMatchDataSnapshot = await get(matchRef); // Récupère les données les plus récentes
         const latestMatchData = latestMatchDataSnapshot.val();
 
-        console.log("DEBUG IA (processAITurn FINI - Vérification des conditions pour processTurn):"); // NOUVEAU LOG
-        console.log("  - action p1:", latestMatchData?.players?.p1?.action); // NOUVEAU LOG
-        console.log("  - action p2 (IA):", latestMatchData?.players?.p2?.action); // NOUVEAU LOG
-        console.log("  - statut du match:", latestMatchData?.status); // NOUVEAU LOG
-        console.log("  - isProcessingTurnInternally (verrou):", isProcessingTurnInternally); // NOUVEAU LOG
+        console.log("DEBUG IA (processAITurn FINI - Conditions finales avant processTurn):"); // NOUVEAU LOG À DÉBOGUER
+        console.log("  - action p1:", latestMatchData?.players?.p1?.action);
+        console.log("  - action p2 (IA):", latestMatchData?.players?.p2?.action);
+        console.log("  - statut du match:", latestMatchData?.status);
+        console.log("  - isProcessingTurnInternally (verrou):", isProcessingTurnInternally);
+
 
         if (latestMatchData && latestMatchData.players.p1.action && latestMatchData.players.p2.action && latestMatchData.status === 'playing' && !isProcessingTurnInternally) {
             console.log("DEBUG IA (processAITurn FINI): Les deux joueurs ont leurs actions, déclenchement de processTurn.");
-            await processTurn(latestMatchData); // Déclenche le traitement du tour
+            await processTurn(latestMatchData);
         } else {
             console.log("DEBUG IA (processAITurn FINI): Conditions NON remplies pour déclencher processTurn après action IA.");
             if (isProcessingTurnInternally) console.log("DEBUG IA (processAITurn FINI): -> Un traitement de tour est déjà en cours.");
@@ -432,12 +437,11 @@ async function processAITurn(matchData) {
             if (latestMatchData && latestMatchData.status !== 'playing') console.log("DEBUG IA (processAITurn FINI): -> Le statut du match n'est pas 'playing'.");
         }
 
-
     } catch (error) {
-        console.error("Erreur lors de l'enregistrement de l'action de l'IA :", error);
+        console.error("Erreur LORS DE L'ENREGISTREMENT OU DU TRAITEMENT DANS processAITurn :", error); // LOG D'ERREUR SPÉCIFIQUE
     } finally {
-        isAIProcessingTurn = false; // Relâche le verrou une fois le traitement terminé (important !)
-        console.log("processAITurn: Verrou isAIProcessingTurn relâché."); // NOUVEAU LOG
+        isAIProcessingTurn = false; // Always release the lock
+        console.log("processAITurn: Verrou isAIProcessingTurn relâché.");
     }
 }
 
