@@ -873,6 +873,7 @@
             }
 
             gameMode = 'PvAI'; // Set game mode to PvAI
+            console.log(`[AI Mode] Starting AI match. gameMode set to: ${gameMode}`); // Log added
             const aiMatchId = "AI_" + currentUser.pseudo + "_" + Date.now().toString().slice(-6); // Unique ID for AI match
 
             const matchRef = ref(db, `matches/${aiMatchId}`);
@@ -1062,6 +1063,9 @@
                 let activePlayerKey = data.turn; // C'est le joueur dont c'est le tour selon la DB
                 let activePlayer = data.players[activePlayerKey];
 
+                console.log(`[Turn Logic] Current turn: ${data.turn}, Active Player Key: ${activePlayerKey}, Active Player Action: ${activePlayer?.action}`); // Log added
+                console.log(`[Turn Logic] Elapsed since last turn processed: ${elapsedSinceLastTurn}s`); // Log added
+
                 // Si le joueur actif n'a pas encore soumis son action
                 if (!activePlayer.action) {
                     const timeRemaining = Math.max(0, timerMax - elapsedSinceLastTurn);
@@ -1069,7 +1073,8 @@
 
                     if (timerInterval) {
                         clearInterval(timerInterval); // Arrête tout timer précédent
-                        console.log("Timer interval cleared (new turn state detected)."); // Log added
+                        timerInterval = null;
+                        console.log("Timer interval cleared (new turn state detected / action pending)."); // Log added
                     }
 
                     if (youKey === activePlayerKey) {
@@ -1112,17 +1117,20 @@
                         // --- NOUVEAU : Logique de l'IA ---
                         if (gameMode === 'PvAI' && activePlayerKey === 'p2' && !activePlayer.action) {
                             // C'est le tour de l'IA et elle n'a pas encore joué
-                            console.log("It's AI's turn, and AI has not played yet.");
+                            console.log("[AI Logic] It's AI's turn (p2) and AI has not played yet. Scheduling AI action.");
                             setTimeout(() => {
                                 // Re-vérifier l'état du match avant que l'IA ne joue
                                 get(matchRef).then(latestSnapshot => {
                                     const latestData = latestSnapshot.val();
+                                    console.log("[AI Logic] Inside setTimeout. Latest data:", latestData); // Log added
+                                    // S'assurer que le tour n'a pas changé et que l'IA n'a pas déjà d'action
                                     if (latestData && latestData.turn === 'p2' && !latestData.players.p2?.action) {
+                                        console.log("[AI Logic] Conditions met to call aiTurn."); // Log added
                                         aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef);
                                     } else {
-                                        console.log("AI's turn skipped: action already submitted or turn changed.");
+                                        console.log("[AI Logic] AI's turn skipped in setTimeout: action already submitted or turn changed."); // Log added
                                     }
-                                }).catch(err => console.error("Error getting match data for AI turn:", err));
+                                }).catch(err => console.error("[AI Logic] Error getting match data for AI turn:", err));
                             }, 1500); // Délai de 1.5 secondes pour simuler la "réflexion" de l'IA
                         }
                         // --- FIN NOUVEAU : Logique de l'IA ---
@@ -1340,28 +1348,31 @@
 
         // --- NOUVELLE FONCTION : Logique de l'IA ---
         async function aiTurn(playerPV, aiPV, matchRef) {
-            console.log("AI Turn: Player PV:", playerPV, "AI PV:", aiPV);
+            console.log("[aiTurn] AI Turn: Player PV:", playerPV, "AI PV:", aiPV);
             let aiAction = 'defend'; // Action par défaut
 
             // Logique simple de l'IA
             if (aiPV < 30 && playerPV > 0) { // Si l'IA a peu de PV et le joueur est encore en vie
                 aiAction = 'heal';
-                console.log("AI chose to HEAL.");
+                console.log("[aiTurn] AI chose to HEAL.");
             } else if (playerPV < 40 && aiPV > 0) { // Si le joueur a peu de PV et l'IA est encore en vie
                 aiAction = 'attack';
-                console.log("AI chose to ATTACK.");
+                console.log("[aiTurn] AI chose to ATTACK.");
             } else {
                 // Choix aléatoire entre attaque et défense
                 const actions = ['attack', 'defend'];
                 aiAction = actions[Math.floor(Math.random() * actions.length)];
-                console.log("AI chose randomly:", aiAction);
+                console.log("[aiTurn] AI chose randomly:", aiAction);
             }
 
             // Soumettre l'action de l'IA à Firebase
             const updates = {};
             updates[`players/p2/action`] = aiAction; // L'IA est toujours p2
 
-            const newHistory = [...(await get(matchRef)).val().history || []];
+            // Fetch latest history to append
+            const currentMatchSnapshot = await get(matchRef);
+            const currentMatchData = currentMatchSnapshot.val();
+            const newHistory = [...(currentMatchData.history || [])];
             newHistory.push(`L'IA a choisi : ${aiAction === 'attack' ? 'Attaque' : (aiAction === 'defend' ? 'Défense' : 'Soin')}.`);
             updates.history = newHistory;
 
