@@ -2,22 +2,248 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Duel 1v1 Multijoueur</title>
-    <link href="style.css" rel="stylesheet" />
+    <style>
+        /* Embedded CSS from user input */
+        body {
+            background-color: #0e0e0e;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1, h2, h3 {
+            color: #00ffd5;
+            margin-bottom: 15px;
+        }
+
+        input {
+            padding: 12px;
+            margin: 10px 5px;
+            border-radius: 8px;
+            border: 1px solid #222;
+            background-color: #1a1a1a;
+            color: #eee;
+            font-size: 1rem;
+            width: 200px;
+            max-width: 80vw; /* Ensure input fields don't overflow on small screens */
+            outline: none;
+            transition: box-shadow 0.3s, background-color 0.3s;
+        }
+
+        input:focus {
+            box-shadow: 0 0 6px 2px #00ffd5;
+            background-color: #222;
+        }
+
+        button {
+            background: linear-gradient(135deg, #00ffd5, #00b3ff);
+            border: none;
+            border-radius: 8px;
+            color: #0e0e0e;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 10px 8px;
+            padding: 12px 30px;
+            transition: transform 0.2s, box-shadow 0.3s;
+            min-width: 150px; /* Ensure buttons have a minimum width */
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 255, 213, 0.4);
+        }
+
+        button:disabled {
+            background: #444;
+            cursor: not-allowed;
+            color: #aaa;
+        }
+        
+        /* Container for sections to manage width and centering */
+        .container {
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 15px;
+        }
+
+        #actions {
+            margin-top: 25px;
+            display: flex; /* Use flexbox for button layout */
+            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+            justify-content: center; /* Center buttons */
+            gap: 10px; /* Add space between buttons */
+        }
+        
+        #actions button {
+             flex-grow: 1; /* Allow buttons to grow */
+             min-width: 120px; /* Minimum width for action buttons */
+        }
+
+        #history {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background: #222;
+            color: #eee;
+            text-align: left; /* Align history text to the left for readability */
+            border-radius: 8px; /* Rounded corners for history box */
+            margin-top: 15px; /* Space above history */
+        }
+
+        #history p {
+            margin: 6px 0;
+            font-size: 0.95rem;
+            color: #a0a0a0;
+        }
+
+        #auth-msg,
+        #match-msg,
+        #action-msg {
+            color: #ff4d6d; /* Default error color */
+            font-weight: bold;
+            margin-top: 12px;
+            min-height: 26px; /* Prevent layout shifts */
+        }
+
+        #game p {
+            font-size: 1.1rem; /* Slightly smaller for better fit */
+            margin: 8px 0;
+        }
+
+        #you-name, #opponent-name {
+            font-weight: 700;
+            color: #00ffd5;
+        }
+        
+        .player-info {
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #1c1c1c;
+        }
+
+        .health-bar-container {
+            width: 100%;
+            background-color: #555;
+            border-radius: 5px;
+            height: 20px;
+            margin-top: 5px;
+            overflow: hidden; /* Ensures inner bar stays within rounded corners */
+        }
+
+        .health-bar {
+            height: 100%;
+            width: 100%; /* Default to full health */
+            background-color: #00ff88; /* Default health color */
+            border-radius: 5px;
+            transition: width 0.5s ease-in-out, background-color 0.5s ease-in-out;
+            text-align: center;
+            color: black;
+            font-weight: bold;
+            line-height: 20px; /* Vertically center text */
+        }
+        
+        /* Specific health bar colors */
+        #you-health-bar.low { background-color: #ff7700; } /* Orange for low */
+        #you-health-bar.critical { background-color: #ff0000; } /* Red for critical */
+        #opponent-health-bar { background-color: #ff4d6d; } /* Default opponent color */
+        #opponent-health-bar.low { background-color: #ff7700; }
+        #opponent-health-bar.critical { background-color: #ff0000; }
+
+
+        #timer-display { /* Changed ID for clarity */
+            font-weight: 700;
+            font-size: 1.2rem; /* Adjusted size */
+            margin-top: 12px;
+            color: #ffdd00;
+        }
+
+        #timer-progress-bar-container { /* Changed ID and styling */
+            width: 90%; /* Max width for timer bar */
+            max-width: 400px; /* Prevent it from getting too wide on large screens */
+            height: 10px;
+            background: #333;
+            margin: 10px auto; /* Center the timer bar */
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #timer-progress-bar { /* Changed ID */
+            height: 100%;
+            width: 100%;
+            background-color: #00ffd5;
+            transition: width 1s linear; /* Smooth transition for timer progress */
+            border-radius: 5px;
+        }
+        
+        /* Effects for PV changes */
+        .damage-effect {
+            animation: damagePulse 0.5s ease-out;
+        }
+        @keyframes damagePulse {
+            0% { transform: scale(1); color: #ff4d6d; }
+            50% { transform: scale(1.1); color: #ff0000; }
+            100% { transform: scale(1); color: #ff4d6d; }
+        }
+
+        .heal-effect {
+            animation: healPulse 1s ease-out;
+        }
+        @keyframes healPulse {
+            0% { transform: scale(1); color: #00ff88; }
+            50% { transform: scale(1.1); color: #88ffcc; }
+            100% { transform: scale(1); color: #00ff88; }
+        }
+
+
+        /* Mobile Responsive */
+        @media (max-width: 600px) {
+            body {
+                padding: 10px; /* Reduce padding on small screens */
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            input, button { /* Make inputs and buttons take more width */
+                width: calc(100% - 20px); /* Full width minus some padding */
+                margin-left: auto;
+                margin-right: auto;
+                display: block;
+            }
+            #actions {
+                flex-direction: column; /* Stack action buttons vertically */
+            }
+            #actions button {
+                width: 100%; /* Full width for stacked buttons */
+            }
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
 </head>
 <body>
     <h1>Duel 1v1 Multijoueur</h1>
 
-    <div id="auth">
-        <input id="pseudo" placeholder="Pseudo" />
-        <input id="code" placeholder="Code (4 chiffres)" maxlength="4" />
+    <div id="auth" class="container">
+        <h2>Authentification</h2>
+        <input id="pseudo" placeholder="Pseudo (min 2 caractères)" />
+        <input id="code" type="password" placeholder="Code (4 chiffres)" maxlength="4" />
         <button id="signup-btn">S'inscrire</button>
         <button id="login-btn">Connexion</button>
         <p id="auth-msg"></p>
     </div>
 
-    <div id="match" style="display:none;">
+    <div id="match" style="display:none;" class="container">
+        <h2>Matchmaking</h2>
         <p>Connecté en tant que <strong id="player-name"></strong></p>
         <input id="match-id" placeholder="Code du match (ex: duel123)" />
         <button id="create-match-btn">Créer un match</button>
@@ -25,47 +251,782 @@
         <p id="match-msg"></p>
     </div>
 
-    <div id="game" style="display:none;">
+    <div id="game" style="display:none;" class="container">
         <h2>Match: <span id="current-match"></span></h2>
-
-        <section id="players-info">
-            <div class="player-display you">
-                <p><strong id="you-name">Vous</strong> (PV: <span id="you-pv">100</span>)</p>
-                <div class="health-bar-container">
-                    <div id="you-health-bar" class="health-bar"></div>
-                </div>
+        
+        <div class="player-info">
+            <p><strong id="you-name"></strong> (PV: <span id="you-pv-display">100</span>)</p>
+            <div class="health-bar-container">
+                <div id="you-health-bar" class="health-bar">100%</div>
             </div>
-            <div class="player-display opponent">
-                <p><strong id="opponent-name">Adversaire</strong> (PV: <span id="opponent-pv">100</span>)</p>
-                <div class="health-bar-container">
-                    <div id="opponent-health-bar" class="health-bar"></div>
-                </div>
+        </div>
+
+        <div class="player-info">
+            <p><strong id="opponent-name">Adversaire</strong> (PV: <span id="opponent-pv-display">100</span>)</p>
+            <div class="health-bar-container">
+                <div id="opponent-health-bar" class="health-bar">100%</div>
             </div>
-        </section>
+        </div>
 
-        <button id="back-to-menu-btn">Retour au menu</button>
+        <p id="timer-display">Temps restant : <span id="timer-value">30</span>s</p> <div id="timer-progress-bar-container"> <div id="timer-progress-bar"></div> </div>
+        
+        <p id="action-msg"></p>
 
-        <section id="game-actions">
-            <h3>Actions</h3>
+        <div id="actions">
             <button id="attack-btn">🗡️ Attaquer</button>
             <button id="defend-btn">🛡️ Défendre</button>
             <button id="heal-btn">🧪 Se soigner</button>
-        </section>
+        </div>
 
-        <section id="turn-info">
-            <p><span id="action-msg"></span></p>
-            <p>Temps restant : <span id="timer">30s</span></p>
-            <div id="timer-bar">
-                <div id="timer-progress"></div>
-            </div>
-        </section>
+        <h3>Historique</h3>
+        <div id="history"></div>
 
-        <section id="game-history">
-            <h3>Historique</h3>
-            <div id="history"></div>
-        </section>
+        <button id="back-to-menu-btn" style="margin-top: 20px; background: #555;">Quitter le Match</button>
     </div>
 
-    <script type="module" src="script.js"></script>
+    <script type="module">
+        // Embedded JavaScript from user input
+        // Import Firebase (corrected paths)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+        import { getDatabase, ref, set, get, onValue, update, push, child, remove, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+        // Analytics can be optional if not used, but kept as per original code
+        // import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics.js";
+
+        // --- CONFIGURATION FIREBASE ---
+        // IMPORTANT: This is the user-provided Firebase configuration.
+        // For production, ensure this is secured and properly set up.
+        const firebaseConfig = {
+            apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA", // Replace with your actual API key if this is a placeholder
+            authDomain: "mini-duel-de-cartes.firebaseapp.com",
+            databaseURL: "https://mini-duel-de-cartes-default-rtdb.firebaseio.com",
+            projectId: "mini-duel-de-cartes",
+            storageBucket: "mini-duel-de-cartes.appspot.com", // Corrected common typo: .firebasestorage.app or .appspot.com
+            messagingSenderId: "1084207708579",
+            appId: "1:1084207708579:web:f1312b68b7eb08f9d44216",
+            measurementId: "G-7YW3J41XZF" // Optional, for Google Analytics
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        // const analytics = getAnalytics(app); // Uncomment if you use analytics
+        const db = getDatabase(app);
+
+        // --- VARIABLES GLOBALES ---
+        let currentUser = null; // { pseudo, code }
+        let currentMatchId = null; // Renamed for clarity
+        let hasPlayedThisTurn = false;
+        let timerInterval = null;
+        const timerMax = 30; // secondes
+        let timerCount = timerMax;
+
+        // Variables pour gérer les timeouts/intervals de nettoyage des matchs
+        let unsubscribeMatchCreationListener = null; 
+        let matchDeletionTimeout = null; // Renamed for clarity (used for finished/forfeited matches)
+        let currentMatchUnsubscribe = null; // To store the unsubscribe function for the main match listener
+
+        // --- DOM Elements Cache ---
+        const pseudoInput = document.getElementById("pseudo");
+        const codeInput = document.getElementById("code");
+        const authMsgEl = document.getElementById("auth-msg");
+        const matchIdInput = document.getElementById("match-id");
+        const matchMsgEl = document.getElementById("match-msg");
+        const actionMsgEl = document.getElementById("action-msg");
+        const youPvDisplayEl = document.getElementById("you-pv-display");
+        const opponentPvDisplayEl = document.getElementById("opponent-pv-display");
+        const youHealthBarEl = document.getElementById("you-health-bar");
+        const opponentHealthBarEl = document.getElementById("opponent-health-bar");
+        const timerValueEl = document.getElementById("timer-value");
+        const timerProgressBarEl = document.getElementById("timer-progress-bar");
+
+
+        // --- FONCTIONS UTILITAIRES ---
+
+        function showMessage(elementId, message, isSuccess = false) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.style.color = isSuccess ? "#00ff88" : "#ff4d6d";
+                el.textContent = message;
+            }
+        }
+
+        function disableActionButtons(disabled) {
+            document.getElementById("attack-btn").disabled = disabled;
+            document.getElementById("defend-btn").disabled = disabled;
+            document.getElementById("heal-btn").disabled = disabled;
+        }
+        
+        function updateHealthBar(healthBarElement, pvDisplayElement, currentPV) {
+            const percentage = Math.max(0, Math.min(100, currentPV));
+            healthBarElement.style.width = `${percentage}%`;
+            healthBarElement.textContent = `${percentage}%`; // Show percentage on bar
+            pvDisplayElement.textContent = currentPV;
+
+            healthBarElement.classList.remove('low', 'critical');
+            if (currentPV < 10) {
+                healthBarElement.classList.add('critical');
+            } else if (currentPV < 30) {
+                healthBarElement.classList.add('low');
+            }
+        }
+
+
+        // --- AUTHENTIFICATION ---
+
+        document.getElementById("signup-btn").onclick = () => {
+            const pseudo = pseudoInput.value.trim();
+            const code = codeInput.value.trim();
+
+            if (pseudo.length < 2) {
+                showMessage("auth-msg", "Pseudo trop court (min 2 caractères).");
+                return;
+            }
+            if (!/^\d{4}$/.test(code)) {
+                showMessage("auth-msg", "Code doit être composé de 4 chiffres.");
+                return;
+            }
+
+            const userRef = ref(db, `users/${pseudo}`);
+            get(userRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    showMessage("auth-msg", "Ce pseudo est déjà pris.");
+                } else {
+                    set(userRef, { code, wins: 0, losses: 0, createdAt: serverTimestamp() })
+                        .then(() => {
+                            showMessage("auth-msg", "Inscription réussie !", true);
+                            currentUser = { pseudo, code };
+                            afterLogin();
+                        })
+                        .catch(error => {
+                            console.error("Signup error:", error);
+                            showMessage("auth-msg", "Erreur lors de l'inscription.");
+                        });
+                }
+            }).catch(error => {
+                console.error("Checking user for signup error:", error);
+                showMessage("auth-msg", "Erreur de base de données.");
+            });
+        };
+
+        document.getElementById("login-btn").onclick = () => {
+            const pseudo = pseudoInput.value.trim();
+            const code = codeInput.value.trim();
+
+            if (!pseudo || !code) {
+                 showMessage("auth-msg", "Pseudo et code requis.");
+                 return;
+            }
+
+            const userRef = ref(db, `users/${pseudo}`);
+            get(userRef).then(snapshot => {
+                if (!snapshot.exists()) {
+                    showMessage("auth-msg", "Pseudo inconnu.");
+                } else {
+                    const data = snapshot.val();
+                    if (data.code === code) {
+                        showMessage("auth-msg", "Connexion réussie !", true);
+                        currentUser = { pseudo, code };
+                        afterLogin();
+                    } else {
+                        showMessage("auth-msg", "Code incorrect.");
+                    }
+                }
+            }).catch(error => {
+                console.error("Login error:", error);
+                showMessage("auth-msg", "Erreur de base de données.");
+            });
+        };
+
+        function afterLogin() {
+            document.getElementById("auth").style.display = "none";
+            document.getElementById("match").style.display = "block";
+            document.getElementById("player-name").textContent = currentUser.pseudo;
+            showMessage("auth-msg", ""); // Clear auth message
+            pseudoInput.value = ""; // Clear inputs
+            codeInput.value = "";
+        }
+
+        // --- MATCH ---
+
+        document.getElementById("create-match-btn").onclick = () => {
+            const matchId = matchIdInput.value.trim();
+            if (!matchId) {
+                showMessage("match-msg", "Veuillez indiquer un code pour le match.");
+                return;
+            }
+            if (!currentUser) {
+                showMessage("match-msg", "Erreur : utilisateur non connecté.");
+                return;
+            }
+
+            const matchRef = ref(db, `matches/${matchId}`);
+            get(matchRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    showMessage("match-msg", "Ce code de match est déjà utilisé.");
+                } else {
+                    const initialMatchData = {
+                        players: {
+                            p1: { pseudo: currentUser.pseudo, pv: 100, defending: false, status: 'connected', lastSeen: serverTimestamp() },
+                            p2: null
+                        },
+                        turn: "p1",
+                        actions: {}, // Consider if this is used or can be removed
+                        history: [`Match ${matchId} créé par ${currentUser.pseudo}. En attente d'un adversaire...`],
+                        status: "waiting", // waiting, playing, finished, forfeited
+                        createdAt: serverTimestamp()
+                    };
+                    set(matchRef, initialMatchData).then(() => {
+                        showMessage("match-msg", "Match créé. En attente de l'adversaire...", true);
+                        startMatchMonitoring(matchId); // Changed function name
+
+                        // Cleanup listener for unjoined match
+                        if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener(); // Clear previous
+                        unsubscribeMatchCreationListener = onValue(matchRef, (matchSnapshot) => {
+                            const matchData = matchSnapshot.val();
+                            if (matchData && matchData.status === 'waiting' && !matchData.players.p2 && typeof matchData.createdAt === 'number') {
+                                const timeElapsed = Date.now() - matchData.createdAt;
+                                if (timeElapsed > 60000) { // 1 minute
+                                    console.log(`Match ${matchId} non rejoint après 1 minute, suppression.`);
+                                    remove(matchRef)
+                                        .then(() => {
+                                            showMessage("match-msg", "Match expiré et supprimé (aucun adversaire).");
+                                            if (currentMatchId === matchId) { // If this was the current match for the creator
+                                                backToMenu(true); // true indicates an unexpected end
+                                            }
+                                        })
+                                        .catch(err => console.error("Error removing expired match:", err));
+                                    if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener(); // Self-unsubscribe
+                                    unsubscribeMatchCreationListener = null;
+                                }
+                            } else if (matchData && matchData.players.p2) { // Opponent joined
+                                if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener();
+                                unsubscribeMatchCreationListener = null;
+                            } else if (!matchData) { // Match was deleted elsewhere
+                                 if (unsubscribeMatchCreationListener) unsubscribeMatchCreationListener();
+                                 unsubscribeMatchCreationListener = null;
+                            }
+                        });
+
+                    }).catch(error => {
+                        console.error("Error creating match:", error);
+                        showMessage("match-msg", "Erreur lors de la création du match.");
+                    });
+                }
+            }).catch(error => {
+                console.error("Error checking match existence:", error);
+                showMessage("match-msg", "Erreur de base de données.");
+            });
+        };
+
+        document.getElementById("join-match-btn").onclick = () => {
+            const matchId = matchIdInput.value.trim();
+            if (!matchId) {
+                showMessage("match-msg", "Veuillez indiquer un code de match.");
+                return;
+            }
+            if (!currentUser) {
+                showMessage("match-msg", "Erreur : utilisateur non connecté.");
+                return;
+            }
+
+            const matchRef = ref(db, `matches/${matchId}`);
+            get(matchRef).then(snapshot => {
+                if (!snapshot.exists()) {
+                    showMessage("match-msg", "Ce match n'existe pas.");
+                    return;
+                }
+
+                const matchData = snapshot.val();
+                if (matchData.players.p1.pseudo === currentUser.pseudo) {
+                    showMessage("match-msg", "Vous ne pouvez pas rejoindre votre propre match en tant qu'adversaire. Si vous l'avez créé, attendez un joueur.");
+                    startMatchMonitoring(matchId); // Allow creator to re-enter monitoring if they left and came back
+                    return;
+                }
+                if (matchData.players.p2) {
+                    showMessage("match-msg", "Ce match est déjà complet.");
+                    return;
+                }
+                if (matchData.status !== 'waiting') {
+                    showMessage("match-msg", "Ce match n'est plus en attente de joueurs.");
+                    return;
+                }
+                
+                const updates = {};
+                updates[`players/p2`] = { pseudo: currentUser.pseudo, pv: 100, defending: false, status: 'connected', lastSeen: serverTimestamp() };
+                updates[`status`] = 'playing';
+                updates[`history`] = [...(matchData.history || []), `${currentUser.pseudo} a rejoint le match ! Le duel commence.`];
+
+
+                update(matchRef, updates).then(() => {
+                    showMessage("match-msg", "Vous avez rejoint le match !", true);
+                    startMatchMonitoring(matchId);
+                }).catch(error => {
+                    console.error("Error joining match:", error);
+                    showMessage("match-msg", "Erreur pour rejoindre le match.");
+                });
+            }).catch(error => {
+                console.error("Error getting match to join:", error);
+                showMessage("match-msg", "Erreur de base de données.");
+            });
+        };
+        
+        // --- DÉBUT ET SUIVI DU MATCH ---
+        function startMatchMonitoring(id) {
+            if (currentMatchUnsubscribe) {
+                currentMatchUnsubscribe(); // Unsubscribe from any previous match listener
+            }
+            
+            currentMatchId = id;
+            const matchRef = ref(db, `matches/${id}`);
+
+            document.getElementById("match").style.display = "none";
+            document.getElementById("game").style.display = "block";
+            document.getElementById("current-match").textContent = id;
+            document.getElementById("you-name").textContent = currentUser.pseudo;
+            document.getElementById("history").innerHTML = ""; // Clear history on new match start
+
+            hasPlayedThisTurn = false;
+            disableActionButtons(true); // Initially disable until turn is confirmed
+            actionMsgEl.textContent = "Chargement du match...";
+
+            currentMatchUnsubscribe = onValue(matchRef, (snapshot) => {
+                const data = snapshot.val();
+                if (!data) {
+                    // Match deleted or non-existent
+                    if (currentMatchId === id) { // Check if this is still the active match for the client
+                        showMessage("action-msg", "Le match a été terminé ou supprimé.");
+                        if (currentMatchUnsubscribe) currentMatchUnsubscribe();
+                        currentMatchUnsubscribe = null;
+                        setTimeout(() => backToMenu(true), 3000);
+                    }
+                    return;
+                }
+
+                // Determine player roles
+                let you, opponent, youKey, opponentKey;
+                if (data.players.p1 && data.players.p1.pseudo === currentUser.pseudo) {
+                    you = data.players.p1; youKey = "p1";
+                    opponent = data.players.p2; opponentKey = "p2";
+                } else if (data.players.p2 && data.players.p2.pseudo === currentUser.pseudo) {
+                    you = data.players.p2; youKey = "p2";
+                    opponent = data.players.p1; opponentKey = "p1";
+                } else {
+                    // Not a player in this match (e.g., if kicked or error)
+                    actionMsgEl.textContent = "Vous n'êtes pas un joueur dans ce match.";
+                    disableActionButtons(true);
+                    if (timerInterval) clearInterval(timerInterval);
+                    timerInterval = null;
+                    return;
+                }
+                
+                // Handle onDisconnect for the current player
+                // This should ideally be set once when the player is confirmed in the match.
+                // Be careful about re-setting it on every onValue update.
+                // A simple approach: set it if 'you' is defined and status is 'connected'.
+                if (you && you.status === 'connected') {
+                    const yourPlayerRef = ref(db, `matches/${id}/players/${youKey}`);
+                    onDisconnect(yourPlayerRef).update({
+                        pv: 0, // Or some indicator of forfeit
+                        status: 'disconnected',
+                        lastSeen: serverTimestamp() 
+                    }).catch(error => console.error("Error setting onDisconnect:", error));
+                    // Also update 'lastSeen' periodically while connected (not implemented here for brevity)
+                    update(yourPlayerRef, { lastSeen: serverTimestamp(), status: 'connected' }); // Mark as seen now
+                }
+
+
+                // Update UI with player data
+                updateHealthBar(youHealthBarEl, youPvDisplayEl, you.pv);
+                document.getElementById("you-name").textContent = `${you.pseudo} (Vous)`;
+
+                if (opponent) {
+                    updateHealthBar(opponentHealthBarEl, opponentPvDisplayEl, opponent.pv);
+                    document.getElementById("opponent-name").textContent = opponent.pseudo;
+                } else {
+                    opponentPvDisplayEl.textContent = "N/A";
+                    opponentHealthBarEl.style.width = "0%";
+                    opponentHealthBarEl.textContent = "0%";
+                    document.getElementById("opponent-name").textContent = "En attente...";
+                }
+                
+                // If waiting for P2
+                if (data.status === "waiting" || !opponent) {
+                    actionMsgEl.textContent = "En attente de l'adversaire...";
+                    disableActionButtons(true);
+                    if (timerInterval) clearInterval(timerInterval);
+                    timerInterval = null;
+                    updateTimerUI(timerMax); // Reset timer display
+                    return;
+                }
+                
+                // Check for opponent disconnect/forfeit explicitly
+                let opponentDisconnected = opponent.status === 'disconnected' || opponent.status === 'forfeited';
+
+
+                // Game End Conditions
+                if (you.pv <= 0 || opponent.pv <= 0 || data.status === 'finished' || data.status === 'forfeited' || opponentDisconnected) {
+                    disableActionButtons(true);
+                    if (timerInterval) clearInterval(timerInterval);
+                    timerInterval = null;
+
+                    // Cancel onDisconnect for this player since match is ending
+                    const playerRefToCancel = ref(db, `matches/${id}/players/${youKey}`);
+                    onDisconnect(playerRefToCancel).cancel().catch(error => console.error("Error cancelling onDisconnect:", error));
+                    
+                    let finalMessage = "";
+                    let yourResult = "draw"; // draw, win, loss
+
+                    if (opponentDisconnected && you.pv > 0) {
+                        finalMessage = `L'adversaire (${opponent.pseudo}) a quitté. Vous avez gagné par forfait !`;
+                        yourResult = "win";
+                    } else if (you.pv <= 0 && opponent.pv <= 0) {
+                        finalMessage = "Match Nul !";
+                    } else if (you.pv <= 0) {
+                        finalMessage = `Vous avez perdu contre ${opponent.pseudo}...`;
+                        yourResult = "loss";
+                    } else if (opponent.pv <= 0) {
+                        finalMessage = `Vous avez gagné contre ${opponent.pseudo} !`;
+                        yourResult = "win";
+                    } else if (data.status === 'forfeited') { // General forfeit status
+                        if (data.winner === youKey) {
+                             finalMessage = `Victoire par forfait !`;
+                             yourResult = "win";
+                        } else {
+                             finalMessage = `Défaite par forfait.`;
+                             yourResult = "loss";
+                        }
+                    }
+                    
+                    actionMsgEl.textContent = finalMessage;
+                    updateUserStats(yourResult);
+
+                    // Schedule match deletion
+                    if (!matchDeletionTimeout) { // Prevent multiple timeouts
+                        actionMsgEl.textContent += " Retour au menu dans 10 secondes...";
+                        matchDeletionTimeout = setTimeout(() => {
+                            console.log(`Match ${id} terminé/forfait, tentative de suppression.`);
+                            // Only p1 (creator) should ideally delete the match to avoid race conditions
+                            // Or, implement a cloud function for cleanup.
+                            // For simplicity here, any player can trigger if they are the last one.
+                            // A better check would be if (youKey === 'p1' || opponent.status !== 'connected')
+                            remove(matchRef)
+                                .then(() => console.log(`Match ${id} supprimé.`))
+                                .catch(err => console.error("Error removing finished match:", err));
+                            backToMenu(true); // true indicates an unexpected end or forced return
+                            matchDeletionTimeout = null;
+                        }, 10000); // 10 seconds
+                    }
+                    return; // End processing for this update
+                }
+
+
+                // Turn Management
+                if (data.turn === youKey) {
+                    if (hasPlayedThisTurn) {
+                        disableActionButtons(true);
+                        actionMsgEl.textContent = "Action jouée. En attente de l'adversaire...";
+                        if (timerInterval) clearInterval(timerInterval); // Stop timer if already played
+                        timerInterval = null;
+                    } else {
+                        disableActionButtons(false);
+                        actionMsgEl.textContent = "C'est votre tour ! Choisissez une action.";
+                        if (!timerInterval) { // Start timer only if not already running for this turn
+                            resetTimerAndStart(youKey, opponentKey);
+                        }
+                    }
+                } else { // Opponent's turn
+                    disableActionButtons(true);
+                    actionMsgEl.textContent = `Tour de ${opponent.pseudo}. Veuillez patienter...`;
+                    if (timerInterval) clearInterval(timerInterval); // Stop your timer
+                    timerInterval = null;
+                    hasPlayedThisTurn = false; // Reset for your next turn
+                    updateTimerUI(timerMax); // Show full timer for opponent visually
+                }
+
+                // Update History
+                const histEl = document.getElementById("history");
+                histEl.innerHTML = ""; // Clear and redraw
+                (data.history || []).forEach(entry => {
+                    const p = document.createElement("p");
+                    p.textContent = entry;
+                    histEl.appendChild(p);
+                });
+                histEl.scrollTop = histEl.scrollHeight; // Auto-scroll
+
+            }, (error) => {
+                console.error("Error listening to match data:", error);
+                showMessage("action-msg", "Erreur de connexion au match. Retour au menu.");
+                if (currentMatchUnsubscribe) currentMatchUnsubscribe();
+                currentMatchUnsubscribe = null;
+                setTimeout(() => backToMenu(true), 3000);
+            });
+        }
+        
+        function updateUserStats(result) {
+            if (!currentUser || result === "draw") return;
+
+            const userStatsRef = ref(db, `users/${currentUser.pseudo}`);
+            get(userStatsRef).then(snapshot => {
+                if (snapshot.exists()) {
+                    const userData = snapshot.val();
+                    const updates = {};
+                    if (result === "win") {
+                        updates.wins = (userData.wins || 0) + 1;
+                    } else if (result === "loss") {
+                        updates.losses = (userData.losses || 0) + 1;
+                    }
+                    update(userStatsRef, updates)
+                        .then(() => console.log(`Stats updated for ${currentUser.pseudo}: ${result}`))
+                        .catch(err => console.error("Error updating user stats:", err));
+                }
+            }).catch(err => console.error("Error fetching user data for stats update:", err));
+        }
+
+
+        // --- ACTIONS ---
+        document.getElementById("attack-btn").onclick = () => doAction("attack");
+        document.getElementById("defend-btn").onclick = () => doAction("defend");
+        document.getElementById("heal-btn").onclick = () => doAction("heal");
+
+        function doAction(actionType) {
+            if (hasPlayedThisTurn || !currentMatchId) return;
+
+            const matchRef = ref(db, `matches/${currentMatchId}`);
+            // Optimistic UI update can be done here, then confirmed by onValue
+            
+            get(matchRef).then(snapshot => { // Get current state to perform action
+                const data = snapshot.val();
+                if (!data || data.status !== 'playing') {
+                    actionMsgEl.textContent = "Le match n'est pas en cours.";
+                    return;
+                }
+
+                let youKey, opponentKey;
+                if (data.players.p1 && data.players.p1.pseudo === currentUser.pseudo) {
+                    youKey = "p1"; opponentKey = "p2";
+                } else if (data.players.p2 && data.players.p2.pseudo === currentUser.pseudo) {
+                    youKey = "p2"; opponentKey = "p1";
+                } else { return; } // Not a player
+
+                if (data.turn !== youKey) {
+                    showMessage("action-msg", "Ce n'est pas votre tour.");
+                    return;
+                }
+
+                const you = data.players[youKey];
+                const opponent = data.players[opponentKey];
+
+                if (!opponent) { // Should not happen if status is 'playing'
+                    showMessage("action-msg", "Adversaire non trouvé.");
+                    return;
+                }
+
+                let newPlayerStates = JSON.parse(JSON.stringify(data.players)); // Deep copy
+                let historyEntry = "";
+                
+                // Reset own defense state before new action (unless action is defend again)
+                newPlayerStates[youKey].defending = false;
+
+                switch (actionType) {
+                    case "attack":
+                        let damage = Math.floor(Math.random() * 11) + 15; // 15-25 damage
+                        if (newPlayerStates[opponentKey].defending) {
+                            damage = Math.floor(damage / 2);
+                            historyEntry = `${you.pseudo} attaque ${opponent.pseudo} (en défense) et inflige ${damage} dégâts.`;
+                            newPlayerStates[opponentKey].defending = false; // Defense breaks after one hit
+                        } else {
+                            historyEntry = `${you.pseudo} attaque ${opponent.pseudo} et inflige ${damage} dégâts.`;
+                        }
+                        newPlayerStates[opponentKey].pv = Math.max(0, opponent.pv - damage);
+                        // Visual effect for damage
+                        opponentPvDisplayEl.classList.add('damage-effect');
+                        setTimeout(() => opponentPvDisplayEl.classList.remove('damage-effect'), 600);
+                        break;
+                    case "defend":
+                        newPlayerStates[youKey].defending = true;
+                        historyEntry = `${you.pseudo} se met en position défensive.`;
+                        break;
+                    case "heal":
+                        let healAmount = Math.floor(Math.random() * 11) + 10; // 10-20 heal
+                        newPlayerStates[youKey].pv = Math.min(100, you.pv + healAmount);
+                        historyEntry = `${you.pseudo} se soigne de ${healAmount} PV. (Total: ${newPlayerStates[youKey].pv})`;
+                         // Visual effect for heal
+                        youPvDisplayEl.classList.add('heal-effect');
+                        setTimeout(() => youPvDisplayEl.classList.remove('heal-effect'), 600);
+                        break;
+                    default: return;
+                }
+
+                const updates = {
+                    players: newPlayerStates,
+                    turn: opponentKey, // Switch turn
+                    history: [...(data.history || []), historyEntry],
+                    status: (newPlayerStates[youKey].pv <= 0 || newPlayerStates[opponentKey].pv <= 0) ? 'finished' : 'playing'
+                };
+                
+                // If game ends due to this action, determine winner
+                if (updates.status === 'finished') {
+                    if (newPlayerStates[youKey].pv <= 0 && newPlayerStates[opponentKey].pv <= 0) updates.winner = 'draw';
+                    else if (newPlayerStates[youKey].pv <= 0) updates.winner = opponentKey;
+                    else updates.winner = youKey;
+                }
+
+
+                update(matchRef, updates).catch(err => console.error("Error updating match on action:", err));
+                
+                hasPlayedThisTurn = true;
+                disableActionButtons(true);
+                actionMsgEl.textContent = "Action envoyée. En attente de l'adversaire...";
+                if(timerInterval) clearInterval(timerInterval); // Stop timer after playing
+                timerInterval = null;
+
+            }).catch(error => {
+                console.error("Error performing action (get phase):", error);
+                actionMsgEl.textContent = "Erreur lors de l'action.";
+            });
+        }
+
+        // --- TIMER ---
+        function resetTimerAndStart(currentPlayerKey, nextPlayerKey) {
+            if (timerInterval) clearInterval(timerInterval);
+            timerCount = timerMax;
+            updateTimerUI(timerCount);
+
+            timerInterval = setInterval(() => {
+                timerCount--;
+                updateTimerUI(timerCount);
+
+                if (timerCount <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    if (!hasPlayedThisTurn) { // Check again, in case action was super fast
+                        autoPassTurn(currentPlayerKey, nextPlayerKey);
+                    }
+                }
+            }, 1000);
+        }
+
+        function updateTimerUI(seconds) {
+            timerValueEl.textContent = seconds;
+            const progress = (seconds / timerMax) * 100;
+            timerProgressBarEl.style.width = progress + "%";
+        }
+
+        function autoPassTurn(timedOutPlayerKey, nextPlayerKey) {
+            if (!currentMatchId) return;
+            const matchRef = ref(db, `matches/${currentMatchId}`);
+            
+            // Get latest match data before updating
+            get(matchRef).then(snapshot => {
+                const data = snapshot.val();
+                if (!data || data.turn !== timedOutPlayerKey || data.status !== 'playing') {
+                    // Turn might have changed, or match ended, or player already played
+                    return; 
+                }
+
+                const timedOutPlayerPseudo = data.players[timedOutPlayerKey].pseudo;
+                const historyEntry = `${timedOutPlayerPseudo} n'a pas joué à temps. Tour passé automatiquement.`;
+                
+                let newPlayerStates = JSON.parse(JSON.stringify(data.players));
+                newPlayerStates[timedOutPlayerKey].defending = false; // Lose defense if timed out
+
+                const updates = {
+                    players: newPlayerStates,
+                    turn: nextPlayerKey,
+                    history: [...(data.history || []), historyEntry]
+                };
+
+                update(matchRef, updates).catch(err => console.error("Error auto passing turn:", err));
+                
+                // This part is for the current player if they are the one timing out
+                if (currentUser.pseudo === timedOutPlayerPseudo) {
+                    hasPlayedThisTurn = true; // Effectively, yes, their turn is over
+                    disableActionButtons(true);
+                    actionMsgEl.textContent = "Temps écoulé ! Tour passé automatiquement.";
+                }
+
+            }).catch(err => console.error("Error in autoPassTurn (get phase):", err));
+        }
+        
+        // --- NAVIGATION & CLEANUP ---
+        document.getElementById("back-to-menu-btn").onclick = () => backToMenu(false);
+
+        function backToMenu(matchEndedOrError = false) {
+            // Clear match-specific listeners and timeouts
+            if (unsubscribeMatchCreationListener) {
+                unsubscribeMatchCreationListener();
+                unsubscribeMatchCreationListener = null;
+            }
+            if (currentMatchUnsubscribe) {
+                currentMatchUnsubscribe();
+                currentMatchUnsubscribe = null;
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+             if (matchDeletionTimeout) { // Clear the 10s deletion timeout if user manually exits
+                clearTimeout(matchDeletionTimeout);
+                matchDeletionTimeout = null;
+            }
+
+
+            if (currentMatchId && currentUser && !matchEndedOrError) {
+                // If user clicks "back to menu" during an active game, they forfeit.
+                const matchRef = ref(db, `matches/${currentMatchId}`);
+                get(matchRef).then(snapshot => {
+                    const data = snapshot.val();
+                    if (data && (data.status === 'playing' || data.status === 'waiting')) {
+                        let youKey, opponentKey;
+                        if (data.players.p1 && data.players.p1.pseudo === currentUser.pseudo) {
+                             youKey = "p1"; opponentKey = "p2";
+                        } else if (data.players.p2 && data.players.p2.pseudo === currentUser.pseudo) {
+                             youKey = "p2"; opponentKey = "p1";
+                        }
+
+                        if (youKey) {
+                            const yourPlayerRef = ref(db, `matches/${currentMatchId}/players/${youKey}`);
+                            onDisconnect(yourPlayerRef).cancel().catch(e => console.warn("Failed to cancel onDisconnect (expected if not set):", e));
+
+                            const updates = {};
+                            updates[`players/${youKey}/status`] = 'forfeited';
+                            updates[`players/${youKey}/pv`] = 0; // Forfeit means loss of all PV
+                            updates[`status`] = 'forfeited';
+                            updates[`winner`] = opponentKey; // The other player wins
+                            updates[`history`] = [...(data.history || []), `${currentUser.pseudo} a quitté le match. ${data.players[opponentKey] ? data.players[opponentKey].pseudo : 'L\'adversaire'} gagne par forfait.`];
+                            
+                            update(matchRef, updates)
+                                .then(() => console.log(`${currentUser.pseudo} forfeited match ${currentMatchId}.`))
+                                .catch(e => console.error("Error updating match on forfeit:", e));
+                            updateUserStats("loss"); // Record a loss for forfeiting
+                        }
+                    }
+                }).catch(error => console.error("Error getting match data for forfeit:", error));
+            }
+            
+            // Reset global state and UI
+            currentMatchId = null;
+            hasPlayedThisTurn = false;
+
+            document.getElementById("game").style.display = "none";
+            document.getElementById("match").style.display = "block";
+            matchIdInput.value = "";
+            showMessage("match-msg", "");
+            actionMsgEl.textContent = "";
+            updateTimerUI(timerMax); // Reset timer display
+            
+            // Clear player info from game screen for next time
+            document.getElementById("you-name").textContent = "Vous";
+            updateHealthBar(youHealthBarEl, youPvDisplayEl, 100);
+            document.getElementById("opponent-name").textContent = "Adversaire";
+            updateHealthBar(opponentHealthBarEl, opponentPvDisplayEl, 100);
+            document.getElementById("history").innerHTML = "";
+        }
+
+        // Initial setup: show auth
+        document.getElementById("auth").style.display = "block";
+        document.getElementById("match").style.display = "none";
+        document.getElementById("game").style.display = "none";
+
+    </script>
 </body>
 </html>
