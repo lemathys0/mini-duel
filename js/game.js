@@ -36,7 +36,6 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         console.log("DEBUG onValue - Current data.turn:", data?.turn);
         console.log("DEBUG onValue - Current data.players.p1.action:", data?.players?.p1?.action);
         console.log("DEBUG onValue - Current data.players.p2.action:", data?.players?.p2?.action);
-        console.log("DEBUG onValue - Current data.players.p2.secondAction:", data?.players?.p2?.secondAction); // Nouveau champ pour la 2ème action de l'IA
         console.log("DEBUG onValue - Current data.status:", data?.status);
         console.log("DEBUG onValue - youKey:", youKey);
         console.log("DEBUG onValue - opponentKey:", opponentKey);
@@ -91,25 +90,11 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
             document.getElementById("opponent-name").textContent = opponent.pseudo;
             console.log("Opponent PV (onValue - UI Update):", opponent.pv); // Debugging: PV de l'adversaire
             
-            // Nouveau statut pour gérer les actions de l'IA
-            if (gameMode === 'PvAI') {
-                if (data.players.p1?.action && !data.players.p2?.action) {
-                    opponentActionStatus = "En attente de la première action de l'IA...";
-                } else if (data.players.p1?.action && data.players.p2?.action && !data.players.p2?.secondAction) {
-                    opponentActionStatus = "En attente de la deuxième action de l'IA...";
-                } else if (data.players.p2?.secondAction) {
-                    opponentActionStatus = "Action de l'IA soumise !"; // Les deux actions IA sont là
-                } else {
-                    opponentActionStatus = "En attente de votre action..."; // Normalement, IA attend P1
-                }
-            } else { // PvP
-                if (opponent.action) {
-                    opponentActionStatus = "Action soumise !";
-                } else if (!opponent.action && data.players[youKey]?.action) {
-                    opponentActionStatus = "En attente d'action de l'adversaire...";
-                } else {
-                    opponentActionStatus = "En attente d'action de l'adversaire...";
-                }
+            // Statut de l'adversaire (IA ou PvP)
+            if (data.players[opponentKey]?.action) {
+                opponentActionStatus = "Action soumise !";
+            } else { 
+                opponentActionStatus = "En attente d'action de l'adversaire...";
             }
             
             // Gérer le forfait de l'adversaire en PvP
@@ -177,75 +162,53 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
             }, 1000));
         } else {
             disableActionButtons(true);
-            if (gameMode === 'PvAI') {
-                if (data.players[youKey]?.action && !data.players[opponentKey]?.action) {
-                    showMessage("action-msg", "Action jouée. L'IA prépare sa première action...");
-                } else if (data.players[opponentKey]?.action && !data.players[opponentKey]?.secondAction) {
-                     showMessage("action-msg", "L'IA prépare sa deuxième action...");
-                } else if (data.players[opponentKey]?.secondAction) {
-                    showMessage("action-msg", "Actions soumises. Traitement du tour...");
-                } else {
-                    showMessage("action-msg", "Veuillez patienter...");
-                }
-            } else { // PvP
-                if (data.players[youKey]?.action && !data.players[opponentKey]?.action) {
-                    showMessage("action-msg", "Action jouée. En attente de l'adversaire...");
-                } else {
-                    showMessage("action-msg", "Veuillez patienter...");
-                }
+            if (data.players[youKey]?.action && !data.players[opponentKey]?.action) {
+                showMessage("action-msg", "Action jouée. En attente de l'adversaire...");
+            } else {
+                showMessage("action-msg", "Veuillez patienter...");
             }
             updateTimerUI(timerMax); 
         }
 
         // --- LOGIQUE DE DÉCLENCHEMENT DE L'IA (MODE PvAI UNIQUEMENT) ---
         if (gameMode === 'PvAI' && data.status === 'playing') {
-            // **Cas 1: L'IA réagit à l'action de P1 (première action de l'IA)**
-            // Déclenchée si P1 a joué, mais P2 n'a pas encore réagi.
-            if (data.turn === youKey && data.players[youKey]?.action && !data.players[opponentKey]?.action) {
-                console.log("Player P1 has submitted action. Triggering AI's FIRST action for this round.");
-                showMessage("action-msg", `Votre action est jouée. L'IA réagit...`);
+            // L'IA agit si c'est son tour (data.turn === opponentKey) ET si elle n'a pas encore agi pour ce tour.
+            // OU si c'est le tour du joueur (P1) et que P1 a déjà agi, mais l'IA n'a pas encore réagi.
+            if ((data.turn === opponentKey && !data.players[opponentKey]?.action) || 
+                (data.turn === youKey && data.players[youKey]?.action && !data.players[opponentKey]?.action)) {
+                
+                console.log("Triggering AI action.");
+                disableActionButtons(true); // Assurer que les boutons sont désactivés pendant le tour de l'IA
+                showMessage("action-msg", `L'IA réfléchit...`);
                 setTimeout(async () => {
                     const latestSnapshot = await get(matchRef);
                     const latestData = latestSnapshot.val();
-                    if (latestData && latestData.status === 'playing' && latestData.turn === youKey && latestData.players[youKey]?.action && !latestData.players[opponentKey]?.action) {
-                        aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef, 'first');
+                    // Double vérification avant de déclencher l'IA pour éviter les doublons ou si l'état a changé
+                    if (latestData && latestData.status === 'playing' && !latestData.players[opponentKey]?.action &&
+                        ((latestData.turn === opponentKey) || (latestData.turn === youKey && latestData.players[youKey]?.action))) {
+                        aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef);
                     } else {
-                        console.log("AI first action skipped: State changed, or AI already played.");
+                        console.log("AI action skipped: State changed, or AI already played.");
                     }
-                }, 1000); 
-                return; 
-            }
-            // **Cas 2: L'IA doit jouer sa DEUXIÈME action du cycle.**
-            // Déclenchée après que le premier traitement de tour a mis à jour p2.action, mais p2.secondAction est null.
-            else if (data.turn === youKey && data.players[youKey]?.action && data.players[opponentKey]?.action && !data.players[opponentKey]?.secondAction) {
-                 console.log("AI's first action is done. Triggering AI's SECOND action for its dedicated turn.");
-                 showMessage("action-msg", "L'IA réfléchit (sa deuxième action)...");
-                 setTimeout(async () => {
-                     const latestSnapshot = await get(matchRef);
-                     const latestData = latestSnapshot.val();
-                     if (latestData && latestData.status === 'playing' && latestData.turn === youKey && latestData.players[youKey]?.action && latestData.players[opponentKey]?.action && !latestData.players[opponentKey]?.secondAction) {
-                         aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef, 'second');
-                     } else {
-                         console.log("AI second action skipped: State changed, or AI already played its second action.");
-                     }
-                 }, 1500); 
-                 return; 
+                }, 1000); // Délai pour simuler le temps de réaction de l'IA
+                return; // L'IA va soumettre une action, ce qui redéclenchera onValue
             }
         }
         // --- FIN DE LA LOGIQUE DE DÉCLENCHEMENT DE L'IA ---
 
 
         // LOGIQUE DE TRAITEMENT DU TOUR
-        // Le traitement se fait lorsque TOUTES les actions requises pour le round sont soumises.
-        // C'est-à-dire : P1.action, P2.action, et P2.secondAction doivent être définis.
-        if (data.players.p1?.action && data.players.p2?.action && data.players.p2?.secondAction) {
-            console.log("All actions submitted (P1, IA1, IA2). Processing full turn.");
+        // Le traitement se fait lorsque les deux actions du round sont soumises (P1 et P2).
+        if (data.players.p1?.action && data.players.p2?.action) {
+            // C'est le rôle de P1 (ou du client en mode PvAI) de traiter le tour
             if (youKey === 'p1' || gameMode === 'PvAI') { 
+                console.log("Both actions submitted. P1/AI client processing turn.");
                 disableActionButtons(true);
                 showMessage("action-msg", "Actions soumises. Traitement du tour...");
                 updateTimerUI(timerMax);
                 setTimeout(() => processTurn(data, matchRef), 500);
             } else {
+                // P2 attend que P1 traite le tour (uniquement en PvP si P1 est le leader)
                 console.log("Both actions submitted. P2 waiting for P1 to process turn.");
                 disableActionButtons(true);
                 showMessage("action-msg", "Actions soumises. En attente du traitement du tour...");
@@ -275,19 +238,23 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
 async function processTurn(data, matchRef) {
     console.log("processTurn started with data:", JSON.stringify(data));
 
+    // IMPORTANT: Récupérer les dernières données de la DB juste avant de traiter pour éviter les incohérences.
     const latestMatchSnapshot = await get(matchRef);
     const latestMatchData = latestMatchSnapshot.val();
 
-    // S'assurer que toutes les actions nécessaires sont présentes avant de traiter
-    if (!latestMatchData || !latestMatchData.players.p1?.action || !latestMatchData.players.p2?.action || !latestMatchData.players.p2?.secondAction) {
-        console.warn("processTurn called but not all actions were present in latest data. Exiting.");
+    if (!latestMatchData || !latestMatchData.players.p1?.action || !latestMatchData.players.p2?.action) {
+        console.warn("processTurn called but one or both actions were null (or missing) in latest data. Exiting (possibly already processed or not ready).");
         return; 
     }
-    data = latestMatchData; // Utiliser les données les plus récentes
+    // Utiliser les données les plus récentes pour le calcul
+    data = latestMatchData;
 
     if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
     disableActionButtons(true);
-    setHasPlayedThisTurn(false); 
+    setHasPlayedThisTurn(false); // Reset pour le prochain tour
+
+    const p1Action = data.players.p1.action;
+    const p2Action = data.players.p2.action;
 
     let p1PV = data.players.p1.pv;
     let p2PV = data.players.p2.pv;
@@ -295,46 +262,21 @@ async function processTurn(data, matchRef) {
 
     historyUpdates.push(`--- Début du tour ---`);
 
-    const p1Action = data.players.p1.action;
-    const p2FirstAction = data.players.p2.action; // Première action de l'IA
-    const p2SecondAction = data.players.p2.secondAction; // Deuxième action de l'IA
-
-    // Application de la première série d'actions : P1 vs P2 (première action)
-    historyUpdates.push(`--- Actions du joueur et de la première IA ---`);
+    // Logique d'application des actions
     if (p1Action === 'attack') {
         historyUpdates.push(`${data.players.p1.pseudo} attaque !`);
-        if (p2FirstAction === 'defend') { p2PV -= 5; historyUpdates.push(`${data.players.p2.pseudo} se défend, subit 5 PV de dégâts.`); }
+        if (p2Action === 'defend') { p2PV -= 5; historyUpdates.push(`${data.players.p2.pseudo} se défend, subit 5 PV de dégâts.`); }
         else { p2PV -= 10; historyUpdates.push(`${data.players.p2.pseudo} subit 10 PV de dégâts.`); }
     }
-    if (p2FirstAction === 'attack') {
-        historyUpdates.push(`${data.players.p2.pseudo} attaque (première action) !`);
+    if (p2Action === 'attack') {
+        historyUpdates.push(`${data.players.p2.pseudo} attaque !`);
         if (p1Action === 'defend') { p1PV -= 5; historyUpdates.push(`${data.players.p1.pseudo} se défend, subit 5 PV de dégâts.`); }
         else { p1PV -= 10; historyUpdates.push(`${data.players.p1.pseudo} subit 10 PV de dégâts.`); }
     }
     if (p1Action === 'heal') { p1PV = Math.min(100, p1PV + 15); historyUpdates.push(`${data.players.p1.pseudo} se soigne et récupère 15 PV.`); }
-    if (p2FirstAction === 'heal') { p2PV = Math.min(100, p2PV + 15); historyUpdates.push(`${data.players.p2.pseudo} se soigne et récupère 15 PV (première action).`); }
-    if (p1Action === 'defend' && p2FirstAction !== 'attack') { historyUpdates.push(`${data.players.p1.pseudo} se met en position défensive.`); }
-    if (p2FirstAction === 'defend' && p1Action !== 'attack') { historyUpdates.push(`${data.players.p2.pseudo} se met en position défensive (première action).`); }
-
-    // Application de la deuxième action de l'IA (P2-B)
-    historyUpdates.push(`--- Deuxième action de l'IA ---`);
-    if (p2SecondAction === 'attack') {
-        historyUpdates.push(`${data.players.p2.pseudo} attaque (deuxième action) !`);
-        // Ici, P1 n'a pas d'action directe pour contrer la deuxième action de l'IA. C'est un tour d'IA "pur".
-        // On peut considérer que P1 ne se défend pas s'il n'a pas défendu au premier segment,
-        // ou qu'il utilise sa défense du premier segment si elle est encore active.
-        // Pour la simplicité, P1 subit plein de dégâts si l'IA attaque sur sa deuxième action.
-        p1PV -= 10; 
-        historyUpdates.push(`${data.players.p1.pseudo} subit 10 PV de dégâts.`);
-    }
-    if (p2SecondAction === 'heal') { 
-        p2PV = Math.min(100, p2PV + 15); 
-        historyUpdates.push(`${data.players.p2.pseudo} se soigne et récupère 15 PV (deuxième action).`); 
-    }
-    if (p2SecondAction === 'defend') { 
-        historyUpdates.push(`${data.players.p2.pseudo} se met en position défensive (deuxième action).`); 
-    }
-
+    if (p2Action === 'heal') { p2PV = Math.min(100, p2PV + 15); historyUpdates.push(`${data.players.p2.pseudo} se soigne et récupère 15 PV.`); }
+    if (p1Action === 'defend' && p2Action !== 'attack') { historyUpdates.push(`${data.players.p1.pseudo} se met en position défensive.`); }
+    if (p2Action === 'defend' && p1Action !== 'attack') { historyUpdates.push(`${data.players.p2.pseudo} se met en position défensive.`); }
 
     historyUpdates.push(`--- Fin du tour ---`);
 
@@ -344,8 +286,13 @@ async function processTurn(data, matchRef) {
     console.log("New P1 PV (before DB update):", p1PV); 
     console.log("New P2 PV (before DB update):", p2PV); 
 
-    // Après le traitement de toutes les actions, on revient au tour de P1
-    let nextTurn = 'p1'; 
+    let nextTurn;
+    // Si c'était le tour de P1 (youKey), le prochain tour est pour P2 (opponentKey)
+    if (data.turn === youKey) {
+        nextTurn = opponentKey;
+    } else { // Si c'était le tour de P2 (opponentKey), le prochain tour est pour P1 (youKey)
+        nextTurn = youKey;
+    }
 
     let gameStatus = 'playing';
     let winner = null;
@@ -359,18 +306,17 @@ async function processTurn(data, matchRef) {
         [`players/p1/pv`]: p1PV,
         [`players/p2/pv`]: p2PV,
         [`players/p1/action`]: null, // Réinitialise l'action de P1
-        [`players/p2/action`]: null, // Réinitialise la première action de P2
-        [`players/p2/secondAction`]: null, // Réinitialise la deuxième action de P2
+        [`players/p2/action`]: null, // Réinitialise l'action de P2
         history: historyUpdates,
-        turn: nextTurn, 
+        turn: nextTurn, // C'est ici que le prochain tour est défini
         status: gameStatus,
-        lastTurnProcessedAt: serverTimestamp() 
+        lastTurnProcessedAt: serverTimestamp() // Met à jour le timestamp du traitement du tour
     };
     if (winner) { updates.winner = winner; if (loser) updates.loser = loser; }
 
     try {
         await update(matchRef, updates);
-        console.log("DEBUG: Firebase update completed successfully (processTurn). New turn set to:", nextTurn); 
+        console.log("DEBUG: Firebase update completed successfully (processTurn). New turn set to:", nextTurn); // Debugging: Confirme le prochain tour envoyé
     } catch (error) {
         console.error("DEBUG: ERROR during Firebase update in processTurn:", error);
         showMessage("action-msg", "Erreur critique lors du traitement du tour. Veuillez recharger la page.");
@@ -380,6 +326,7 @@ async function processTurn(data, matchRef) {
 async function submitDefaultAction(playerKey, matchRef, currentMatchData) {
     if (!playerKey || !matchRef || !currentMatchData) return;
     
+    // Obtenir la dernière version du match pour éviter les conflits
     const snapshot = await get(matchRef);
     const data = snapshot.val();
     if (!data || data.players[playerKey]?.action) {
@@ -391,7 +338,7 @@ async function submitDefaultAction(playerKey, matchRef, currentMatchData) {
     const updates = {};
     updates[`players/${playerKey}/action`] = defaultAction;
 
-    const newHistory = [...(data.history || [])]; 
+    const newHistory = [...(data.history || [])]; // Utilise les dernières données
     const pseudo = data.players[playerKey]?.pseudo || "Un joueur";
     newHistory.push(`${pseudo} n'a pas agi à temps et s'est automatiquement défendu.`);
     updates.history = newHistory;
@@ -403,13 +350,14 @@ async function submitDefaultAction(playerKey, matchRef, currentMatchData) {
     }
 }
 
-export async function aiTurn(playerPV, aiPV, matchRef, actionTypeToSet) {
-    // actionTypeToSet sera 'first' ou 'second'
+export async function aiTurn(playerPV, aiPV, matchRef) {
+    // Obtenir la dernière version du match pour s'assurer de l'état actuel avant de jouer
     const snapshot = await get(matchRef);
     const currentMatchData = snapshot.val();
 
-    if (!currentMatchData || currentMatchData.status !== 'playing') {
-        console.log("AI skip: Not correct state for AI to play, or match ended.");
+    // L'IA ne joue que si le match est "playing" et si elle n'a pas encore soumis d'action.
+    if (!currentMatchData || currentMatchData.status !== 'playing' || currentMatchData.players.p2?.action) {
+        console.log("AI skip: Not correct state for AI to play, AI already played, or match ended.");
         return;
     }
 
@@ -420,42 +368,22 @@ export async function aiTurn(playerPV, aiPV, matchRef, actionTypeToSet) {
     else { const actions = ['attack', 'defend']; aiAction = actions[Math.floor(Math.random() * actions.length)]; }
 
     const updates = {};
-    let historyMessage = "";
+    updates[`players/p2/action`] = aiAction;
 
-    if (actionTypeToSet === 'first') {
-        // Vérifier si la première action n'est pas déjà soumise
-        if (currentMatchData.players.p2?.action) {
-            console.log("AI first action already submitted.");
-            return;
-        }
-        updates[`players/p2/action`] = aiAction;
-        historyMessage = `L'IA a choisi : ${aiAction === 'attack' ? 'Attaque' : (aiAction === 'defend' ? 'Défense' : 'Soin')} (première action).`;
-    } else if (actionTypeToSet === 'second') {
-        // Vérifier si la deuxième action n'est pas déjà soumise
-        if (currentMatchData.players.p2?.secondAction) {
-            console.log("AI second action already submitted.");
-            return;
-        }
-        updates[`players/p2/secondAction`] = aiAction;
-        historyMessage = `L'IA a choisi : ${aiAction === 'attack' ? 'Attaque' : (aiAction === 'defend' ? 'Défense' : 'Soin')} (deuxième action).`;
-    } else {
-        console.error("Invalid actionTypeToSet for aiTurn:", actionTypeToSet);
-        return;
-    }
-    
     const newHistory = [...(currentMatchData.history || [])];
-    newHistory.push(historyMessage);
+    newHistory.push(`L'IA a choisi : ${aiAction === 'attack' ? 'Attaque' : (aiAction === 'defend' ? 'Défense' : 'Soin')}.`);
     updates.history = newHistory;
 
     try {
         await update(matchRef, updates);
-        console.log(`AI ${actionTypeToSet} action submitted:`, aiAction);
+        console.log("AI action submitted:", aiAction);
     } catch (error) {
         console.error("Error submitting AI action:", error);
     }
 }
 
 export async function performAction(actionType) {
+    // Vérification de `hasPlayedThisTurn` avant toute autre chose
     if (hasPlayedThisTurn) {
         showMessage("action-msg", "Vous avez déjà soumis une action pour ce tour.");
         return;
@@ -469,30 +397,25 @@ export async function performAction(actionType) {
 
     if (!matchData) { showMessage("action-msg", "Match introuvable ou terminé."); backToMenu(true); return; }
     
+    // Ajout d'un log pour vérifier le tour avant de jouer
     console.log("Attempting to perform action. Current turn in DB:", matchData.turn, "Your key:", youKey);
 
-    // Vous pouvez agir si c'est votre tour (P1) et que vous n'avez pas encore soumis d'action.
-    // Et toutes les actions précédentes de l'IA (si elles existent) doivent être traitées/réinitialisées.
-    if (matchData.turn !== youKey || matchData.players[youKey]?.action) { // Normalement, p1.action devrait être null ici
+    // Vous pouvez agir si c'est votre tour (matchData.turn === youKey)
+    // ET si vous n'avez pas encore soumis votre action (!matchData.players[youKey].action).
+    if (matchData.turn !== youKey || matchData.players[youKey]?.action) {
         showMessage("action-msg", "Ce n'est pas votre tour ou vous avez déjà joué !");
         return;
     }
-    // Assurez-vous aussi que les actions de l'IA du tour précédent sont bien nulles avant de laisser P1 jouer
-    if (matchData.players[opponentKey]?.action || matchData.players[opponentKey]?.secondAction) {
-         showMessage("action-msg", "Veuillez patienter, les actions de l'IA sont encore en cours de traitement.");
-         return;
-    }
-
 
     const updates = {};
     updates[`players/${youKey}/action`] = actionType;
 
     const actionDisplayName = { 'attack': 'Attaquer', 'defend': 'Défendre', 'heal': 'Soigner' }[actionType];
-    showMessage("action-msg", `Vous avez choisi : ${actionDisplayName}.`);
+    showMessage("action-msg", `Vous avez choisi : ${actionDisplayName}. En attente de l'adversaire...`);
 
     try {
         await update(matchRef, updates);
-        setHasPlayedThisTurn(true); 
+        setHasPlayedThisTurn(true); // Met à jour l'état local APRES la soumission réussie
         disableActionButtons(true);
         if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
     } catch (error) {
