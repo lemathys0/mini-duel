@@ -4,13 +4,13 @@ import { db } from "./firebaseConfig.js"; // Importe l'instance 'db' depuis fire
 
 // TRÈS IMPORTANT : Utilisez les URLs CDN complètes pour TOUS les imports Firebase,
 // et listez explicitement TOUTES les fonctions nécessaires.
-import { 
-    ref, 
-    update, 
-    serverTimestamp, 
-    onValue, 
-    off, 
-    remove, 
+import {
+    ref,
+    update,
+    serverTimestamp,
+    onValue,
+    off,
+    remove,
     onDisconnect, // <-- Assure que onDisconnect est importé
     set,          // <-- Assure que set est importé (pour performAction)
     get           // <-- Assure que get est importé (pour handleForfeit)
@@ -29,13 +29,13 @@ let currentMatchUnsubscribe = null; // Pour stocker la fonction d'unsubscribe du
 
 export function startMatchMonitoring(matchId, user, playerKey, mode) {
     // Met à jour les variables globales du match dans main.js
-    setMatchVariables(matchId, user, playerKey, mode); 
+    setMatchVariables(matchId, user, playerKey, mode);
 
     // Affiche l'interface de jeu et masque les autres
-    document.getElementById("main-menu").style.display = "none"; 
-    document.getElementById("matchmaking-status").style.display = "none"; 
-    document.getElementById("auth").style.display = "none"; 
-    document.getElementById("game").style.display = "block"; 
+    document.getElementById("main-menu").style.display = "none";
+    document.getElementById("matchmaking-status").style.display = "none";
+    document.getElementById("auth").style.display = "none";
+    document.getElementById("game").style.display = "block";
 
     // Initialise l'interface utilisateur pour le nouveau jeu
     document.getElementById("current-match").textContent = matchId;
@@ -54,38 +54,37 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     // Ceci doit être fait une seule fois lors de la connexion du joueur à un match
     if (!onDisconnectRef) { // S'assure que ce n'est pas configuré plusieurs fois
         console.log("--- DEBUGGING onDisconnect ---");
-        console.log("1. Value of db:", db); // Log the 'db' instance
-        
+        console.log("1. Value of db:", db);
+
         // Obtient une référence à la présence du joueur actuel
         const playerPresenceRef = ref(db, `matches/${currentMatchId}/players/${youKey}`);
-        console.log("2. Value of playerPresenceRef:", playerPresenceRef); // Log the reference object
-        
+        console.log("2. Value of playerPresenceRef:", playerPresenceRef);
+
         // C'est ICI que l'erreur se produit si playerPresenceRef n'est pas un objet Reference valide
-        // Testons la méthode directement
-        if (typeof playerPresenceRef === 'object' && playerPresenceRef !== null && typeof playerPresenceRef.onDisconnect === 'function') {
-            console.log("3. playerPresenceRef.onDisconnect is a function. Proceeding with method call.");
-            const currentOnDisconnect = playerPresenceRef.onDisconnect(); 
-            // Alternative: const currentOnDisconnect = onDisconnect(playerPresenceRef);
-            
+        // Utilisons la fonction onDisconnect() importée directement
+        console.log("Tentative d'utilisation de onDisconnect comme appel de fonction direct.");
+        try {
+            const currentOnDisconnect = onDisconnect(playerPresenceRef); // <--- MODIFICATION CRUCIALE ICI
+
             // Stocke cet objet OnDisconnect globalement pour pouvoir l'annuler plus tard
-            setOnDisconnectRef(currentOnDisconnect); 
+            setOnDisconnectRef(currentOnDisconnect);
 
             // Définit les mises à jour à effectuer en cas de déconnexion
             currentOnDisconnect.update({
-                status: 'forfeited', // Marque le joueur comme "abandonné"
-                lastSeen: serverTimestamp(), // Met à jour la dernière fois vu
-                action: null // Efface son action en attente
+                status: 'forfeited',
+                lastSeen: serverTimestamp(),
+                action: null
             }).then(() => {
                 console.log(`Opérations onDisconnect configurées pour ${youKey}`);
             }).catch(error => {
-                console.error("Échec de la configuration des opérations onDisconnect:", error);
+                console.error("Échec de la configuration des opérations onDisconnect (après update):", error);
+                showMessage("action-msg", "Erreur: Échec de la configuration de la déconnexion.");
             });
-        } else {
-            console.error("3. CRITICAL ERROR: playerPresenceRef.onDisconnect is NOT a function.", playerPresenceRef);
-            // You might want to add a more visible error message here in the UI
+        } catch (error) {
+            console.error("3. ERREUR CRITIQUE: Échec de l'appel de la fonction onDisconnect.", error, playerPresenceRef);
             showMessage("action-msg", "Erreur critique: La fonction de déconnexion n'a pas pu être configurée. Le jeu pourrait être instable.");
         }
-        console.log("--- END DEBUGGING onDisconnect ---");
+        console.log("--- FIN DU DEBUGGING onDisconnect ---");
     }
 
     // Listener principal du match
@@ -100,7 +99,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         if (!matchData) {
             console.log("Données de match introuvables ou match supprimé. Retour au menu.");
             if (currentMatchUnsubscribe) {
-                currentMatchUnsubscribe(); 
+                currentMatchUnsubscribe();
                 currentMatchUnsubscribe = null;
             }
             if (matchDeletionTimeout) {
@@ -119,9 +118,9 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         document.getElementById("opponent-name").textContent = opponentData.pseudo;
         updateHealthBar('you', youData.pv);
         updateHealthBar('opponent', opponentData.pv);
-        
+
         // Met à jour l'historique
-        clearHistory(); 
+        clearHistory();
         if (matchData.history) {
             matchData.history.forEach(entry => appendToHistory(entry));
         }
@@ -155,7 +154,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             showMessage("action-msg", `Tour ${turnCount} : C'est votre tour ! Choisissez une action.`);
             document.getElementById("opponent-action-status").textContent = ""; // Efface le statut de l'action de l'adversaire
             setHasPlayedThisTurn(false); // Réinitialise pour le joueur actuel
-            
+
             // Démarre ou réinitialise le timer pour votre tour
             if (timerInterval) clearInterval(timerInterval);
             let countdown = timeLeft; // Commence le compte à rebours là où il est
@@ -167,7 +166,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                     clearInterval(timerInterval);
                     setTimerInterval(null);
                     // Si le temps est écoulé et le joueur n'a pas joué
-                    if (!hasPlayedThisTurn) { 
+                    if (!hasPlayedThisTurn) {
                         appendToHistory(`${currentUser.pseudo} n'a pas agi à temps. Action par défaut: Défense.`);
                         // Action par défaut : défense
                         performAction('defend'); // Utilise la fonction performAction pour mettre à jour Firebase
@@ -191,7 +190,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             if (opponentData.action) {
                 // Si l'adversaire a déjà soumis une action, traite le tour
                 document.getElementById("opponent-action-status").textContent = "Action choisie.";
-                processTurn(matchData); 
+                processTurn(matchData);
             } else {
                 // Si l'adversaire n'a pas encore agi (PvP) ou si c'est le tour de l'IA
                 document.getElementById("opponent-action-status").textContent = "En attente de l'action...";
@@ -201,7 +200,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                     if (!timerInterval) { // Empêche les actions multiples de l'IA
                          console.log("Tour de l'IA. En attente de l'action de l'IA.");
                          // Utilise un setTimeout pour un délai simple pour l'IA
-                         setTimerInterval(setTimeout(() => { 
+                         setTimerInterval(setTimeout(() => {
                              performAIAction(matchId, matchData);
                              setTimerInterval(null); // Efface ce timeout spécifique à l'IA
                          }, 1500)); // Délai de 1.5 seconde pour l'IA
@@ -215,13 +214,13 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     document.getElementById("action-attack").onclick = () => performAction('attack');
     document.getElementById("action-defend").onclick = () => performAction('defend');
     document.getElementById("action-heal").onclick = () => performAction('heal');
-    document.getElementById("back-to-menu-btn").onclick = () => handleForfeit(); 
+    document.getElementById("back-to-menu-btn").onclick = () => handleForfeit();
 }
 
 async function performAction(actionType) {
     // Vérifie si c'est le tour du joueur et s'il n'a pas déjà joué
     if (!currentMatchId || !currentUser || !youKey || hasPlayedThisTurn) {
-        if (!hasPlayedThisTurn) { // Si le joueur n'a pas joué, mais qu'une autre condition est false
+        if (!hasPlayedThisTurn) { // Si le joueur n'a pas joué, mais qu'une autre condition est fausse
             showMessage("action-msg", "Ce n'est pas votre tour ou le match n'est pas prêt.");
         }
         return;
@@ -278,7 +277,7 @@ async function processTurn(matchData) {
     // Traite le tour uniquement si les deux joueurs (ou joueur et IA) ont choisi une action
     if (!matchData.players.p1.action || !matchData.players.p2.action) {
         console.log("En attente de l'action des deux joueurs.");
-        return; 
+        return;
     }
 
     // Arrête le timer s'il est en cours
@@ -300,7 +299,7 @@ async function processTurn(matchData) {
     const p2HealValue = 15; // Valeur de soin
 
     let historyUpdates = [];
-    historyUpdates.push(`--- Tour ${matchData.turnCount || 1} ---`); 
+    historyUpdates.push(`--- Tour ${matchData.turnCount || 1} ---`);
 
     // Applique les cooldowns de soin
     // Crée des copies pour ne pas modifier l'objet d'origine avant la mise à jour Firebase
@@ -314,7 +313,7 @@ async function processTurn(matchData) {
     // Logique des actions
     // P1
     if (p1Action === 'defend') {
-        p2Damage -= 5; 
+        p2Damage -= 5;
         historyUpdates.push(`${p1.pseudo} se défend.`);
     } else if (p1Action === 'heal') {
         if (p1.healCooldown === 0) {
@@ -333,7 +332,7 @@ async function processTurn(matchData) {
 
     // P2
     if (p2Action === 'defend') {
-        p1Damage -= 5; 
+        p1Damage -= 5;
         historyUpdates.push(`${p2.pseudo} se défend.`);
     } else if (p2Action === 'heal') {
         if (p2.healCooldown === 0) {
@@ -351,11 +350,11 @@ async function processTurn(matchData) {
     }
 
     // Applique les dégâts (seulement si l'action n'était pas un soin réussi)
-    if (!(p1Action === 'heal' && p1.healCooldown === 0)) { 
+    if (!(p1Action === 'heal' && p1.healCooldown === 0)) {
         newP1Pv = Math.max(0, newP1Pv - Math.max(0, p2Damage));
         historyUpdates.push(`${p1.pseudo} a reçu ${Math.max(0, p2Damage)} dégâts. PV restants: ${newP1Pv}`);
     }
-    if (!(p2Action === 'heal' && p2.healCooldown === 0)) { 
+    if (!(p2Action === 'heal' && p2.healCooldown === 0)) {
         newP2Pv = Math.max(0, newP2Pv - Math.max(0, p1Damage));
         historyUpdates.push(`${p2.pseudo} a reçu ${Math.max(0, p1Damage)} dégâts. PV restants: ${newP2Pv}`);
     }
@@ -364,18 +363,18 @@ async function processTurn(matchData) {
     const updates = {};
     updates[`matches/${currentMatchId}/players/p1/pv`] = newP1Pv;
     updates[`matches/${currentMatchId}/players/p1/action`] = null;
-    updates[`matches/${currentMatchId}/players/p1/lastAction`] = p1Action; 
+    updates[`matches/${currentMatchId}/players/p1/lastAction`] = p1Action;
     updates[`matches/${currentMatchId}/players/p1/healCooldown`] = nextP1HealCooldown;
 
     updates[`matches/${currentMatchId}/players/p2/pv`] = newP2Pv;
     updates[`matches/${currentMatchId}/players/p2/action`] = null;
-    updates[`matches/${currentMatchId}/players/p2/lastAction`] = p2Action; 
+    updates[`matches/${currentMatchId}/players/p2/lastAction`] = p2Action;
     updates[`matches/${currentMatchId}/players/p2/healCooldown`] = nextP2HealCooldown;
 
     // Avance le tour et met à jour le compteur de tours
     updates[`matches/${currentMatchId}/turn`] = (matchData.turn === 'p1') ? 'p2' : 'p1';
     updates[`matches/${currentMatchId}/turnCount`] = (matchData.turnCount || 0) + 1;
-    updates[`matches/${currentMatchId}/lastTurnProcessedAt`] = serverTimestamp(); 
+    updates[`matches/${currentMatchId}/lastTurnProcessedAt`] = serverTimestamp();
 
     // Ajoute l'historique du tour actuel à l'historique du match
     const newHistory = (matchData.history || []).concat(historyUpdates);
@@ -401,7 +400,7 @@ async function processTurn(matchData) {
         newHistory.push(`${p1.pseudo} gagne !`);
         gameEnded = true;
     }
-    
+
     // Met à jour le résultat final dans Firebase
     if (winnerResult) {
         updates[`matches/${currentMatchId}/result`] = winnerResult;
@@ -446,17 +445,17 @@ function handleGameEnd(matchData, customMessage = null) {
         } else if (result === 'draw') {
             resultMessage = "Le match est un match nul !";
         } else {
-            resultMessage = "Le match est terminé."; 
+            resultMessage = "Le match est terminé.";
         }
     }
 
     showMessage("action-msg", resultMessage);
     appendToHistory(resultMessage);
-    
+
     // Planifie la suppression du match après un délai
     if (gameMode === 'PvP') {
         appendToHistory("Ce match sera supprimé dans 5 minutes.");
-        if (matchDeletionTimeout) clearTimeout(matchDeletionTimeout); 
+        if (matchDeletionTimeout) clearTimeout(matchDeletionTimeout);
         setMatchDeletionTimeout(setTimeout(async () => {
             try {
                 // remove(ref(db), `matches/${currentMatchId}`); // Ancienne syntaxe qui ne fonctionnait pas
@@ -507,7 +506,7 @@ async function handleForfeit() {
         const historyEntry = `${currentUser.pseudo} a abandonné le match.`;
         // Récupère l'historique actuel pour le mettre à jour correctement
         // 'get' doit être importé de firebase-database.js
-        const snapshot = await get(matchHistoryRef); 
+        const snapshot = await get(matchHistoryRef);
         const currentHistory = snapshot.val() || [];
         const newHistory = [...currentHistory, historyEntry];
         await set(matchHistoryRef, newHistory); // Utilise set pour remplacer l'historique
