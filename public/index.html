@@ -858,7 +858,7 @@
                                     console.log("Actions already processed or not present for P1 processing (after timeout).");
                                 }
                             }).catch(err => console.error("Error getting latest match data for processing:", err));
-                        }, 1000); // Délai de 200 ms pour la propagation Firebase
+                        }, 1000); // **Délai de 1000 ms**
                     } else {
                         console.log("P2 detected both actions, P1 is responsible for processing. Waiting for P1's update.");
                     }
@@ -924,7 +924,8 @@
         // --- RESOLUTION DU TOUR ---
         async function processTurn(data, youKeyCurrentListener, opponentKeyCurrentListener, matchRef) {
             console.log("processTurn started (by P1 if logic is followed) with data:", JSON.stringify(data));
-            
+            console.log("data.turn at start of processTurn (current turn):", data.turn); // AJOUTÉ POUR DÉBOGAGE
+
             // Vérifiez encore une fois que les actions sont non-nulles pour éviter le double traitement
             if (!data.players.p1.action || !data.players.p2.action) {
                 console.warn("processTurn called but one or both actions are null. Exiting (already processed or not ready).");
@@ -999,6 +1000,8 @@
 
             // Déterminer le prochain tour ou la fin du match
             let nextTurn = (data.turn === 'p1') ? 'p2' : 'p1';
+            console.log(`Current turn was: ${data.turn}, Calculated next turn: ${nextTurn}`); // AJOUTÉ POUR DÉBOGAGE
+
             let gameStatus = 'playing';
             let winner = null;
             let loser = null;
@@ -1025,7 +1028,7 @@
                 [`players/p1/action`]: null, // Réinitialise l'action du joueur 1 pour le prochain tour
                 [`players/p2/action`]: null, // Réinitialise l'action du joueur 2 pour le prochain tour
                 history: historyUpdates,
-                turn: nextTurn,
+                turn: nextTurn, // C'est cette valeur qui doit être mise à jour dans Firebase
                 status: gameStatus,
                 lastTurnProcessedAt: serverTimestamp() // Mettre à jour le timestamp pour le timer
             };
@@ -1035,7 +1038,7 @@
                 if (loser) updates.loser = loser;
             }
 
-            console.log("Attempting to update Firebase with processed turn data:", JSON.stringify(updates));
+            console.log("Updates payload for Firebase:", JSON.stringify(updates)); // AJOUTÉ POUR DÉBOGAGE
             try {
                 // Utiliser une mise à jour atomique pour garantir la cohérence
                 await update(matchRef, updates);
@@ -1342,7 +1345,7 @@
                             updates.status = 'forfeited';
                             updates.winner = opponentKeyForForfeit; 
                             updates.history = [...(matchData.history || [])]; // Copie l'historique existant
-                            updates.history.push(`${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForForfeit].pseudo} gagne par forfait.`);
+                            updates.history.push(`${currentUser.pseudo} a quitté le match. ${matchData.players[opponentKeyForfeit].pseudo} gagne par forfait.`);
                             
                             update(matchRef, updates)
                                 .then(() => console.log(`${currentUser.pseudo} left and forfeited match ${currentMatchId}`))
