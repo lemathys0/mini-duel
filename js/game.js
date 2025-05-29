@@ -1,7 +1,8 @@
 // game.js
 
 import { db } from "./firebaseConfig.js";
-import { ref, update, serverTimestamp, onValue, off, remove } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+// Correction ici: ajout de 'onDisconnect' aux imports
+import { ref, update, serverTimestamp, onValue, off, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { currentUser, currentMatchId, youKey, opponentKey, gameMode,
          timerMax, timerInterval, setTimerInterval,
          onDisconnectRef, setOnDisconnectRef,
@@ -428,7 +429,7 @@ function handleGameEnd(matchData, customMessage = null) {
         if (matchDeletionTimeout) clearTimeout(matchDeletionTimeout); 
         setMatchDeletionTimeout(setTimeout(async () => {
             try {
-                await remove(ref(db, `matches/${currentMatchId}`));
+                await remove(ref(db), `matches/${currentMatchId}`); // Utilisez remove sur la référence directe
                 console.log(`Match PvP ${currentMatchId} supprimé.`);
                 backToMenu(true);
             } catch (error) {
@@ -440,7 +441,7 @@ function handleGameEnd(matchData, customMessage = null) {
         if (matchDeletionTimeout) clearTimeout(matchDeletionTimeout);
         setMatchDeletionTimeout(setTimeout(async () => {
             try {
-                await remove(ref(db, `matches/${currentMatchId}`));
+                await remove(ref(db, `matches/${currentMatchId}`)); // Utilisez remove sur la référence directe
                 console.log(`Match IA ${currentMatchId} supprimé.`);
                 backToMenu(true);
             } catch (error) {
@@ -473,7 +474,7 @@ async function handleForfeit() {
         const matchHistoryRef = ref(db, `matches/${currentMatchId}/history`);
         const historyEntry = `${currentUser.pseudo} a abandonné le match.`;
         // Récupère l'historique actuel pour le mettre à jour correctement
-        const snapshot = await get(matchHistoryRef);
+        const snapshot = await get(matchHistoryRef); // Assurez-vous d'avoir 'get' importé si ce n'est pas déjà fait
         const currentHistory = snapshot.val() || [];
         const newHistory = [...currentHistory, historyEntry];
         await set(matchHistoryRef, newHistory); // Utilise set pour remplacer l'historique
