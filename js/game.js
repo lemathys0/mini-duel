@@ -243,6 +243,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
         // --- Condition pour déclencher processTurn ---
         // Cette condition se déclenchera une fois que les actions de P1 et P2 sont présentes et que le match est en cours.
+        // C'est crucial pour faire avancer le jeu après que les deux parties aient agi.
         if (matchData.players.p1.action && matchData.players.p2.action && matchData.status === 'playing') {
             console.log("Les deux joueurs ont soumis leurs actions. Traitement du tour.");
             await processTurn(matchData);
@@ -434,7 +435,8 @@ async function processTurn(matchData) {
         newStatus = 'finished';
         winner = p2.pseudo;
         historyUpdates.push(`${p1.pseudo} est K.O. ! ${p2.pseudo} a gagné !`);
-    } else if (newP2Pv <= 0) {
+    }
+    else if (newP2Pv <= 0) {
         newStatus = 'finished';
         winner = p1.pseudo;
         historyUpdates.push(`${p2.pseudo} est K.O. ! ${p1.pseudo} a gagné !`);
