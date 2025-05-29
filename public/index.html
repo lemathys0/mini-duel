@@ -868,6 +868,7 @@
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
+                console.log("Timer interval cleared (startMatchMonitoring)."); // Log added
             }
             if (onDisconnectRef) {
                 onDisconnectRef.cancel().catch(err => console.error("Error canceling old onDisconnect:", err));
@@ -925,6 +926,7 @@
                     disableActionButtons(true);
                     if (timerInterval) clearInterval(timerInterval);
                     timerInterval = null;
+                    console.log("Timer interval cleared (not player in match)."); // Log added
                     return;
                 }
 
@@ -996,6 +998,7 @@
                     disableActionButtons(true);
                     if (timerInterval) clearInterval(timerInterval);
                     timerInterval = null;
+                    console.log("Timer interval cleared (waiting for opponent)."); // Log added
                     updateTimerUI(timerMax); // Reset timer display
                     return;
                 }
@@ -1020,7 +1023,10 @@
                     const timeRemaining = Math.max(0, timerMax - elapsedSinceLastTurn);
                     updateTimerUI(timeRemaining);
 
-                    if (timerInterval) clearInterval(timerInterval); // Arrête tout timer précédent
+                    if (timerInterval) {
+                        clearInterval(timerInterval); // Arrête tout timer précédent
+                        console.log("Timer interval cleared (new turn state detected)."); // Log added
+                    }
 
                     if (youKey === activePlayerKey) {
                         // C'est mon tour, et je n'ai pas soumis d'action
@@ -1032,18 +1038,21 @@
                                 const currentElapsed = Math.floor((Date.now() - lastTurnProcessedTime) / 1000);
                                 const currentRemaining = Math.max(0, timerMax - currentElapsed);
                                 updateTimerUI(currentRemaining);
+                                console.log(`Timer tick for ${youKey}: ${currentRemaining}s remaining.`); // Log added
                                 if (currentRemaining <= 0) {
                                     clearInterval(timerInterval);
                                     timerInterval = null;
+                                    console.log("Timer interval cleared (timeout reached)."); // Log added
                                     console.log(`Timer for ${currentUser.pseudo} (${youKey}) expired. Submitting default action for YOU.`);
                                     submitDefaultAction(youKey, matchRef, data); // Soumet pour CE joueur
                                 }
-                            }, 200);
+                            }, 1000);
+                            console.log("Timer interval set for:", youKey); // Log added
                         } else {
-                            // J'ai déjà joué, j'attends l'adversaire (P1 traitera)
-                            disableActionButtons(true);
-                            actionMsgEl.textContent = "Action jouée. En attente de l'adversaire...";
-                            console.log("Your turn, action played. Waiting for opponent.");
+                             // J'ai déjà joué mon action pour ce tour, j'attends l'adversaire
+                             disableActionButtons(true);
+                             actionMsgEl.textContent = "Action jouée. En attente de l'adversaire...";
+                             console.log(`Your turn (${youKey}), action played. Waiting for opponent.`); // Log added
                         }
                     } else { // C'est le tour de l'adversaire (et il n'a pas soumis son action)
                         disableActionButtons(true);
@@ -1058,8 +1067,11 @@
                         }
                     }
                 } else { // L'action du joueur actif est déjà soumise
-                    if (timerInterval) clearInterval(timerInterval);
-                    timerInterval = null;
+                    if (timerInterval) {
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                        console.log("Timer interval cleared (action submitted)."); // Log added
+                    }
                     updateTimerUI(timerMax); // Reset timer UI to full if actions are present
 
                     // Si les deux actions (P1 et P2) sont présentes dans Firebase, et que ce client est P1,
@@ -1116,6 +1128,7 @@
             if (timerInterval) {
                 clearInterval(timerInterval); // Stop timer immediately when processing
                 timerInterval = null;
+                console.log("Timer interval cleared (processTurn)."); // Log added
             }
             disableActionButtons(true); // Disable buttons during processing
 
@@ -1219,11 +1232,11 @@
                 if (loser) updates.loser = loser;
             }
 
-            console.log("DEBUG: Final updates payload sent to Firebase:", JSON.stringify(updates, null, 2)); // AJOUTÉ POUR DÉBOGAGE
+            console.log("DEBUG: Final updates payload sent to Firebase (processTurn):", JSON.stringify(updates, null, 2)); // AJOUTÉ POUR DÉBOGAGE
             try {
                 // Utiliser une mise à jour atomique pour garantir la cohérence
                 await update(matchRef, updates);
-                console.log("DEBUG: Firebase update completed successfully.");
+                console.log("DEBUG: Firebase update completed successfully (processTurn).");
                 // Le onValue listener va détecter ce changement et mettre à jour l'UI
                 // et potentiellement déclencher le timer pour le prochain tour.
             } catch (error) {
@@ -1253,11 +1266,13 @@
             newHistory.push(`${pseudo} n'a pas agi à temps et s'est automatiquement défendu.`);
             updates.history = newHistory;
 
+            console.log(`DEBUG: Updates payload for default action (${playerKey}):`, JSON.stringify(updates, null, 2)); // Log added
+
             try {
                 await update(matchRef, updates);
-                console.log(`Default action '${defaultAction}' submitted for ${pseudo} (${playerKey}) due to timeout.`);
+                console.log(`DEBUG: Default action '${defaultAction}' submitted for ${pseudo} (${playerKey}) due to timeout. Firebase update successful.`); // Log added
             } catch (error) {
-                console.error(`Error submitting default action for ${playerKey}:`, error);
+                console.error(`DEBUG: ERROR submitting default action for ${playerKey}:`, error); // Log added
                 // Ne pas afficher de message d'erreur à l'utilisateur, car cela peut se produire en arrière-plan
             }
         }
@@ -1320,9 +1335,9 @@
             updates[`players/${playerKeyInMatch}/action`] = actionType;
 
             const actionDisplayName = {
-                'attack': 'Attaque',
-                'defend': 'Défense',
-                'heal': 'Soin'
+                'attack': 'Attaquer',
+                'defend': 'Défendre',
+                'heal': 'Soigner'
             }[actionType];
 
             actionMsgEl.textContent = `Vous avez choisi : ${actionDisplayName}. En attente de l'adversaire...`;
@@ -1332,8 +1347,11 @@
                 await update(matchRef, updates);
                 hasPlayedThisTurn = true; // Marquer comme joué pour ce tour sur le client
                 disableActionButtons(true);
-                if (timerInterval) clearInterval(timerInterval); // Arrêter le timer une fois l'action soumise
-                timerInterval = null;
+                if (timerInterval) {
+                    clearInterval(timerInterval); // Arrêter le timer une fois l'action soumise
+                    timerInterval = null;
+                    console.log("Timer interval cleared (action submitted by player)."); // Log added
+                }
                 console.log(`Action '${actionType}' submitted by ${currentUser.pseudo}. Timer stopped.`);
             } catch (error) {
                 console.error("Error performing action:", error);
@@ -1380,6 +1398,7 @@
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
+                console.log("Timer interval cleared (game end)."); // Log added
             }
             if (onDisconnectRef) {
                 onDisconnectRef.cancel().catch(error => console.error("Error cancelling onDisconnect:", error));
@@ -1458,7 +1477,7 @@
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
-                console.log("Timer interval cleared.");
+                console.log("Timer interval cleared (back to menu)."); // Log added
             }
             if (matchDeletionTimeout) {
                 clearTimeout(matchDeletionTimeout);
