@@ -28,7 +28,12 @@ import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActio
 let currentMatchUnsubscribe = null;
 
 // Variable de verrouillage pour empêcher l'IA de jouer plusieurs fois d'affilée sur le même tour
+// et aussi pour empêcher processTurn de se déclencher pendant que l'IA agit.
 let isAIProcessingTurn = false;
+
+// Verrou pour empêcher processTurn de se déclencher plusieurs fois pour le même tour
+let isProcessingTurnInternally = false;
+
 
 /**
  * Exécute une action choisie par le joueur.
@@ -51,6 +56,13 @@ export async function performAction(actionType) {
     if (hasPlayedThisTurn) {
         showMessage("action-msg", "Vous avez déjà joué votre tour.");
         console.warn("performAction : Joueur a déjà joué ce tour.");
+        return;
+    }
+    
+    // Empêcher l'action si processTurn est déjà en cours
+    if (isProcessingTurnInternally) {
+        showMessage("action-msg", "Le tour est en cours de traitement, veuillez patienter.");
+        console.warn("performAction : Traitement de tour en cours, action bloquée.");
         return;
     }
 
@@ -244,7 +256,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 // l'action du joueur est soumise, et l'action de l'IA est toujours null.
                 if (gameMode === 'PvAI' && matchData.players[youKey].action && !matchData.players[opponentKey].action) {
                     console.log("DEBUG IA (APRES JOUEUR): Conditions remplies. Déclenchement de processAITurn.");
-                    await processAITurn(matchData);
+                    await processAITurn(matchData); // Cette fonction déclenchera processTurn après que l'IA ait agi
                 } else if (gameMode === 'PvAI') {
                     console.log("DEBUG IA (APRES JOUEUR): Conditions NON remplies pour déclencher l'IA après action du joueur.");
                     if (!matchData.players[youKey].action) console.log("DEBUG IA (APRES JOUEUR): -> L'action du joueur n'est pas soumise.");
@@ -268,43 +280,20 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             // L'IA joue si c'est un match PvAI, c'est son tour, et son action est null.
             if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
                 console.log("DEBUG IA (DEBUT TOUR IA): Conditions remplies. Déclenchement de processAITurn.");
-                await processAITurn(matchData);
+                await processAITurn(matchData); // Cette fonction déclenchera processTurn après que l'IA ait agi
             } else if (gameMode === 'PvAI') {
                 console.log("DEBUG IA (DEBUT TOUR IA): Conditions NON remplies pour déclencher l'IA.");
                 if (matchData.players[opponentKey].action) console.log("DEBUG IA (DEBUT TOUR IA): -> L'IA a déjà une action en attente.");
             }
         }
 
-        // --- Condition pour déclencher processTurn ---
-        // Cette condition se déclenchera une fois que les actions de P1 et P2 sont présentes et que le match est en cours.
-        // C'est crucial pour faire avancer le jeu après que les deux parties aient agi.
-        console.log("DEBUG PROCESS TURN: Vérification pour déclencher processTurn.");
-        console.log("DEBUG PROCESS TURN: P1 action:", matchData.players.p1.action, ", P2 action:", matchData.players.p2.action, ", Match Status:", matchData.status);
+        // --- Ancienne condition pour déclencher processTurn ---
+        // Cette section a été retirée pour un déclenchement plus contrôlé.
+        // La logique de déclenchement de processTurn sera maintenant dans processAITurn ou après une action PvP confirmée.
+        console.log("DEBUG PROCESS TURN: Vérification pour déclencher processTurn. (Passée par l'écouteur onValue)");
+        // L'appel à processTurn ne se fera plus ici directement via onValue pour éviter les races conditions.
+        // Il sera déclenché de manière plus contrôlée depuis les fonctions qui garantissent les deux actions sont là.
 
-        // MODIFICATION ICI: Ajoutez isAIProcessingTurn pour éviter que processTurn ne se déclenche
-        // AVANT que l'IA n'ait effectivement écrit son action.
-        if (matchData.players.p1.action && matchData.players.p2.action && matchData.status === 'playing' && !isAIProcessingTurn) {
-            console.log("DEBUG PROCESS TURN: Les deux joueurs ont soumis leurs actions et le match est en cours. Traitement du tour.");
-            // Ajout d'un délai minimum pour s'assurer que Firebase a bien propagé l'action de l'IA
-            // avant de lancer le processTurn. Cela aide à gérer les conditions de concurrence.
-            setTimeout(async () => {
-                const latestMatchDataSnapshot = await get(matchRef); // Récupère les données les plus récentes
-                const latestMatchData = latestMatchDataSnapshot.val();
-
-                if (latestMatchData && latestMatchData.players.p1.action && latestMatchData.players.p2.action && latestMatchData.status === 'playing') {
-                     console.log("DEBUG PROCESS TURN (Delayed): Les conditions sont toujours remplies, exécution de processTurn.");
-                     await processTurn(latestMatchData);
-                } else {
-                     console.log("DEBUG PROCESS TURN (Delayed): Conditions non remplies après le délai. Probablement déjà traité ou état invalide.");
-                }
-            }, 100); // Court délai (ex: 100ms) pour laisser Firebase se synchroniser.
-        } else {
-            console.log("DEBUG PROCESS TURN: Conditions NON remplies pour déclencher processTurn.");
-            if (!matchData.players.p1.action) console.log("DEBUG PROCESS TURN: -> P1 n'a pas d'action.");
-            if (!matchData.players.p2.action) console.log("DEBUG PROCESS TURN: -> P2 n'a pas d'action.");
-            if (matchData.status !== 'playing') console.log("DEBUG PROCESS TURN: -> Le statut du match n'est pas 'playing'.");
-            if (isAIProcessingTurn) console.log("DEBUG PROCESS TURN: -> L'IA est en cours de traitement (isAIProcessingTurn est true).");
-        }
     }, (error) => { // Fin de onValue
         console.error("Erreur d'écoute sur le match :", error);
         showMessage("match-msg", "Erreur de connexion au match.");
@@ -353,7 +342,6 @@ async function processAITurn(matchData) {
     const aiPlayerKey = opponentKey; // L'IA est toujours l'adversaire
 
     // Vérification de verrouillage pour empêcher le déclenchement multiple.
-    // Cette vérification est cruciale.
     if (isAIProcessingTurn) {
         console.log("processAITurn: Un traitement de l'IA est déjà en cours. Abandon.");
         return;
@@ -361,7 +349,6 @@ async function processAITurn(matchData) {
     isAIProcessingTurn = true; // Déclenche le verrouillage
 
     // Double vérification pour le cas où l'action serait déjà là (suite à une race condition très rapide)
-    // Nous récupérons les données de l'IA directement de matchData pour être sûr de l'état actuel
     if (matchData.players[aiPlayerKey].action) {
         console.log("processAITurn: L'IA a déjà une action soumise (d'après matchData). Relâche le verrou et abandonne.");
         isAIProcessingTurn = false; // Relâche le verrou si cette condition est vraie
@@ -395,7 +382,7 @@ async function processAITurn(matchData) {
             console.log("processAITurn: Joueur plus fort, IA a une chance de choisir 'defend'.");
         } else {
             aiAction = 'attack'; // Sinon, attaque
-            console.log("processAITurn: Conditions par défaut, IA choisit 'attack'.");
+            console.ol("processAITurn: Conditions par défaut, IA choisit 'attack'.");
         }
     }
 
@@ -410,12 +397,29 @@ async function processAITurn(matchData) {
         const currentAiActionSnapshot = await get(ref(db, `matches/${currentMatchId}/players/${aiPlayerKey}/action`));
         if (currentAiActionSnapshot.exists() && currentAiActionSnapshot.val() !== null) {
             console.warn("processAITurn: Action de l'IA déjà définie dans Firebase juste avant la mise à jour. Annulation pour éviter un écrasement."); // NOUVEAU LOG
+            isAIProcessingTurn = false; // Important de relâcher le verrou ici aussi
             return; // Sortir si l'action est déjà là
         }
 
         await update(matchRef, { [`players/${aiPlayerKey}/action`]: aiAction });
         console.log(`IA a choisi et enregistré l'action : ${aiAction} dans Firebase.`); // NOUVEAU LOG : Action enregistrée
         showMessage("history", `L'IA a choisi son action.`); // Ajoute un message générique à l'historique
+
+        // --- DÉCLENCHEMENT EXPLICITE DE PROCESS TURN APRÈS L'ACTION DE L'IA ---
+        // Après que l'IA ait soumis son action, nous devons vérifier si le joueur a également soumis la sienne
+        // et déclencher le traitement du tour si c'est le cas.
+        const latestMatchDataSnapshot = await get(matchRef); // Récupère les données les plus récentes
+        const latestMatchData = latestMatchDataSnapshot.val();
+
+        if (latestMatchData && latestMatchData.players.p1.action && latestMatchData.players.p2.action && latestMatchData.status === 'playing' && !isProcessingTurnInternally) {
+            console.log("DEBUG IA (processAITurn FINI): Les deux joueurs ont leurs actions, déclenchement de processTurn.");
+            await processTurn(latestMatchData); // Déclenche le traitement du tour
+        } else {
+            console.log("DEBUG IA (processAITurn FINI): Conditions non remplies pour déclencher processTurn après action IA.");
+            if (isProcessingTurnInternally) console.log("DEBUG IA (processAITurn FINI): -> Un traitement de tour est déjà en cours.");
+        }
+
+
     } catch (error) {
         console.error("Erreur lors de l'enregistrement de l'action de l'IA :", error);
     } finally {
@@ -430,6 +434,14 @@ async function processAITurn(matchData) {
  */
 async function processTurn(matchData) {
     console.log("processTurn lancé."); // DEBUG
+    
+    // Verrou interne pour éviter le double traitement
+    if (isProcessingTurnInternally) {
+        console.warn("processTurn: Déjà en cours de traitement, abandon.");
+        return;
+    }
+    isProcessingTurnInternally = true; // Active le verrou
+
     // FIX: Arrête l'intervalle correctement
     if (timerInterval) {
         clearInterval(timerInterval);
@@ -441,6 +453,7 @@ async function processTurn(matchData) {
     // Cette condition est très importante pour éviter de traiter deux fois le même tour
     if (matchData.status !== 'playing' || !matchData.players.p1.action || !matchData.players.p2.action) {
         console.warn("processTurn : Annulé, les conditions ne sont pas remplies ou déjà traité.");
+        isProcessingTurnInternally = false; // Relâche le verrou
         return;
     }
 
@@ -564,6 +577,9 @@ async function processTurn(matchData) {
         console.error("Erreur lors du traitement du tour :", error);
         showMessage("action-msg", "Erreur interne lors du traitement du tour.");
         enableActionButtons(); // Réactive les boutons en cas d'erreur grave
+    } finally {
+        isProcessingTurnInternally = false; // Relâche le verrou à la fin du traitement
+        console.log("processTurn: Verrou isProcessingTurnInternally relâché.");
     }
 }
 
