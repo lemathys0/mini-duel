@@ -858,7 +858,7 @@
                                     console.log("Actions already processed or not present for P1 processing (after timeout).");
                                 }
                             }).catch(err => console.error("Error getting latest match data for processing:", err));
-                        }, 0); // Délai de 200 ms pour la propagation Firebase
+                        }, 1000); // Délai de 200 ms pour la propagation Firebase
                     } else {
                         console.log("P2 detected both actions, P1 is responsible for processing. Waiting for P1's update.");
                     }
