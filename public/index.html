@@ -782,109 +782,116 @@
         }
 
 
-        // --- ACTIONS ---
-        document.getElementById("attack-btn").onclick = () => doAction("attack");
-        document.getElementById("defend-btn").onclick = () => doAction("defend");
-        document.getElementById("heal-btn").onclick = () => doAction("heal");
+       // --- ACTIONS ---
+document.getElementById("attack-btn").onclick = () => doAction("attack");
+document.getElementById("defend-btn").onclick = () => doAction("defend");
+document.getElementById("heal-btn").onclick = () => doAction("heal");
 
-        function doAction(actionType) {
-            if (hasPlayedThisTurn || !currentMatchId) return;
+function doAction(actionType) {
+    if (hasPlayedThisTurn || !currentMatchId) return;
 
-            const matchRef = ref(db, `matches/${currentMatchId}`);
-            // Optimistic UI update can be done here, then confirmed by onValue
-            
-            get(matchRef).then(snapshot => { // Get current state to perform action
-                const data = snapshot.val();
-                if (!data || data.status !== 'playing') {
-                    actionMsgEl.textContent = "Le match n'est pas en cours.";
-                    return;
-                }
+    const matchRef = ref(db, `matches/${currentMatchId}`);
 
-                let youKey, opponentKey;
-                if (data.players.p1 && data.players.p1.pseudo === currentUser.pseudo) {
-                    youKey = "p1"; opponentKey = "p2";
-                } else if (data.players.p2 && data.players.p2.pseudo === currentUser.pseudo) {
-                    youKey = "p2"; opponentKey = "p1";
-                } else { return; } // Not a player
-
-                if (data.turn !== youKey) {
-                    showMessage("action-msg", "Ce n'est pas votre tour.");
-                    return;
-                }
-
-                const you = data.players[youKey];
-                const opponent = data.players[opponentKey];
-
-                if (!opponent) { // Should not happen if status is 'playing'
-                    showMessage("action-msg", "Adversaire non trouvé.");
-                    return;
-                }
-
-                let newPlayerStates = JSON.parse(JSON.stringify(data.players)); // Deep copy
-                let historyEntry = "";
-                
-                // Reset own defense state before new action (unless action is defend again)
-                newPlayerStates[youKey].defending = false;
-
-                switch (actionType) {
-                    case "attack":
-                        let damage = Math.floor(Math.random() * 11) + 15; // 15-25 damage
-                        if (newPlayerStates[opponentKey].defending) {
-                            damage = Math.floor(damage / 2);
-                            historyEntry = `${you.pseudo} attaque ${opponent.pseudo} (en défense) et inflige ${damage} dégâts.`;
-                            newPlayerStates[opponentKey].defending = false; // Defense breaks after one hit
-                        } else {
-                            historyEntry = `${you.pseudo} attaque ${opponent.pseudo} et inflige ${damage} dégâts.`;
-                        }
-                        newPlayerStates[opponentKey].pv = Math.max(0, opponent.pv - damage);
-                        // Visual effect for damage
-                        opponentPvDisplayEl.classList.add('damage-effect');
-                        setTimeout(() => opponentPvDisplayEl.classList.remove('damage-effect'), 600);
-                        break;
-                    case "defend":
-                        newPlayerStates[youKey].defending = true;
-                        historyEntry = `${you.pseudo} se met en position défensive.`;
-                        break;
-                    case "heal":
-                        let healAmount = Math.floor(Math.random() * 11) + 10; // 10-20 heal
-                        newPlayerStates[youKey].pv = Math.min(100, you.pv + healAmount);
-                        historyEntry = `${you.pseudo} se soigne de ${healAmount} PV. (Total: ${newPlayerStates[youKey].pv})`;
-                         // Visual effect for heal
-                        youPvDisplayEl.classList.add('heal-effect');
-                        setTimeout(() => youPvDisplayEl.classList.remove('heal-effect'), 600);
-                        break;
-                    default: return;
-                }
-
-                const updates = {
-                    players: newPlayerStates,
-                    turn: opponentKey, // Switch turn
-                    history: [...(data.history || []), historyEntry],
-                    status: (newPlayerStates[youKey].pv <= 0 || newPlayerStates[opponentKey].pv <= 0) ? 'finished' : 'playing'
-                };
-                
-                // If game ends due to this action, determine winner
-                if (updates.status === 'finished') {
-                    if (newPlayerStates[youKey].pv <= 0 && newPlayerStates[opponentKey].pv <= 0) updates.winner = 'draw';
-                    else if (newPlayerStates[youKey].pv <= 0) updates.winner = opponentKey;
-                    else updates.winner = youKey;
-                }
-
-
-                update(matchRef, updates).catch(err => console.error("Error updating match on action:", err));
-                
-                hasPlayedThisTurn = true;
-                disableActionButtons(true);
-                actionMsgEl.textContent = "Action envoyée. En attente de l'adversaire...";
-                if(timerInterval) clearInterval(timerInterval); // Stop timer after playing
-                timerInterval = null;
-
-            }).catch(error => {
-                console.error("Error performing action (get phase):", error);
-                actionMsgEl.textContent = "Erreur lors de l'action.";
-            });
+    // Utilisation de runTransaction pour gérer les actions  
+    runTransaction(matchRef, (currentData) => {
+        if (!currentData) {
+            console.warn("Le match n'existe plus.");
+            return; // Le match n'existe plus, la transaction s'arrête.
+        }
+        // Vérifier si le match est en cours, sinon arrêter.
+        if (currentData.status !== 'playing') {
+            actionMsgEl.textContent = "Le match n'est pas en cours.";
+            return; 
         }
 
+        let youKey, opponentKey;
+        if (currentData.players.p1 && currentData.players.p1.pseudo === currentUser.pseudo) {
+            youKey = "p1"; opponentKey = "p2";
+        } else if (currentData.players.p2 && currentData.players.p2.pseudo === currentUser.pseudo) {
+            youKey = "p2"; opponentKey = "p1";
+        } else {
+            console.warn("Joueur non trouvé dans le match. Action annulée.");
+            return; // Pas un joueur  
+        }
+
+        // Vérification cruciale : est-ce toujours mon tour selon les données les plus récentes ?
+        if (currentData.turn !== youKey) {
+            actionMsgEl.textContent = "Ce n'est pas votre tour.";
+            return; // La transaction s'arrête, aucune modification.
+        }
+
+        const you = currentData.players[youKey];
+        const opponent = currentData.players[opponentKey];
+
+        if (!opponent) {
+            actionMsgEl.textContent = "Adversaire non trouvé.";
+            return; // Should not happen if status is 'playing'
+        }
+
+        let newPlayerStates = JSON.parse(JSON.stringify(currentData.players)); // Copie profonde  
+        let historyEntry = "";
+        
+        // Reset own defense state before new action (unless action is defend again)
+        newPlayerStates[youKey].defending = false;
+
+        switch (actionType) {
+            case "attack":
+                let damage = Math.floor(Math.random() * 11) + 15; // 15-25 damage  
+                if (newPlayerStates[opponentKey].defending) {
+                    damage = Math.floor(damage / 2);
+                    historyEntry = `${you.pseudo} attaque ${opponent.pseudo} (en défense) et inflige ${damage} dégâts.`;
+                    newPlayerStates[opponentKey].defending = false; // Defense breaks after one hit  
+                } else {
+                    historyEntry = `${you.pseudo} attaque ${opponent.pseudo} et inflige ${damage} dégâts.`;
+                }
+                newPlayerStates[opponentKey].pv = Math.max(0, opponent.pv - damage);
+                break;
+            case "defend":
+                newPlayerStates[youKey].defending = true;
+                historyEntry = `${you.pseudo} se met en position défensive.`;
+                break;
+            case "heal":
+                let healAmount = Math.floor(Math.random() * 11) + 10; // 10-20 heal  
+                newPlayerStates[youKey].pv = Math.min(100, you.pv + healAmount);
+                historyEntry = `${you.pseudo} se soigne de ${healAmount} PV. (Total: ${newPlayerStates[youKey].pv})`;
+                break;
+            default: 
+                console.warn("Type d'action inconnu. Action annulée.");
+                return; // Action invalide  
+        }
+
+        const updates = {
+            players: newPlayerStates,
+            turn: opponentKey, // Switch turn  
+            history: [...(currentData.history || []), historyEntry],
+            status: (newPlayerStates[youKey].pv <= 0 || newPlayerStates[opponentKey].pv <= 0) ? 'finished' : 'playing'
+        };
+        
+        // If game ends due to this action, determine winner  
+        if (updates.status === 'finished') {
+            if (newPlayerStates[youKey].pv <= 0 && newPlayerStates[opponentKey].pv <= 0) updates.winner = 'draw';
+            else if (newPlayerStates[youKey].pv <= 0) updates.winner = opponentKey;
+            else updates.winner = youKey;
+        }
+
+        return updates; // Renvoyer les mises à jour de l'état du match  
+    }).then(result => {
+        if (!result.committed) {
+            console.warn(`Transaction pour action ${actionType} non validée. L'état du jeu a peut-être changé.`);
+            // L'interface utilisateur se mettra à jour via onValue de toute façon.
+        } else {
+            console.log(`Transaction pour action ${actionType} validée.`);
+            hasPlayedThisTurn = true;
+            disableActionButtons(true);
+            actionMsgEl.textContent = "Action envoyée. En attente du tour adversaire...";
+            if (timerInterval) clearInterval(timerInterval); 
+            timerInterval = null;
+        }
+    }).catch(error => {
+        console.error(`Transaction pour action ${actionType} échouée: `, error);
+        actionMsgEl.textContent = "Erreur lors de l'action (transaction).";
+    });
+}
         // --- TIMER ---
         function resetTimerAndStart(currentPlayerKey, nextPlayerKey) {
             if (timerInterval) clearInterval(timerInterval);
