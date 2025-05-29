@@ -14,7 +14,7 @@
     <div class="container">
         <h1>Mini Duel de Cartes</h1>
 
-        <div id="auth">
+        <div id="auth" class="menu-section">
             <h2>Authentification</h2>
             <input type="text" id="pseudo" placeholder="Votre Pseudo">
             <input type="password" id="code" placeholder="Votre Code (4 chiffres)">
@@ -23,16 +23,22 @@
             <p id="auth-msg" class="message"></p>
         </div>
 
-        <div id="match">
+        <div id="main-menu" class="menu-section" style="display:none;">
             <h2>Bienvenue <span id="player-name" style="color:#f1c40f;"></span> !</h2>
-            <h3>Rejoindre ou Créer un Match</h3>
-            <input type="text" id="match-id" placeholder="Code du Match (ex: ABC123)">
+            <p id="pseudo-display"></p> <p id="match-msg" class="message"></p>
+
+            <h3>Choisissez un mode de jeu</h3>
             <div style="display: flex; flex-wrap: wrap; justify-content: center; margin-top: 10px;">
-                <button id="join-match-btn" style="flex: 1 1 auto; margin: 5px;">Rejoindre Match</button>
-                <button id="create-match-btn" style="flex: 1 1 auto; margin: 5px;">Créer Match</button>
-                <button id="play-ai-btn" style="flex: 1 1 auto; margin: 5px; background-color: #27ae60;">Jouer contre l'IA</button>
-            </div>
-            <p id="match-msg" class="message"></p>
+                <button id="start-ai-game-btn" style="flex: 1 1 auto; margin: 5px; background-color: #27ae60;">Jouer contre l'IA</button>
+                <button id="start-pvp-game-btn" style="flex: 1 1 auto; margin: 5px; background-color: #3498db;">Rejoindre un match PvP</button>
+                </div>
+            <button id="logout-btn" class="menu-button" style="margin-top: 20px;">Déconnexion</button>
+        </div>
+
+        <div id="matchmaking-status" class="menu-section" style="display:none;">
+            <h3>Recherche de match PvP...</h3>
+            <p id="matchmaking-message"></p>
+            <button id="cancel-matchmaking-btn" class="menu-button">Annuler la recherche</button>
         </div>
 
         <div id="game">
@@ -63,11 +69,10 @@
                 <span class="timer-value" id="timer-value">20</span>
             </div>
 
-            <div class="game-controls">
-                <p id="action-msg" class="message"></p>
-                <button id="attack-btn">Attaquer (10 dégâts)</button>
-                <button id="defend-btn">Défendre (-5 dégâts reçus)</button>
-                <button id="heal-btn">Soigner (+15 PV)</button>
+            <div class="game-controls action-buttons"> <p id="action-msg" class="message"></p>
+                <button id="action-attack">Attaquer (10 dégâts)</button>
+                <button id="action-defend">Défendre (-5 dégâts reçus)</button>
+                <button id="action-heal">Soigner (+15 PV)</button>
             </div>
 
             <div class="history-section">
@@ -80,4 +85,4 @@
 
     <script type="module" src="js/main.js"></script>
 </body>
-</html> 
+</html>

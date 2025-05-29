@@ -1,3 +1,5 @@
+// game.js - Mise à jour de la logique de démarrage du match et du traitement du tour
+
 import { db } from "./firebaseConfig.js";
 import { ref, get, update, onValue, onDisconnect, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { showMessage, disableActionButtons, updateHealthBar, updateTimerUI, clearHistory } from "./utils.js";
@@ -50,7 +52,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
 
         // 1. Gestion du match supprimé ou inexistant
         if (!data) {
-            if (currentMatchId === id) {
+            if (currentMatchId === id) { // S'assurer que c'est bien le match en cours qui est supprimé
                 showMessage("action-msg", "Le match a été terminé ou supprimé.");
                 if (currentMatchUnsubscribe) currentMatchUnsubscribe();
                 currentMatchUnsubscribe = null;
@@ -72,17 +74,18 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         }
 
         // 3. Mise à jour de lastSeen et définition de onDisconnect (PvP seulement)
-        if (gameMode === 'PvP') {
+        if (data.mode === 'PvP') { // Utiliser data.mode pour déterminer si c'est PvP
             const yourPlayerRef = ref(db, `matches/${id}/players/${youKey}`);
             if (!onDisconnectRef) {
                 const newOnDisconnectRef = onDisconnect(yourPlayerRef);
                 newOnDisconnectRef.update({
-                    pv: 0,
+                    pv: 0, // PV à 0 pour indiquer une défaite par déconnexion
                     status: 'forfeited',
                     lastSeen: serverTimestamp()
                 }).catch(error => console.error("Error setting onDisconnect:", error));
                 setOnDisconnectRef(newOnDisconnectRef);
             }
+            // Mettre à jour le statut du joueur à chaque rafraîchissement
             update(yourPlayerRef, { lastSeen: serverTimestamp(), status: 'connected' });
         }
 
@@ -103,12 +106,14 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
                 opponentActionStatus = "En attente d'action de l'adversaire...";
             }
             
-            if (gameMode === 'PvP' && (opponent.status === 'forfeited' || opponent.pv <= 0)) {
+            // Gérer le forfait de l'adversaire en mode PvP
+            if (data.mode === 'PvP' && (opponent.status === 'forfeited' || opponent.pv <= 0)) {
                 showMessage("action-msg", `L'adversaire (${opponent.pseudo}) a quitté le match ou est vaincu.`);
-                handleGameEnd(data, 'win');
+                handleGameEnd(data, 'win'); // Le joueur actuel gagne par forfait
                 return;
             }
         } else {
+            // Affichage si l'adversaire n'est pas encore connecté (en mode PvP 'waiting')
             document.getElementById("opponent-pv-display").textContent = "N/A";
             document.getElementById("opponent-health-bar").style.width = "0%";
             document.getElementById("opponent-health-bar").textContent = "0%";
@@ -120,6 +125,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         // Mise à jour visuelle du bouton de soin du joueur
         const healButton = document.getElementById("action-heal");
         updateHealButtonUI(healButton, you.healCooldown, HEAL_COOLDOWN_TURNS);
+
 
         // 5. Conditions de fin de jeu
         if (data.status === 'finished' || you.pv <= 0 || (opponent && opponent.pv <= 0)) {
@@ -135,7 +141,13 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         }
 
         // 6. Si le match est en attente du P2 (PvP seulement)
-        if (gameMode === 'PvP' && (data.status === "waiting" || !opponent)) {
+        // Cacher la section de matchmaking une fois que le match commence vraiment (status "playing")
+        if (data.status === "playing") {
+             document.getElementById("matchmaking-status").style.display = "none";
+        }
+
+        if (data.mode === 'PvP' && (data.status === "waiting" || !opponent || opponent.status === 'forfeited')) {
+            // Si le match est en attente d'un adversaire, afficher le message approprié
             showMessage("action-msg", "En attente de l'adversaire...");
             disableActionButtons(true);
             if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
@@ -151,9 +163,9 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         
         if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); } 
 
-        // LOGIQUE DU JOUEUR HUMAIN (P1)
-        // Les boutons sont activés UNIQUEMENT si c'est le tour de P1 (data.turn === youKey)
-        // ET si P1 n'a pas encore soumis son action pour ce round.
+        // LOGIQUE DU JOUEUR HUMAIN (P1 ou P2)
+        // Les boutons sont activés UNIQUEMENT si c'est votre tour (data.turn === youKey)
+        // ET si vous n'avez pas encore soumis votre action pour ce round.
         if (data.turn === youKey && !data.players[youKey]?.action) {
             disableActionButtons(false);
             // Gérer l'état du bouton de soin séparément de disableActionButtons
@@ -183,7 +195,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
             if (data.players[youKey]?.action && !data.players[opponentKey]?.action) {
                 showMessage("action-msg", "Action jouée. En attente de l'adversaire...");
             } else if (data.turn === opponentKey && !data.players[opponentKey]?.action) {
-                showMessage("action-msg", "C'est le tour de l'IA. Veuillez patienter...");
+                showMessage("action-msg", `C'est le tour de ${opponent.pseudo}. Veuillez patienter...`);
             } else {
                 showMessage("action-msg", "Veuillez patienter...");
             }
@@ -192,7 +204,8 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
 
         // --- LOGIQUE DE DÉCLENCHEMENT DE L'IA (MODE PvAI UNIQUEMENT) ---
         // L'IA agit seulement après que le joueur humain ait soumis son action (manuellement ou par défaut).
-        if (gameMode === 'PvAI' && data.status === 'playing') {
+        // NOUVELLE CONDITION : Vérifier que le mode de jeu est bien 'PvAI'
+        if (data.mode === 'PvAI' && data.status === 'playing') { 
             const shouldAiReactThisMoment = 
                 !aiActionSubmittedForThisRound && // N'a pas encore soumis d'action pour ce round
                 data.turn === youKey && // C'est le tour du joueur humain (P1)
@@ -206,13 +219,12 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
                 
                 aiActionSubmittedForThisRound = true; // Empêche les multiples déclenchements
 
-                // Utiliser un await pour un délai forcé avant que l'IA ne soumette son action
-                // Vous pouvez ajuster ce délai (en millisecondes) pour un rythme de jeu confortable.
                 await new Promise(resolve => setTimeout(resolve, 3000)); // Délai de 3 secondes pour l'IA
                 
                 const latestSnapshot = await get(matchRef);
                 const latestData = latestSnapshot.val();
                 if (latestData) { 
+                    // Assurez-vous que l'IA joue en tant que p2
                     aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef);
                 }
             }
@@ -223,14 +235,15 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         // LOGIQUE DE TRAITEMENT DU TOUR
         // Le traitement se fait lorsque les deux actions du round sont soumises (P1 et P2).
         if (data.players.p1?.action && data.players.p2?.action) {
-            // C'est toujours P1 qui traite le tour en PvAI pour éviter des doubles traitements.
-            if (youKey === 'p1' || gameMode === 'PvAI') { 
-                console.log("Both actions submitted. P1/AI client processing turn.");
+            // Le joueur P1 (ou le client en mode PvAI) est responsable du traitement du tour.
+            // Cela assure qu'un seul client met à jour la base de données pour éviter les conflits.
+            if (youKey === 'p1') { 
+                console.log("Both actions submitted. P1 client processing turn.");
                 disableActionButtons(true);
                 showMessage("action-msg", "Actions soumises. Traitement du tour...");
                 updateTimerUI(timerMax);
                 setTimeout(() => processTurn(data, matchRef), 700); 
-            } else {
+            } else { // Si vous êtes P2 en PvP, vous attendez P1
                 console.log("Both actions submitted. P2 waiting for P1 to process turn.");
                 disableActionButtons(true);
                 showMessage("action-msg", "Actions soumises. En attente du traitement du tour...");
@@ -343,8 +356,11 @@ async function processTurn(data, matchRef) {
         lastTurnProcessedAt: serverTimestamp() 
     };
     
+    // En mode PvAI, le "turn" reste toujours `p1` car c'est le joueur humain qui initie chaque round.
+    // En mode PvP, le tour alterne.
     if (gameStatus === 'playing') {
-        updates.turn = 'p1'; 
+        // En mode PvP, le tour bascule entre p1 et p2
+        updates.turn = (data.mode === 'PvP') ? (data.turn === 'p1' ? 'p2' : 'p1') : 'p1'; 
     } else {
         updates.turn = null; 
     }
@@ -395,10 +411,16 @@ export async function aiTurn(playerPV, aiPV, matchRef) {
     const snapshot = await get(matchRef);
     const currentMatchData = snapshot.val();
 
+    // Condition pour que l'IA ne joue que si le mode est PvAI
+    if (currentMatchData.mode !== 'PvAI') { 
+        console.log("AI skip: Not in PvAI mode.");
+        return;
+    }
+
     const isAITurnToAct = 
         currentMatchData && 
         currentMatchData.status === 'playing' && 
-        currentMatchData.turn === 'p1' && 
+        currentMatchData.turn === 'p1' && // L'IA joue toujours quand c'est le tour de P1 (car P1 est l'humain en PvAI)
         currentMatchData.players.p1?.action && 
         !currentMatchData.players.p2?.action;
 
@@ -408,7 +430,7 @@ export async function aiTurn(playerPV, aiPV, matchRef) {
     }
 
     const aiLastAction = currentMatchData.players.p2?.lastAction; 
-    const aiHealCooldown = currentMatchData.players.p2?.healCooldown || 0; // Récupérer le cooldown de l'IA
+    const aiHealCooldown = currentMatchData.players.p2?.healCooldown || 0; 
     
     let aiAction = 'defend';
     
@@ -430,7 +452,6 @@ export async function aiTurn(playerPV, aiPV, matchRef) {
     // Priorité 4: Comportement par défaut (aléatoire)
     else { 
         const actions = ['attack', 'defend']; 
-        // Si soin est possible (cooldown ok et pas fait au tour précédent), on l'ajoute comme option
         if (aiHealCooldown >= HEAL_COOLDOWN_TURNS && aiLastAction !== 'heal') {
             actions.push('heal');
         }
