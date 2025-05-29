@@ -1,12 +1,12 @@
 import { db } from "./firebaseConfig.js";
 import { ref, get, update, onValue, onDisconnect, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { showMessage, disableActionButtons, updateHealthBar, updateTimerUI, clearHistory } from "./utils.js";
-import { backToMenu, currentUser, currentMatchId, youKey, opponentKey, gameMode, setMatchVariables, timerMax, timerInterval, setTimerInterval, setOnDisconnectRef, onDisconnectRef, matchDeletionTimeout, setMatchDeletionTimeout, hasPlayedThisTurn, setHasPlayedThisTurn, updateUserStats } from "./main.js"; // Import variables et fonctions de main
+import { backToMenu, currentUser, currentMatchId, youKey, opponentKey, gameMode, setMatchVariables, timerMax, timerInterval, setTimerInterval, setOnDisconnectRef, onDisconnectRef, matchDeletionTimeout, setMatchDeletionTimeout, hasPlayedThisTurn, setHasPlayedThisTurn, updateUserStats } from "./main.js";
 
 let currentMatchUnsubscribe = null;
 
 export async function startMatchMonitoring(id, user, playerKey, mode) {
-    // Nettoyage des listeners précédents
+    // Nettoyage des listeners et timers précédents
     if (currentMatchUnsubscribe) { currentMatchUnsubscribe(); currentMatchUnsubscribe = null; }
     if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
     if (onDisconnectRef) { onDisconnectRef.cancel().catch(err => console.error("Error canceling old onDisconnect:", err)); setOnDisconnectRef(null); }
@@ -14,11 +14,12 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
 
     setMatchVariables(id, user, playerKey, mode); // Met à jour les variables globales dans main.js
 
+    // Initialisation de l'UI
     document.getElementById("match").style.display = "none";
     document.getElementById("game").style.display = "block";
     document.getElementById("current-match").textContent = id;
     document.getElementById("you-name").textContent = user.pseudo;
-    clearHistory(); // Clear history on new match start
+    clearHistory();
     document.getElementById("opponent-action-status").textContent = "";
 
     setHasPlayedThisTurn(false);
@@ -30,8 +31,10 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
     currentMatchUnsubscribe = onValue(matchRef, async (snapshot) => {
         console.log("onValue triggered (full snapshot):", snapshot.val());
         const data = snapshot.val();
+
+        // 1. Gestion du match supprimé ou inexistant
         if (!data) {
-            if (currentMatchId === id) { // S'assurer que c'est le match actuel qui est supprimé
+            if (currentMatchId === id) {
                 showMessage("action-msg", "Le match a été terminé ou supprimé.");
                 if (currentMatchUnsubscribe) currentMatchUnsubscribe();
                 currentMatchUnsubscribe = null;
@@ -44,6 +47,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         const you = data.players[youKey];
         const opponent = data.players[opponentKey];
 
+        // 2. Vérification de la présence du joueur dans le match
         if (!you) {
             showMessage("action-msg", "Vous n'êtes pas un joueur dans ce match.");
             disableActionButtons(true);
@@ -51,7 +55,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
             return;
         }
 
-        // Mettre à jour lastSeen et définir onDisconnect (seulement pour PvP)
+        // 3. Mise à jour de lastSeen et définition de onDisconnect (PvP seulement)
         if (gameMode === 'PvP') {
             const yourPlayerRef = ref(db, `matches/${id}/players/${youKey}`);
             if (!onDisconnectRef) {
@@ -66,7 +70,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
             update(yourPlayerRef, { lastSeen: serverTimestamp(), status: 'connected' });
         }
 
-        // Mettre à jour l'interface avec les données des joueurs
+        // 4. Mettre à jour l'interface avec les données des joueurs (PV, noms)
         updateHealthBar(document.getElementById("you-health-bar"), document.getElementById("you-pv-display"), you.pv);
         document.getElementById("you-name").textContent = `${you.pseudo} (Vous)`;
 
@@ -79,11 +83,14 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
             } else if (data.turn === opponentKey) {
                 opponentActionStatus = "En attente d'action de l'adversaire...";
             }
+            // Gérer le forfait de l'adversaire en PvP
             if (gameMode === 'PvP' && (opponent.status === 'forfeited' || opponent.pv <= 0)) {
                 showMessage("action-msg", `L'adversaire (${opponent.pseudo}) a quitté le match ou est vaincu.`);
-                handleGameEnd(data, 'win'); // Vous gagnez par forfait ou KO
+                handleGameEnd(data, 'win');
+                return; // Sortir après avoir géré la fin du jeu
             }
         } else {
+            // Cas où l'adversaire n'existe pas encore (par exemple, en attente en PvP)
             document.getElementById("opponent-pv-display").textContent = "N/A";
             document.getElementById("opponent-health-bar").style.width = "0%";
             document.getElementById("opponent-health-bar").textContent = "0%";
@@ -92,7 +99,7 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
         }
         document.getElementById("opponent-action-status").textContent = opponentActionStatus;
 
-        // Conditions de fin de jeu
+        // 5. Conditions de fin de jeu (après mise à jour des PV pour un affichage correct)
         if (data.status === 'finished' || you.pv <= 0 || (opponent && opponent.pv <= 0)) {
             if (onDisconnectRef) { onDisconnectRef.cancel().catch(error => console.error("Error cancelling onDisconnect:", error)); setOnDisconnectRef(null); }
             let finalResult = "draw";
@@ -102,57 +109,62 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
                 finalResult = "loss";
             }
             handleGameEnd(data, finalResult);
-            return;
+            return; // Sortir si le jeu est terminé
         }
 
-        // Si le match est en attente du P2 (PvP seulement)
+        // 6. Si le match est en attente du P2 (PvP seulement)
         if (gameMode === 'PvP' && (data.status === "waiting" || !opponent)) {
             showMessage("action-msg", "En attente de l'adversaire...");
             disableActionButtons(true);
             if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
             updateTimerUI(timerMax);
-            return;
+            return; // Attendre l'adversaire
         }
 
-        // Logique clé pour gérer le tour et le timer
+        // --- DÉBUT DE LA LOGIQUE CLÉ DU TOUR ---
         const currentTime = Date.now();
+        // S'assurer que lastTurnProcessedAt est un nombre
         const lastTurnProcessedTime = data.lastTurnProcessedAt && typeof data.lastTurnProcessedAt.toMillis === 'function'
             ? data.lastTurnProcessedAt.toMillis()
-            : currentTime;
-        const elapsedSinceLastTurn = Math.floor((currentTime - lastTurnProcessedTime) / 1000);
+            : (data.lastTurnProcessedAt || currentTime); // Fallback pour les anciens formats ou si null
+        
+        // Le timer est géré par setInterval, pas directement ici.
+        // La mise à jour de l'UI du timer est gérée par le setInterval en cours
+        // ou réinitialisée si le tour change.
+        if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); } // Toujours effacer l'ancien timer
 
         let activePlayerKey = data.turn;
         let activePlayer = data.players[activePlayerKey];
 
-        // --- DÉBUT DES MODIFICATIONS DE LOGIQUE DE TOUR ---
-
-        // 1. Gérer le tour de l'IA (PvAI uniquement)
+        // LOGIQUE DE L'IA (prioritaire si c'est son tour et qu'elle n'a pas agi)
         if (gameMode === 'PvAI' && activePlayerKey === 'p2' && !activePlayer.action) {
             console.log("AI's turn detected and no action submitted. Triggering AI turn.");
-            disableActionButtons(true); // Désactivez les boutons pendant que l'IA "réfléchit"
+            disableActionButtons(true);
             showMessage("action-msg", `Tour de l'IA. Veuillez patienter...`);
 
-            // Ajoutez un petit délai pour simuler une "réflexion" de l'IA
-            setTimeout(() => {
-                // Double-vérifier l'état du match avant que l'IA ne joue
-                get(matchRef).then(latestSnapshot => {
-                    const latestData = latestSnapshot.val();
-                    if (latestData && latestData.turn === 'p2' && !latestData.players.p2?.action && latestData.status === 'playing') {
-                        aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef);
-                    } else {
-                        console.log("AI skip: Match state changed or AI already played.");
-                    }
-                }).catch(err => console.error("[AI Logic] Error getting match data for AI turn:", err));
-            }, 1500); // Délai de 1.5 secondes
-            return; // Sortir, car l'IA va jouer et le onValue sera redéclenché
+            // Ajoute un petit délai pour simuler une "réflexion"
+            setTimeout(async () => {
+                // IMPORTANT: Relire l'état actuel juste avant que l'IA ne joue
+                const latestSnapshot = await get(matchRef);
+                const latestData = latestSnapshot.val();
+                // S'assurer que le match n'est pas terminé, que c'est toujours le tour de l'IA
+                // et qu'elle n'a pas été déclenchée par un autre onValue entre-temps
+                if (latestData && latestData.status === 'playing' && latestData.turn === 'p2' && !latestData.players.p2?.action) {
+                    aiTurn(latestData.players.p1.pv, latestData.players.p2.pv, matchRef);
+                } else {
+                    console.log("AI skip: Match state changed or AI already played before setTimeout.");
+                }
+            }, 1500);
+            return; // Sortir d'ici car l'IA va modifier la DB et redéclencher onValue
         }
 
-        // 2. Gérer le tour du joueur humain
+        // LOGIQUE DU JOUEUR HUMAIN
         if (youKey === activePlayerKey) {
-            if (!hasPlayedThisTurn && !you.action) { // Vérifie aussi you.action pour le cas où l'onValue est déclenché avant que hasPlayedThisTurn soit mis à jour
+            if (!you.action) { // Vérifie directement si l'action du joueur n'est pas encore soumise
                 disableActionButtons(false);
                 showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
-                if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); } // Clear old timer
+                
+                // Démarrer le timer pour le joueur humain
                 setTimerInterval(setInterval(() => {
                     const currentElapsed = Math.floor((Date.now() - lastTurnProcessedTime) / 1000);
                     const currentRemaining = Math.max(0, timerMax - currentElapsed);
@@ -160,42 +172,43 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
                     if (currentRemaining <= 0) {
                         clearInterval(timerInterval);
                         setTimerInterval(null);
+                        // Soumettre une action par défaut si le temps est écoulé
                         submitDefaultAction(youKey, matchRef, data);
                     }
                 }, 1000));
             } else {
-                // Le joueur a déjà joué ou son action est déjà soumise
+                // Le joueur a déjà soumis son action
                 disableActionButtons(true);
                 showMessage("action-msg", "Action jouée. En attente de l'adversaire...");
-                if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); } // Clear timer if action submitted
+                updateTimerUI(timerMax); // Réinitialise le timer visuel
             }
-        } else { // Ce n'est pas le tour du joueur humain
+        } else { // Ce n'est pas le tour du joueur humain (c'est le tour de l'adversaire, ou traitement)
             disableActionButtons(true);
             showMessage("action-msg", `Tour de ${opponent ? opponent.pseudo : 'l\'adversaire'}. Veuillez patienter...`);
-            if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); } // Clear timer if not active player
+            updateTimerUI(timerMax); // Réinitialise le timer visuel
         }
 
-        // 3. Traiter le tour si les deux actions sont soumises
-        // Cette partie doit être indépendante du joueur dont c'est le tour actuellement,
-        // car n'importe quel joueur peut déclencher le traitement du tour en soumettant sa propre action.
+        // LOGIQUE DE TRAITEMENT DU TOUR (si les deux actions sont soumises)
         if (data.players.p1?.action && data.players.p2?.action) {
-            // S'assurer qu'un seul client traite le tour (par exemple, seul P1)
-            if (youKey === 'p1' || gameMode === 'PvAI') { // P1 traite toujours, ou si c'est un match IA (car un seul client actif)
-                console.log("Both actions submitted. P1/AI match processing turn.");
-                if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
-                disableActionButtons(true);
+            // C'est le rôle de P1 (ou du client en mode PvAI) de traiter le tour
+            if (youKey === 'p1' || gameMode === 'PvAI') {
+                console.log("Both actions submitted. P1/AI client processing turn.");
+                disableActionButtons(true); // Assurez-vous que les boutons sont désactivés
                 showMessage("action-msg", "Actions soumises. Traitement du tour...");
-                // Ajoutez un petit délai avant de traiter pour permettre à l'UI de se mettre à jour
+                updateTimerUI(timerMax); // Réinitialise le timer visuel
+
+                // Ajoute un petit délai avant de traiter le tour pour laisser le temps à l'UI de se mettre à jour
                 setTimeout(() => processTurn(data, matchRef), 500);
             } else {
+                // P2 attend que P1 traite le tour
                 console.log("Both actions submitted. P2 waiting for P1 to process turn.");
                 disableActionButtons(true);
                 showMessage("action-msg", "Actions soumises. En attente du traitement du tour...");
+                updateTimerUI(timerMax); // Réinitialise le timer visuel
             }
         }
-        // --- FIN DES MODIFICATIONS DE LOGIQUE DE TOUR ---
 
-        // Mettre à jour l'historique
+        // Mise à jour de l'historique
         const histEl = document.getElementById("history");
         histEl.innerHTML = "";
         (data.history || []).forEach(entry => {
@@ -217,20 +230,20 @@ export async function startMatchMonitoring(id, user, playerKey, mode) {
 async function processTurn(data, matchRef) {
     console.log("processTurn started with data:", JSON.stringify(data));
 
-    // Double-vérification: Assurez-vous que les actions sont toujours là AVANT de les traiter
-    // Cela évite de re-traiter si un autre client a déjà mis à jour.
+    // IMPORTANT: Récupérer les dernières données de la DB juste avant de traiter pour éviter les incohérences.
     const latestMatchSnapshot = await get(matchRef);
     const latestMatchData = latestMatchSnapshot.val();
+
     if (!latestMatchData || !latestMatchData.players.p1?.action || !latestMatchData.players.p2?.action) {
-        console.warn("processTurn called but one or both actions were null (or missing) in latest data. Exiting.");
-        return;
+        console.warn("processTurn called but one or both actions were null (or missing) in latest data. Exiting (possibly already processed or not ready).");
+        return; // Ne pas traiter si les actions ne sont pas là ou si le match a changé
     }
-    // Utilisez latestMatchData pour le traitement du tour
+    // Utiliser les données les plus récentes pour le calcul
     data = latestMatchData;
 
     if (timerInterval) { clearInterval(timerInterval); setTimerInterval(null); }
     disableActionButtons(true);
-    setHasPlayedThisTurn(false); // Reset for the next turn
+    setHasPlayedThisTurn(false); // Reset pour le prochain tour
 
     const p1Action = data.players.p1.action;
     const p2Action = data.players.p2.action;
@@ -241,7 +254,7 @@ async function processTurn(data, matchRef) {
 
     historyUpdates.push(`--- Début du tour ---`);
 
-    // Logique d'application des actions (identique à celle que vous avez)
+    // Logique d'application des actions
     if (p1Action === 'attack') {
         historyUpdates.push(`${data.players.p1.pseudo} attaque !`);
         if (p2Action === 'defend') { p2PV -= 5; historyUpdates.push(`${data.players.p2.pseudo} se défend, subit 5 PV de dégâts.`); }
@@ -274,12 +287,12 @@ async function processTurn(data, matchRef) {
     const updates = {
         [`players/p1/pv`]: p1PV,
         [`players/p2/pv`]: p2PV,
-        [`players/p1/action`]: null,
-        [`players/p2/action`]: null,
+        [`players/p1/action`]: null, // Réinitialise l'action de P1
+        [`players/p2/action`]: null, // Réinitialise l'action de P2
         history: historyUpdates,
         turn: nextTurn,
         status: gameStatus,
-        lastTurnProcessedAt: serverTimestamp()
+        lastTurnProcessedAt: serverTimestamp() // Met à jour le timestamp du traitement du tour
     };
     if (winner) { updates.winner = winner; if (loser) updates.loser = loser; }
 
@@ -320,11 +333,12 @@ async function submitDefaultAction(playerKey, matchRef, currentMatchData) {
 }
 
 export async function aiTurn(playerPV, aiPV, matchRef) {
-    // Obtenir la dernière version du match pour s'assurer de l'état actuel
+    // Obtenir la dernière version du match pour s'assurer de l'état actuel avant de jouer
     const snapshot = await get(matchRef);
     const currentMatchData = snapshot.val();
 
-    if (!currentMatchData || currentMatchData.turn !== 'p2' || currentMatchData.players.p2?.action) {
+    // Vérifications critiques avant que l'IA ne joue
+    if (!currentMatchData || currentMatchData.status !== 'playing' || currentMatchData.turn !== 'p2' || currentMatchData.players.p2?.action) {
         console.log("AI skip: Not AI's turn, AI already played, or match ended.");
         return;
     }
@@ -344,6 +358,7 @@ export async function aiTurn(playerPV, aiPV, matchRef) {
 
     try {
         await update(matchRef, updates);
+        console.log("AI action submitted:", aiAction);
     } catch (error) {
         console.error("Error submitting AI action:", error);
     }
