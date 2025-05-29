@@ -224,6 +224,14 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 disableActionButtons();
                 setTimerInterval(clearInterval(timerInterval)); // Arrête votre timer
                 updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
+
+                // --- LOGIQUE SPÉCIFIQUE POUR L'IA APRÈS QUE LE JOUEUR A JOUÉ EN PvAI ---
+                // Si c'est un match PvAI, que le joueur vient de soumettre son action,
+                // ET que l'IA n'a PAS encore soumis son action, on déclenche l'IA.
+                if (gameMode === 'PvAI' && !matchData.players[opponentKey].action) {
+                    console.log("Détection PvAI: Joueur a joué, IA n'a pas encore joué. Déclenchement de processAITurn.");
+                    await processAITurn(matchData);
+                }
             }
         }
         // Cas général: Si c'est le tour de l'adversaire (ou si le tour est déjà passé à l'IA)
@@ -234,9 +242,10 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             setTimerInterval(clearInterval(timerInterval)); // Arrête votre timer
             updateTimerUI(timerMax); // Remet le timer à zéro pour l'affichage
 
-            // Si c'est un match PvAI et l'IA n'a pas encore soumis son action (et c'est SON tour)
+            // Cette logique est toujours valide si l'IA doit jouer son tour car le joueur a temporisé,
+            // mais le bloc ci-dessus (dans le 'if (matchData.turn === youKey)') gérera le cas le plus courant.
             if (gameMode === 'PvAI' && !matchData.players[opponentKey].action) {
-                console.log("C'est le tour de l'IA et elle n'a pas encore choisi d'action. Appel de processAITurn.");
+                console.log("C'est le tour de l'IA et elle n'a pas encore choisi d'action (déclenchement via tour de l'IA). Appel de processAITurn.");
                 await processAITurn(matchData);
             }
         }
