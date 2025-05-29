@@ -1038,7 +1038,7 @@
                                     console.log(`Timer for ${currentUser.pseudo} (${youKey}) expired. Submitting default action for YOU.`);
                                     submitDefaultAction(youKey, matchRef, data); // Soumet pour CE joueur
                                 }
-                            }, 1000);
+                            }, 200);
                         } else {
                             // J'ai déjà joué, j'attends l'adversaire (P1 traitera)
                             disableActionButtons(true);
