@@ -30,8 +30,7 @@ let currentMatchUnsubscribe = null;
 // Verrou pour empêcher processTurn de se déclencher plusieurs fois pour le même tour
 let isProcessingTurnInternally = false;
 
-// NOUVELLE VARIABLE : Verrou pour empêcher de déclencher processAITurn plusieurs fois pour le même tour IA
-let isAIActionScheduled = false; // Initialisation
+// isAIActionScheduled a été déplacé et géré dans aiLogic.js désormais.
 
 
 /**
@@ -243,22 +242,10 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 (matchData.turn === opponentKey && !opponentActionExists) ||
                 (matchData.turn === youKey && matchData.players[youKey].action && !opponentActionExists);
 
-            // Si l'IA DOIT jouer ET qu'aucune action de l'IA n'est déjà planifiée ou en cours
-            if (shouldAIPlay && !isAIActionScheduled) {
-                console.log("DEBUG IA: Conditions remplies. Planification de processAITurn après 1s.");
-                isAIActionScheduled = true; // Définir le verrou pour empêcher d'autres planifications
-
-                setTimeout(async () => {
-                    console.log("DEBUG IA: Exécution de processAITurn après délai.");
-                    await processAITurn(matchData);
-                    // Le verrou est relâché ici. Si processAITurn met à jour Firebase (ce qui est le cas en soumettant l'action),
-                    // le onValue se redéclenchera, et la condition shouldAIPlay devrait alors être fausse
-                    // (car opponentActionExists sera vrai après l'action de l'IA).
-                    // Si l'IA est censée rejouer au tour suivant, ce verrou sera réinitialisé par le nouveau cycle de onValue.
-                    isAIActionScheduled = false; // Relâcher le verrou APRÈS l'exécution
-                }, 1000); // Délai d'une seconde
-            } else if (isAIActionScheduled) {
-                console.log("DEBUG IA: Une action de l'IA est déjà planifiée, pas de nouveau déclenchement.");
+            // Si l'IA DOIT jouer, nous appelons processAITurn. La gestion du délai et du verrou est interne à aiLogic.
+            if (shouldAIPlay) {
+                console.log("DEBUG IA: Conditions remplies. Appel de processAITurn (gestion du délai interne à aiLogic).");
+                await processAITurn(matchData); // On l'appelle directement, aiLogic va gérer le reste
             } else {
                 console.log("DEBUG IA: Les conditions pour déclencher processAITurn ne sont pas encore remplies.");
             }
