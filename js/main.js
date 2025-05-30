@@ -7,21 +7,21 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https:/
 import { db } from "./firebaseConfig.js";
 import { ref, push, set, onValue, update, remove, serverTimestamp, get } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { startMatchMonitoring } from "./game.js";
-import { showMessage } from "./utils.js"; // Pas besoin d'importer updateHealthBar, updateTimerUI, clearHistory, disableActionButtons ici, ils sont utilisés dans game.js ou utils.js directement.
+import { showMessage } from "./utils.js";
 
 const auth = getAuth(app);
 
-// Variables globales pour le match
+// Variables globales pour le match (exportées)
 export let currentUser = null;
 export let currentMatchId = null;
 export let youKey = null; // 'p1' ou 'p2'
-export let opponentKey = null; // 'p1' ou 'p2'
-export let gameMode = null; // 'PvAI' ou 'PvP'
+export let opponentKey = null; // 'p1' ou 'p2' // EXPORTÉE pour que ai.js puisse l'utiliser directement
+export let gameMode = null; // 'PvAI' ou 'PvP' // EXPORTÉE pour que ai.js puisse l'utiliser directement
 
-// Variables de contrôle du timer et de déconnexion
+// Variables de contrôle du timer et de déconnexion (exportées)
 export const timerMax = 30; // 30 secondes par tour
 export let timerInterval = null;
-export function setTimerInterval(interval) { timerInterval = interval; } // Cette fonction est utilisée par game.js
+export function setTimerInterval(interval) { timerInterval = interval; }
 
 export let onDisconnectRef = null;
 export function setOnDisconnectRef(ref) { onDisconnectRef = ref; }
@@ -32,7 +32,7 @@ export function setMatchDeletionTimeout(timeout) { matchDeletionTimeout = timeou
 export let hasPlayedThisTurn = false;
 export function setHasPlayedThisTurn(bool) { hasPlayedThisTurn = bool; }
 
-// Permet à game.js de mettre à jour les variables globales du match
+// Permet à game.js (et potentiellement ai.js) de mettre à jour les variables globales du match
 export function setMatchVariables(id, user, playerKey, mode) {
     currentMatchId = id;
     currentUser = user;
@@ -187,7 +187,7 @@ async function createMatch(mode) {
                 healCooldown: 0,
             }
         },
-        history: [`Match ${mode === 'PvP' ? 'PvP' : 'IA'} créé par ${pseudo}. ${mode === 'PvP' ? 'En attente d\'un adversaire...' : 'Le duel contre l\'IA commence !'}`],
+        history: [`Match ${mode === 'PvP' ? 'PvP' : 'IA'} créé par ${pseudo}. ${mode === 'PvP' ? 'En attente d'un adversaire...' : 'Le duel contre l'IA commence !'}`],
         lastTurnProcessedAt: serverTimestamp(),
         turnStartTime: serverTimestamp() // Ajout du timestamp de début de tour
     };
@@ -266,7 +266,7 @@ async function findOrCreatePvPMatch() {
                         };
                         updates[`matches/${matchId}/status`] = 'playing';
                         updates[`matches/${matchId}/history`] = [...(match.history || []), `${currentUser.pseudo} a rejoint le match ! Le duel commence !`];
-                        updates[`matches/${matchId}/turnStartTime`] = serverTimestamp(); // IMPORTANT : Démarrer le chrono pour les deux !
+                        updates[`matches/${matchId}/turnStartTime`] = serverTimestamp();
 
                         await update(ref(db), updates);
                         showMessage("match-msg", `Vous avez rejoint le match ${matchId} !`);
@@ -309,7 +309,7 @@ async function findOrCreatePvPMatch() {
 
 // --- GESTION DE LA FIN DE MATCH ET DU RETOUR AU MENU ---
 
-export function backToMenu(fromGame = false) { // <-- Ajout de 'export' ici
+export function backToMenu(fromGame = false) {
     console.log("Retour au menu demandé. Provient du jeu :", fromGame);
     if (fromGame) {
         document.getElementById("game").style.display = "none";
