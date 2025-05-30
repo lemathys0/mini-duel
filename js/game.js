@@ -3,15 +3,17 @@
 import { db, ref, onValue, off, runTransaction, serverTimestamp } from './firebaseConfig.js';
 // Updated imports to match the new utils.js exports and function names
 import {
-    showMessage,
-    updateHealthBar,
-    updateTimerUI,
-    addHistoryMessage, // New function name
-    clearHistory,      // New function
-    disableActionButtons, // New function
-    enableActionButtons,  // New function
-    showGameScreen,    // New function name for showing game screen
-    showMainMenu       // New function name for showing main menu
+    // ... autres imports ...
+    ajouterMessageHistorique, // <-- Changez 'addHistoryMessage' par 'ajouterMessageHistorique'
+    effacerHistorique,        // <-- Changez 'clearHistory' par 'effacerHistorique'
+    desactiverBoutonsAction,  // <-- Changez 'disableActionButtons' par 'desactiverBoutonsAction'
+    activerBoutonsAction,     // <-- Changez 'enableActionButtons' par 'activerBoutonsAction'
+    afficherMessage,          // <-- Changez 'showMessage' par 'afficherMessage'
+    mettreAJourBarreDeVie,    // <-- Changez 'updateHealthBar' par 'mettreAJourBarreDeVie'
+    mettreAJourMinuteurUI,    // <-- Changez 'updateTimerUI' par 'mettreAJourMinuteurUI'
+    afficherEcranJeu,         // <-- Changez 'showGameScreen' par 'afficherEcranJeu'
+    afficherMenuPrincipal     // <-- Changez 'showMainMenu' par 'afficherMenuPrincipal'
+    // ... autres imports ...
 } from './utils.js';
 import { auth } from './auth.js';
 import { processAITurn } from './aiLogic.js';
