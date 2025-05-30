@@ -2,10 +2,28 @@
 
 // Importe initializeApp pour initialiser l'application Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+
 // Importe getAuth pour l'authentification Firebase
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-// Importe getDatabase pour la base de données Realtime
-import { getDatabase } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+// Importe TOUTES les fonctions nécessaires de Firebase Realtime Database
+import {
+    getDatabase,
+    ref,
+    set,
+    get,
+    update,
+    remove,
+    onValue,
+    off,
+    serverTimestamp,
+    runTransaction,
+    push,
+    onDisconnect,
+    query,          // Ajout de query ici
+    orderByChild,   // Ajout de orderByChild ici
+    equalTo         // Ajout de equalTo ici
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 
 
 // Définir la configuration de ton projet Firebase
@@ -23,19 +41,37 @@ const firebaseConfig = {
 // Initialiser l'application Firebase
 export const app = initializeApp(firebaseConfig);
 
-// Obtenir l'instance de la base de données et l'exporter
+// Obtenir l'instance de la base de données
 export const db = getDatabase(app);
 
-// Obtenir l'instance de l'authentification et l'exporter
+// Obtenir l'instance de l'authentification ET L'EXPORTER
 export const auth = getAuth(app);
 
-// *** PAS BESOIN D'EXPORTER LES FONCTIONS DE LA DB ICI ***
-// Elles seront importées directement dans les fichiers qui en ont besoin.
-
-// Optionnel: Pour le test local de la vérification téléphonique, à REMPLACER en production
+// OPTIONNEL MAIS RECOMMANDÉ POUR LE DÉVELOPPEMENT LOCAL :
+// Désactive la vérification reCAPTCHA pour les tests sur localhost.
+// À SUPPRIMER OU COMMENTER EN PRODUCTION !!!
 if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    // Si auth n'est pas encore défini (très rare à ce point), il faudrait une vérification plus robuste.
-    // Mais ici, auth est exporté directement après getAuth(app), donc il devrait être défini.
     auth.settings.appVerificationDisabledForTesting = true;
-    console.warn("Firebase Auth: Phone verification disabled for testing on localhost.");
+    console.warn("Firebase Auth: La vérification téléphonique est désactivée pour le test sur localhost.");
 }
+
+
+// EXPORTE TOUTES LES FONCTIONS DE LA BASE DE DONNÉES POUR LES AUTRES MODULES
+// Ces fonctions spécifiques de la DB peuvent être réimportées directement d'ici.
+// C'est cette partie qui fait que tu peux les importer depuis firebaseConfig.js
+export {
+    ref,
+    set,
+    get,
+    update,
+    remove,
+    onValue,
+    off,
+    serverTimestamp,
+    runTransaction,
+    push,
+    onDisconnect,
+    query,          // N'oublie pas de les exporter si tu les as importées ci-dessus
+    orderByChild,
+    equalTo
+};
