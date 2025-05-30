@@ -1,7 +1,7 @@
 // game.js
 
 // Importer les modules Firebase depuis ton fichier de configuration centralisé
-import { app, database, auth } from './firebase.js'; // Assure-toi que le chemin est correct
+import { app, database, auth } from './firebaseConfig.js'; // Assure-toi que le chemin est correct
 
 import { ref, get, set, runTransaction, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
