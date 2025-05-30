@@ -2,25 +2,10 @@
 
 // Importe initializeApp pour initialiser l'application Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { equalTo } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 // Importe getAuth pour l'authentification Firebase
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-
-// Importe TOUTES les fonctions nécessaires de Firebase Realtime Database
-import {
-    getDatabase,
-    ref,
-    set,
-    get,
-    update,
-    remove,
-    onValue,
-    off,
-    serverTimestamp,
-    runTransaction,
-    push,
-    onDisconnect
-} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+// Importe getDatabase pour la base de données Realtime
+import { getDatabase } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 
 
 // Définir la configuration de ton projet Firebase
@@ -38,24 +23,19 @@ const firebaseConfig = {
 // Initialiser l'application Firebase
 export const app = initializeApp(firebaseConfig);
 
-// Obtenir l'instance de la base de données
+// Obtenir l'instance de la base de données et l'exporter
 export const db = getDatabase(app);
 
-// Obtenir l'instance de l'authentification ET L'EXPORTER
-export const auth = getAuth(app); // C'est cette ligne qui était manquante !
+// Obtenir l'instance de l'authentification et l'exporter
+export const auth = getAuth(app);
 
-// EXPORTE TOUTES LES FONCTIONS DE LA BASE DE DONNÉES POUR LES AUTRES MODULES
-// Ces fonctions spécifiques de la DB peuvent être réimportées directement d'ici
-export {
-    ref,
-    set,
-    get,
-    update,
-    remove,
-    onValue,
-    off,
-    serverTimestamp,
-    runTransaction,
-    push,
-    onDisconnect
-};
+// *** PAS BESOIN D'EXPORTER LES FONCTIONS DE LA DB ICI ***
+// Elles seront importées directement dans les fichiers qui en ont besoin.
+
+// Optionnel: Pour le test local de la vérification téléphonique, à REMPLACER en production
+if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    // Si auth n'est pas encore défini (très rare à ce point), il faudrait une vérification plus robuste.
+    // Mais ici, auth est exporté directement après getAuth(app), donc il devrait être défini.
+    auth.settings.appVerificationDisabledForTesting = true;
+    console.warn("Firebase Auth: Phone verification disabled for testing on localhost.");
+}

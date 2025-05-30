@@ -1,7 +1,7 @@
 // js/auth.js
 
-// 1. Importe les instances 'auth' et 'db' et les fonctions DB depuis ton fichier de configuration Firebase
-import { auth, db } from './firebaseConfig.js';
+// 1. Importe les instances 'auth' et 'db' depuis ton fichier de configuration Firebase
+import { auth, db } from './firebaseConfig.js'; // SEULEMENT auth et db ici
 
 // 2. Importe les fonctions spécifiques d'authentification directement depuis la bibliothèque Firebase Auth
 import {
@@ -9,12 +9,24 @@ import {
     signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
-    GoogleAuthProvider,       // Ajout pour Google Auth
-    signInWithPopup,          // Ajout pour Google Auth
-    PhoneAuthProvider,        // Ajout pour Phone Auth
-    signInWithPhoneNumber,    // Ajout pour Phone Auth
-    RecaptchaVerifier         // Ajout pour Phone Auth (reCAPTCHA)
+    GoogleAuthProvider,
+    signInWithPopup,
+    PhoneAuthProvider,
+    signInWithPhoneNumber,
+    RecaptchaVerifier
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // L'URL doit correspondre à ta version de Firebase
+
+// 3. Importe les fonctions spécifiques de Firebase Realtime Database
+// C'est ici que tu dois importer ref, set, get, query, orderByChild, equalTo
+import {
+    ref,
+    set,
+    get,
+    query,
+    orderByChild,
+    equalTo // Ajout de equalTo ici
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
 
 // Assurez-vous que ces chemins sont corrects pour vos autres fichiers
 import { showMessage } from './utils.js';
@@ -24,6 +36,7 @@ console.log("auth.js chargé.");
 
 // Variable pour stocker le confirmationResult pour l'authentification par téléphone
 let confirmationResult = null;
+let recaptchaVerifierInstance = null; // Variable pour garder l'instance reCAPTCHA
 
 export function setupAuthListeners() {
     // Éléments pour Email/Mot de passe
@@ -143,23 +156,37 @@ export function setupAuthListeners() {
     }
 
     // --- Authentification Téléphone ---
-    if (sendOtpBtn) {
-        // Initialise reCAPTCHA une seule fois
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, recaptchaContainer, {
-            'size': 'invisible', // Ou 'normal' pour un widget visible
-            'callback': (response) => {
-                // reCAPTCHA résolu, vous pouvez maintenant envoyer le code
-                // Cette callback est déclenchée automatiquement par l'appel à signInWithPhoneNumber
-            },
-            'expired-callback': () => {
-                showMessage(authMsgPhone, 'Le reCAPTCHA a expiré, veuillez réessayer.', false);
-                // Réinitialiser le reCAPTCHA si nécessaire
-                if (window.recaptchaVerifier && window.recaptchaVerifier.clear) {
-                    window.recaptchaVerifier.clear();
-                }
+    if (sendOtpBtn && recaptchaContainer) { // Assurez-vous que les deux éléments existent
+        // Initialise reCAPTCHA seulement si ce n'est pas déjà fait et que auth est défini
+        if (!recaptchaVerifierInstance && auth) {
+             try {
+                recaptchaVerifierInstance = new RecaptchaVerifier(auth, recaptchaContainer, {
+                    'size': 'invisible', // Ou 'normal' pour un widget visible
+                    'callback': (response) => {
+                        console.log("reCAPTCHA résolu !");
+                        // Cette callback est déclenchée automatiquement par l'appel à signInWithPhoneNumber
+                    },
+                    'expired-callback': () => {
+                        showMessage(authMsgPhone, 'Le reCAPTCHA a expiré, veuillez réessayer.', false);
+                        // Réinitialiser le reCAPTCHA si nécessaire
+                        if (recaptchaVerifierInstance && recaptchaVerifierInstance.clear) {
+                            recaptchaVerifierInstance.clear();
+                        }
+                    }
+                });
+                // Rendre le reCAPTCHA. Cela peut renvoyer une promesse.
+                recaptchaVerifierInstance.render().catch(err => {
+                    console.error("Erreur lors du rendu reCAPTCHA:", err);
+                    showMessage(authMsgPhone, "Impossible de charger le reCAPTCHA. Veuillez rafraîchir la page.", false);
+                });
+                // Stocker dans window pour l'accès global si Firebase le nécessite (souvent le cas pour reCAPTCHA)
+                window.recaptchaVerifier = recaptchaVerifierInstance;
+                console.log("reCAPTCHA initialisé.");
+            } catch (error) {
+                console.error("Erreur d'initialisation reCAPTCHA:", error);
+                showMessage(authMsgPhone, `Erreur d'initialisation reCAPTCHA: ${error.message}`, false);
             }
-        });
-        window.recaptchaVerifier.render(); // Pour s'assurer qu'il est prêt
+        }
 
         sendOtpBtn.addEventListener('click', async () => {
             const phoneNumber = phoneInput.value.trim();
@@ -169,16 +196,21 @@ export function setupAuthListeners() {
                 return;
             }
 
-            // Vérification simple du format (peut être améliorée)
             if (!/^\+\d{1,3}\d{6,14}$/.test(phoneNumber)) { // Exemple: +33612345678
                 showMessage(authMsgPhone, 'Format de numéro invalide. Ex: +33612345678', false);
                 return;
             }
 
+            // Vérifier si reCAPTCHA est bien initialisé avant d'envoyer le code
+            if (!recaptchaVerifierInstance) {
+                 showMessage(authMsgPhone, 'Le système de vérification (reCAPTCHA) n\'est pas prêt. Veuillez réessayer.', false);
+                 return;
+            }
+
             try {
                 showMessage(authMsgPhone, 'Envoi du code...', true);
                 // Utilise le reCAPTCHA verifier que nous avons initialisé
-                confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
+                confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifierInstance);
                 showMessage(authMsgPhone, 'Code envoyé ! Veuillez vérifier vos SMS.', true);
                 // Optionnel: masquer le bouton "Envoyer" et afficher le champ OTP
                 sendOtpBtn.style.display = 'none';
@@ -194,8 +226,8 @@ export function setupAuthListeners() {
                     showMessage(authMsgPhone, `Erreur: ${error.message}`, false);
                 }
                 // Réinitialiser le reCAPTCHA en cas d'erreur
-                if (window.recaptchaVerifier && window.recaptchaVerifier.clear) {
-                    window.recaptchaVerifier.clear();
+                if (recaptchaVerifierInstance && recaptchaVerifierInstance.clear) {
+                    recaptchaVerifierInstance.clear();
                 }
             }
         });
