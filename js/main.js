@@ -46,7 +46,7 @@ function createAIDifficultySelect() {
     const existingSelect = document.getElementById('ai-difficulty-select');
     if (existingSelect) return; // Si déjà là, ne rien faire
 
-    const select = document(createElement('select');
+    const select = document.createElement('select');
     select.id = 'ai-difficulty-select';
     select.innerHTML = `
         <option value="easy">Facile</option>
