@@ -2,17 +2,22 @@
 
 console.log("main.js chargé."); // DEBUG : Confirme le chargement de main.js
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+// Importez 'app' et 'db' directement depuis firebaseConfig.js
+// Vous n'avez plus besoin d'importer initializeApp ou getDatabase ici,
+// car firebaseConfig.js les utilise déjà et vous exporte le résultat.
+import { app, db } from "./firebaseConfig.js"; // <-- MODIFIÉ ICI !
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-import { getDatabase, ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-import { firebaseConfig } from "./firebaseConfig.js";
+import { ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction, push } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+// import { firebaseConfig } from "./firebaseConfig.js"; // <-- SUPPRIMÉ / COMMENTÉ CETTE LIGNE
 import { startMatchMonitoring } from "./game.js"; // Importe la fonction de démarrage du monitoring du match
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons } from "./utils.js"; // Importe les fonctions utilitaires
 
 // Initialiser Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
+// Ces lignes sont maintenant DÉPLACÉES vers firebaseConfig.js
+// const app = initializeApp(firebaseConfig); // <-- SUPPRIMÉ CETTE LIGNE
+// const db = getDatabase(app);             // <-- SUPPRIMÉ CETTE LIGNE
+
+const auth = getAuth(app); // Utilisez l'instance 'app' importée
 const provider = new GoogleAuthProvider();
 
 // Variables globales pour le match en cours
@@ -82,8 +87,8 @@ onAuthStateChanged(auth, (user) => {
         get(userRef).then(snapshot => {
             if (snapshot.exists()) {
                 const userData = snapshot.val();
-                user.pseudo = userData.pseudo || user.displayName; // Attribue le pseudo à l'objet user
-                pseudoDisplay.textContent = `Pseudo: ${user.pseudo}`;
+                currentUser.pseudo = userData.pseudo || user.displayName; // Attribue le pseudo à l'objet user
+                pseudoDisplay.textContent = `Pseudo: ${currentUser.pseudo}`;
                 updateUserStatsDisplay(userData.stats);
             } else {
                 // Si l'utilisateur n'a pas de données, créer une entrée avec le displayName comme pseudo
@@ -91,8 +96,8 @@ onAuthStateChanged(auth, (user) => {
                     pseudo: user.displayName,
                     stats: { wins: 0, losses: 0, draws: 0 }
                 }).then(() => {
-                    user.pseudo = user.displayName;
-                    pseudoDisplay.textContent = `Pseudo: ${user.pseudo}`;
+                    currentUser.pseudo = user.displayName;
+                    pseudoDisplay.textContent = `Pseudo: ${currentUser.pseudo}`;
                     updateUserStatsDisplay({ wins: 0, losses: 0, draws: 0 });
                 }).catch(error => console.error("Erreur création profil utilisateur:", error));
             }
@@ -111,6 +116,7 @@ onAuthStateChanged(auth, (user) => {
 });
 
 document.getElementById("login-btn").addEventListener("click", () => {
+    const provider = new GoogleAuthProvider(); // Déplacez la création du provider ici si vous ne la définissez pas globalement
     signInWithPopup(auth, provider)
         .catch((error) => {
             console.error("Erreur de connexion:", error);
@@ -205,7 +211,8 @@ document.getElementById("play-ia-btn").addEventListener("click", async () => {
 
     // Crée un ID unique pour le match
     const newMatchRef = ref(db, 'matches');
-    const matchId = await pushNewMatch(newMatchRef); // Utilisez pushNewMatch pour obtenir l'ID généré par push()
+    const newRef = push(newMatchRef); // Utilise push pour générer un ID unique
+    const matchId = newRef.key; // Récupère la clé (ID) du nouveau nœud
 
     if (!matchId) {
         showMessage("main-menu-msg", "Erreur lors de la création du match.");
@@ -253,11 +260,6 @@ document.getElementById("play-ia-btn").addEventListener("click", async () => {
     }
 });
 
-// Helper pour push un nouveau match et obtenir l'ID
-async function pushNewMatch(newMatchRef) {
-    const newRef = await push(newMatchRef); // Utilise push pour générer un ID unique
-    return newRef.key; // Retourne la clé (ID) du nouveau nœud
-}
 
 document.getElementById("play-player-btn").addEventListener("click", async () => {
     showMessage("main-menu-msg", "Fonctionnalité 'Jouer contre un joueur' en développement.");
