@@ -1,310 +1,319 @@
 // js/game.js
 
-console.log("game.js: Début du chargement."); // DEBUG: Confirme le début du fichier
+console.log("game.js: Début du chargement.");
 
-// Importe les fonctions de la base de données DEPUIS firebaseConfig.js
-// C'est TRÈS IMPORTANT que ce soit "./firebaseConfig.js" et non l'URL CDN de Firebase
-import { db, ref, onValue, update, remove, serverTimestamp, onDisconnect, get, off } from "./firebaseConfig.js";
-console.log("game.js: Imports Firebase ok."); // DEBUG: Confirme l'import Firebase
+import { db, ref, onValue, update, remove, serverTimestamp, onDisconnect, off, runTransaction } from "./firebaseConfig.js";
+import { showMessage, enableActionButtons, disableActionButtons, updateHealthBar, updateTimerUI, clearHistory, appendToHistory, showGameScreen, showMainMenu } from "./utils.js";
+import { processAITurn, isAITurnCurrentlyProcessing, lastAITurnProcessed } from "./aiLogic.js";
 
-import { showMessage, enableActionButtons, disableActionButtons, updateHealthBar, updateTimerUI, clearHistory } from "./utils.js"; // Ajout de updateHealthBar, updateTimerUI, clearHistory
-console.log("game.js: Imports utils ok."); // DEBUG: Confirme l'import utils
-
-import { processAITurn, isAITurnCurrentlyProcessing, lastAITurnProcessed } from "./aiLogic.js"; // Importe les variables de aiLogic
-console.log("game.js: Imports aiLogic ok."); // DEBUG: Confirme l'import aiLogic
-
-// Import des variables et fonctions depuis main.js pour un accès mutuel
-// C'est crucial pour réinitialiser le hasPlayedThisTurn global et revenir au menu
-import {
-    currentUser,
-    setMatchVariables,
-    setHasPlayedThisTurn as setGlobalHasPlayedThisTurn, // Renomme pour éviter un conflit de nom
-    setTimerInterval as setGlobalTimerInterval,
-    setOnDisconnectRef as setGlobalOnDisconnectRef,
-    setMatchDeletionTimeout as setGlobalMatchDeletionTimeout,
-    backToMenu as globalBackToMenu // Importe la fonction globale pour le retour au menu
-} from "./main.js";
-console.log("game.js: Imports main.js (variables globales et fonctions) ok."); // DEBUG: Confirme l'import main.js
-
-// Variables de match (assurez-vous qu'elles sont initialisées via main.js ou un état global)
+// Variables globales pour le match en cours
 export let currentMatchId = null;
 export let youKey = null; // 'p1' ou 'p2'
 export let opponentKey = null; // 'p1' ou 'p2'
 export let gameMode = null; // 'PvAI' ou 'PvP'
 
+// Variables d'état interne au module game.js
 let hasPlayedThisTurn = false;
 let isProcessingTurnInternally = false;
-let timerInterval = null; // Pour gérer le timer de tour
+let timerInterval = null;
+let onDisconnectRef = null; // Référence pour l'opération onDisconnect
 
-// Fonction pour mettre à jour hasPlayedThisTurn (utilisée par main.js)
-// Cette fonction locale est distincte de celle dans main.js
-export function setHasPlayedThisTurn(value) {
-    hasPlayedThisTurn = value;
-    console.log(`DEBUG game.js: hasPlayedThisTurn local mis à jour vers ${hasPlayedThisTurn}`);
-}
+// Éléments du DOM (mis en cache pour la performance)
+const player1PvDisplay = document.getElementById('player1-pv');
+const player2PvDisplay = document.getElementById('player2-pv');
+const player1PseudoDisplay = document.getElementById('player1-pseudo');
+const player2PseudoDisplay = document.getElementById('player2-pseudo');
+const youHealthBar = document.getElementById('you-health-bar');
+const opponentHealthBar = document.getElementById('opponent-health-bar');
+const actionMsgDisplay = document.getElementById('action-msg');
+const opponentActionStatusDisplay = document.getElementById('opponent-action-status');
+const gameHistoryDiv = document.getElementById('history');
+const actionAttackBtn = document.getElementById('action-attack');
+const actionDefendBtn = document.getElementById('action-defend');
+const actionHealBtn = document.getElementById('action-heal');
+const returnToMenuBtn = document.getElementById('return-to-menu');
+const timerDisplay = document.getElementById('timer-display');
 
-// Fonction pour démarrer la surveillance d'un match
+
+/**
+ * Fonction pour démarrer la surveillance d'un match Firebase.
+ * @param {string} matchId L'ID du match à surveiller.
+ * @param {string} playerKey La clé du joueur actuel ('p1' ou 'p2').
+ * @param {string} mode Le mode de jeu ('PvP' ou 'PvAI').
+ */
 export function startMatchMonitoring(matchId, playerKey, mode) {
     console.log("startMatchMonitoring lancé.");
+
+    // Réinitialiser les variables globales du match
     currentMatchId = matchId;
     youKey = playerKey;
     opponentKey = (playerKey === 'p1' ? 'p2' : 'p1');
     gameMode = mode;
+    hasPlayedThisTurn = false;
+    isProcessingTurnInternally = false;
+    lastAITurnProcessed = -1; // Réinitialise le compteur de l'IA pour le nouveau match
 
-    // Mise à jour des variables globales dans main.js
-    setMatchVariables(matchId, currentUser, youKey, gameMode);
-    setGlobalHasPlayedThisTurn(false); // S'assurer que le global est aussi réinitialisé au démarrage du match
+    showGameScreen(); // Affiche l'écran de jeu
 
     const matchRef = ref(db, `matches/${currentMatchId}`);
 
-    // Gestion de la déconnexion
+    // Annuler toute écoute précédente pour éviter les fuites de mémoire
+    off(matchRef);
+
+    // Configurer l'opération onDisconnect pour le joueur actuel
     const playerPresenceRef = ref(db, `matches/${currentMatchId}/players/${youKey}/disconnected`);
-    console.log("--- DÉBOGAGE onDisconnect (game.js) ---");
-    console.log("1. Valeur de db :", db);
-    console.log("2. Valeur de playerPresenceRef :", playerPresenceRef);
-
-    // Initialise l'opération onDisconnect
-    const disconnectOperation = onDisconnect(playerPresenceRef);
-
-    // Configure ce qui se passe à la déconnexion
-    disconnectOperation.set(true)
-        .then(() => {
-            console.log(`Opérations onDisconnect configurées pour ${youKey}`);
-            setGlobalOnDisconnectRef(disconnectOperation); // Stocke la référence dans main.js
-        })
-        .catch(error => {
-            console.error("Erreur lors de la configuration de onDisconnect:", error);
-        });
-    console.log("--- FIN DU DÉBOGAGE onDisconnect (game.js) ---");
-
+    if (onDisconnectRef) {
+        onDisconnectRef.cancel(); // Annuler l'ancienne si elle existe
+    }
+    onDisconnectRef = onDisconnect(playerPresenceRef);
+    onDisconnectRef.set(true)
+        .then(() => console.log(`Opérations onDisconnect configurées pour ${youKey}`))
+        .catch(error => console.error("Erreur lors de la configuration de onDisconnect:", error));
 
     // Écoute des changements dans le match
     onValue(matchRef, async (snapshot) => {
         const matchData = snapshot.val();
         if (!matchData) {
             console.log("Match terminé ou non trouvé (snapshot vide).");
-            // Gérer la fin du match, retour au menu, etc.
-            showMessage("match-info", "Le match a été annulé ou est terminé.");
-            globalBackToMenu(true); // Utilise la fonction globale pour revenir au menu
+            showMessage("action-msg", "Le match a été annulé ou est terminé.");
+            returnToMainMenu(true);
             return;
         }
+        // Ajouter l'ID du match aux données pour faciliter l'accès dans processAITurn
+        matchData.id = currentMatchId;
 
         console.log("Données du match mises à jour :", matchData);
-        console.log("onValue: Current hasPlayedThisTurn (local game.js):", hasPlayedThisTurn);
-
+        console.log(`Current hasPlayedThisTurn (game.js): ${hasPlayedThisTurn}`);
 
         // Mise à jour de l'affichage de l'état des joueurs
-        document.getElementById('player1-pv').textContent = matchData.players.p1.pv + " PV"; // Ajout " PV"
-        updateHealthBar("you-health-bar", matchData.players.p1.pv); // Mettre à jour la barre de vie
-        document.getElementById('player2-pv').textContent = matchData.players.p2.pv + " PV"; // Ajout " PV"
-        updateHealthBar("opponent-health-bar", matchData.players.p2.pv); // Mettre à jour la barre de vie
+        updateGameUI(matchData);
 
-        // Mise à jour des pseudos
-        document.getElementById('player1-pseudo').textContent = matchData.players.p1.pseudo;
-        document.getElementById('player2-pseudo').textContent = matchData.players.p2.pseudo;
-
-        // Mise à jour de l'historique
-        const historyDiv = document.getElementById('history');
-        if (historyDiv && Array.isArray(matchData.history)) {
-            historyDiv.innerHTML = matchData.history.map(entry => `<p>${entry}</p>`).join('');
-            historyDiv.scrollTop = historyDiv.scrollHeight; // Scroll vers le bas
-        }
-
-
-        // Debugging des actions et du tour
-        console.log(`Tour actuel selon Firebase : ${matchData.turn} | Votre clé de joueur : ${youKey}`);
-        console.log(`Statut action joueur (${youKey}): ${matchData.players[youKey].action}`);
-        console.log(`Statut action adversaire (${opponentKey}): ${matchData.players[opponentKey].action}`);
-
-
-        // Logique de gestion du tour et des boutons
-        const yourActionExists = matchData.players[youKey].action;
-        const opponentActionExists = matchData.players[opponentKey].action;
+        // Logique principale de gestion du tour
+        const yourPlayerState = matchData.players[youKey];
+        const opponentPlayerState = matchData.players[opponentKey];
 
         if (matchData.status === 'playing') {
-            if (matchData.turn === youKey) { // C'est votre tour
-                if (!yourActionExists) {
+            const currentTurnPlayerKey = matchData.turn;
+            const isYourTurn = (currentTurnPlayerKey === youKey);
+
+            // Gérer le timer
+            startOrUpdateTurnTimer(matchData);
+
+            // Gérer l'état des boutons et les messages
+            if (isYourTurn) {
+                if (!yourPlayerState.action) {
+                    // C'est votre tour et vous n'avez pas encore agi
                     console.log("C'est votre tour. Vous n'avez pas encore soumis d'action. Réactivation des boutons.");
-                    setHasPlayedThisTurn(false); // Réinitialiser pour le nouveau tour localement
-                    setGlobalHasPlayedThisTurn(false); // Réinitialiser pour le nouveau tour globalement
-                    console.log("onValue: hasPlayedThisTurn réinitialisé à false.");
+                    hasPlayedThisTurn = false; // Assurer que le flag est false
                     enableActionButtons();
-                    console.log("onValue: Appel de enableActionButtons.");
-                    showMessage("action-msg", "C'est votre tour ! Choisissez votre action.");
+                    checkHealButtonAvailability(yourPlayerState.healCooldown || 0); // Vérifie le cooldown du soin
+                    showMessage(actionMsgDisplay.id, "C'est votre tour ! Choisissez votre action.");
+                    opponentActionStatusDisplay.textContent = ''; // Effacer le statut de l'adversaire
                 } else {
+                    // C'est votre tour, vous avez agi, attendez l'adversaire
                     console.log("C'est votre tour. Votre action a été soumise. En attente de l'adversaire. Désactivation des boutons.");
-                    console.log("onValue: Appel de disableActionButtons car action soumise.");
-                    disableActionButtons(); // Votre action a été soumise, on attend l'adversaire
-                    showMessage("action-msg", "Action soumise, en attente de l'adversaire...");
+                    disableActionButtons();
+                    showMessage(actionMsgDisplay.id, "Action soumise, en attente de l'adversaire...");
+                    if (gameMode === 'PvP') {
+                        opponentActionStatusDisplay.textContent = 'En attente de l\'adversaire...';
+                    }
                 }
-            } else { // C'est le tour de l'adversaire
+            } else {
+                // C'est le tour de l'adversaire
                 console.log("C'est le tour de l'adversaire. Désactivation des boutons.");
-                console.log("onValue: Appel de disableActionButtons car tour de l'adversaire.");
-                disableActionButtons(); // C'est le tour de l'adversaire, vos boutons sont désactivés
-                showMessage("action-msg", `C'est le tour de ${matchData.players[matchData.turn].pseudo}.`);
+                disableActionButtons();
+                showMessage(actionMsgDisplay.id, `C'est le tour de ${matchData.players[currentTurnPlayerKey].pseudo}.`);
+                opponentActionStatusDisplay.textContent = `Au tour de ${matchData.players[currentTurnPlayerKey].pseudo}...`;
             }
+
+            // --- DÉCLENCHEMENT DE L'IA SI NÉCESSAIRE (PvAI UNIQUEMENT) ---
+            if (gameMode === 'PvAI') {
+                const currentMatchTurnCounter = matchData.turnCounter || 0;
+                // L'IA joue si c'est son tour OU si le joueur a joué et que l'IA n'a pas encore répondu pour ce tour logique.
+                const shouldAIPlay =
+                    (matchData.turn === opponentKey && !opponentPlayerState.action) || // C'est le tour de l'IA et elle n'a pas joué
+                    (matchData.turn === youKey && yourPlayerState.action && !opponentPlayerState.action); // C'est ton tour, tu as joué, et l'IA n'a pas répondu
+
+                if (shouldAIPlay && !isAITurnCurrentlyProcessing && lastAITurnProcessed !== currentMatchTurnCounter) {
+                    console.log(`DEBUG AI: Conditions remplies. Appel de processAITurn (turnCounter: ${currentMatchTurnCounter}).`);
+                    await processAITurn(matchData);
+                } else if (isAITurnCurrentlyProcessing) {
+                    console.log("DEBUG AI: Traitement de l'IA déjà en cours, pas de nouveau déclenchement.");
+                } else if (lastAITurnProcessed === currentMatchTurnCounter) {
+                    console.log(`DEBUG AI: L'IA a déjà agi pour le tour ${currentMatchTurnCounter}.`);
+                } else {
+                    console.log("DEBUG AI: Les conditions pour déclencher processAITurn ne sont pas encore remplies.");
+                }
+            }
+
+            // --- DÉCLENCHEMENT CONDITIONNEL DE PROCESS TURN ---
+            // Appelez processTurn UNIQUEMENT si les deux actions sont présentes
+            // ET qu'aucun traitement n'est en cours.
+            if (yourPlayerState.action && opponentPlayerState.action && !isProcessingTurnInternally) {
+                console.log("DEBUG PROCESS TURN: Les deux actions sont soumises. Déclenchement de processTurn.");
+                await processTurn(matchData);
+            } else if (isProcessingTurnInternally) {
+                console.log("DEBUG PROCESS TURN: Un traitement est déjà en cours, pas de nouveau déclenchement.");
+            } else {
+                console.log("DEBUG PROCESS TURN: Les conditions pour déclencher processTurn ne sont pas encore remplies.");
+            }
+
         } else if (matchData.status === 'finished') {
             console.log("Match terminé. Désactivation des boutons.");
+            stopTurnTimer();
             disableActionButtons();
-            showMessage("match-msg", `Match terminé ! Vainqueur : ${matchData.winner}`);
-            // Afficher un bouton pour rejouer ou revenir au menu
-            // Note: Le bouton "Retour au Menu" est déjà présent dans index.html
-        }
-
-
-        // --- DÉCLENCHEMENT DU TIMER ---
-        // Seulement si le match est en cours et qu'un temps de début de tour est présent
-        if (matchData.status === 'playing' && matchData.turnStartTime) {
-            const now = new Date().getTime();
-            // serverTimestamp() est un objet { ".sv": "timestamp" } jusqu'à ce qu'il soit écrit
-            // Une fois écrit, c'est un nombre (timestamp UNIX en ms)
-            const startTimeMillis = typeof matchData.turnStartTime === 'object' ? now : matchData.turnStartTime;
-
-            const elapsed = (now - startTimeMillis) / 1000; // secondes
-            const timerMax = 30; // Temps max pour un tour
-            const timeLeft = Math.max(0, timerMax - elapsed);
-
-            // Gérer l'affichage du timer
-            updateTimerUI(timeLeft, timerMax);
-
-            // Démarrer ou réinitialiser le timer si nécessaire
-            // OnClearInterval est géré dans le backToMenu et processTurn
-            if (!timerInterval) {
-                console.log(`game.js: Timer démarré avec startTime : ${startTimeMillis}`);
-                startTurnTimer(startTimeMillis, matchData.turn, youKey, currentMatchId);
-            }
-        } else {
-            // Si le match n'est pas en cours, assurez-vous que le timer est arrêté
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-                setGlobalTimerInterval(null); // Aussi réinitialiser dans main.js
-            }
-        }
-
-
-        // --- DÉCLENCHEMENT DE L'IA SI NÉCESSAIRE (PvAI UNIQUEMENT) ---
-        if (gameMode === 'PvAI' && matchData.status === 'playing') {
-            const currentMatchTurnCounter = matchData.turnCounter || 0;
-
-            // Condition d'appel pour l'IA :
-            // C'est le tour de l'IA (opponentKey) ET elle n'a pas encore agi
-            // OU
-            // C'est le tour du joueur (youKey) ET le joueur a déjà agi ET l'IA n'a pas encore agi.
-            const shouldAIPlay =
-                (matchData.turn === opponentKey && !opponentActionExists) ||
-                (matchData.turn === youKey && matchData.players[youKey].action && !opponentActionExists);
-
-            if (shouldAIPlay && !isAITurnCurrentlyProcessing && lastAITurnProcessed !== currentMatchTurnCounter) {
-                console.log("DEBUG IA: Conditions remplies. Appel de processAITurn (gestion du délai interne à aiLogic).");
-                await processAITurn(matchData);
-            } else if (isAITurnCurrentlyProcessing) {
-                console.log("DEBUG IA: Traitement de l'IA déjà en cours, pas de nouveau déclenchement.");
-            } else if (lastAITurnProcessed === currentMatchTurnCounter) {
-                console.log(`DEBUG IA: L'IA a déjà agi pour le tour ${currentMatchTurnCounter}.`);
-            } else {
-                console.log("DEBUG IA: Les conditions pour déclencher processAITurn ne sont pas encore remplies.");
-            }
-        }
-
-
-        // --- DÉCLENCHEMENT CONDITIONNEL DE PROCESS TURN ---
-        // Appelez processTurn UNIQUEMENT si les deux actions sont présentes
-        // ET qu'aucun traitement n'est en cours.
-        if (matchData.status === 'playing' && yourActionExists && opponentActionExists && !isProcessingTurnInternally) {
-            console.log("DEBUG PROCESS TURN: Les deux actions sont soumises. Déclenchement de processTurn.");
-            await processTurn(matchData);
-        } else if (isProcessingTurnInternally) {
-            console.log("DEBUG PROCESS TURN: Un traitement est déjà en cours, pas de nouveau déclenchement.");
-        } else {
-            console.log("DEBUG PROCESS TURN: Les conditions pour déclencher processTurn ne sont pas encore remplies.");
+            const winnerPseudo = (matchData.winner === youKey) ? yourPlayerState.pseudo : opponentPlayerState.pseudo;
+            showMessage(actionMsgDisplay.id, `Match terminé ! Vainqueur : ${winnerPseudo}`, matchData.winner === youKey);
+            // Afficher le bouton de retour au menu
+            returnToMenuBtn.style.display = 'block';
+        } else if (matchData.status === 'waiting') {
+            showMessage(actionMsgDisplay.id, 'En attente d\'un adversaire...');
+            disableActionButtons();
         }
     });
 
-    // Attachement des écouteurs d'événements pour les boutons d'action
-    // Ces écouteurs ne devraient être attachés qu'une seule fois.
-    // On peut vérifier s'ils existent déjà pour éviter de les ajouter en double.
-    const actionAttackBtn = document.getElementById('action-attack');
-    if (actionAttackBtn && !actionAttackBtn._hasEventListener) { // Vérifie un flag personnalisé
+    // Attachement des écouteurs d'événements pour les boutons d'action (une seule fois)
+    if (!actionAttackBtn._hasEventListener) {
         actionAttackBtn.addEventListener('click', () => performAction('attack'));
         actionAttackBtn._hasEventListener = true;
-        console.log("DEBUG: Écouteur 'attack' attaché.");
     }
-    const actionDefendBtn = document.getElementById('action-defend');
-    if (actionDefendBtn && !actionDefendBtn._hasEventListener) {
+    if (!actionDefendBtn._hasEventListener) {
         actionDefendBtn.addEventListener('click', () => performAction('defend'));
         actionDefendBtn._hasEventListener = true;
-        console.log("DEBUG: Écouteur 'defend' attaché.");
     }
-    const actionHealBtn = document.getElementById('action-heal');
-    if (actionHealBtn && !actionHealBtn._hasEventListener) {
+    if (!actionHealBtn._hasEventListener) {
         actionHealBtn.addEventListener('click', () => performAction('heal'));
         actionHealBtn._hasEventListener = true;
-        console.log("DEBUG: Écouteur 'heal' attaché.");
     }
-    const returnToMenuBtn = document.getElementById('return-to-menu');
-    if (returnToMenuBtn && !returnToMenuBtn._hasEventListener) {
-        returnToMenuBtn.addEventListener('click', () => globalBackToMenu(false)); // Utilise la fonction globale de main.js
+    if (!returnToMenuBtn._hasEventListener) {
+        returnToMenuBtn.addEventListener('click', returnToMainMenu);
         returnToMenuBtn._hasEventListener = true;
-        console.log("DEBUG: Écouteur 'retour au menu' attaché.");
     }
 
-    // Initial disable to prevent premature clicks
-    disableActionButtons();
+    disableActionButtons(); // Désactiver au début
     console.log("startMatchMonitoring terminé.");
 }
 
 /**
- * Exécute une action pour le joueur actuel.
- * @param {string} actionType - Le type d'action ('attack', 'defend', 'heal').
+ * Met à jour l'interface utilisateur du jeu avec les données du match.
+ * @param {object} matchData Les données du match Firebase.
+ */
+function updateGameUI(matchData) {
+    const p1 = matchData.players.p1;
+    const p2 = matchData.players.p2;
+
+    const you = (youKey === 'p1') ? p1 : p2;
+    const opponent = (youKey === 'p1') ? p2 : p1;
+
+    player1PseudoDisplay.textContent = you.pseudo;
+    player2PseudoDisplay.textContent = opponent.pseudo;
+
+    player1PvDisplay.textContent = `${you.pv} PV`;
+    player2PvDisplay.textContent = `${opponent.pv} PV`;
+
+    updateHealthBar(youHealthBar.id, you.pv);
+    updateHealthBar(opponentHealthBar.id, opponent.pv);
+
+    // Mettre à jour l'historique
+    if (matchData.history && Array.isArray(matchData.history)) {
+        gameHistoryDiv.innerHTML = matchData.history.map(entry => `<p>${entry}</p>`).join('');
+        gameHistoryDiv.scrollTop = gameHistoryDiv.scrollHeight; // Scroll vers le bas
+    }
+
+    // Afficher le statut de l'adversaire (si PvP)
+    if (gameMode === 'PvP') {
+        if (opponent.action && matchData.turnCounter === (matchData.turnCounter || 0)) { // Vérifier si l'action est pour le tour actuel
+            opponentActionStatusDisplay.textContent = 'Adversaire a joué !';
+        } else if (matchData.status === 'playing') {
+            opponentActionStatusDisplay.textContent = 'En attente de l\'adversaire...';
+        }
+    }
+}
+
+/**
+ * Gère l'action du joueur (attaque, défense, soin).
+ * @param {string} actionType L'action choisie.
  */
 async function performAction(actionType) {
-    console.log(`DEBUG CLICK: Bouton '${actionType}' cliqué. hasPlayedThisTurn avant appel performAction: ${hasPlayedThisTurn}`);
+    console.log(`DEBUG ACTION: Bouton '${actionType}' cliqué. hasPlayedThisTurn avant performAction: ${hasPlayedThisTurn}`);
 
     if (hasPlayedThisTurn) {
-        showMessage("action-msg", "Vous avez déjà soumis votre action pour ce tour.");
+        showMessage(actionMsgDisplay.id, "Vous avez déjà soumis votre action pour ce tour.");
         return;
     }
 
-    console.log("Tentative d'action :", actionType);
-    console.log(`performAction - currentMatchId: ${currentMatchId}, youKey: ${youKey}, hasPlayedThisTurn: ${hasPlayedThisTurn}`);
-
-
-    if (!currentMatchId || !youKey) {
-        showMessage("action-msg", "Erreur: Match non défini ou joueur non identifié.");
-        return;
-    }
-
-    // Désactiver les boutons immédiatement après l'action
-    console.log("performAction: Appel de disableActionButtons.");
+    // Désactiver les boutons immédiatement pour éviter les double-clics
     disableActionButtons();
-
 
     const matchRef = ref(db, `matches/${currentMatchId}`);
     try {
-        // Enregistrer l'action du joueur dans Firebase
-        await update(matchRef, {
-            [`players/${youKey}/action`]: actionType,
-            [`players/${youKey}/lastActionTimestamp`]: serverTimestamp() // Marqueur temporel de l'action
+        const snapshot = await runTransaction(matchRef, (currentMatch) => {
+            if (currentMatch && currentMatch.status === 'playing') {
+                const playerState = currentMatch.players[youKey];
+
+                // Vérifier le cooldown du soin
+                if (actionType === 'heal') {
+                    if ((playerState.healCooldown || 0) > 0) {
+                        // Le soin est en cooldown, annuler l'action côté client et réactiver les boutons
+                        return; // Abort the transaction
+                    }
+                }
+
+                // S'assurer que le joueur n'a pas déjà soumis d'action pour ce tour logique
+                if (!playerState.action) {
+                    playerState.action = actionType;
+                    // Le healCooldown est mis à jour dans processTurn
+                    return currentMatch;
+                }
+            }
+            return undefined; // Abort the transaction
         });
-        setHasPlayedThisTurn(true); // Met à jour l'état local
-        setGlobalHasPlayedThisTurn(true); // Met à jour l'état global dans main.js
-        console.log("performAction: hasPlayedThisTurn défini à true (local et global).");
-        showMessage("action-msg", `Action '${actionType}' enregistrée.`);
-        console.log(`Action '${actionType}' enregistrée pour ${youKey}.`);
+
+        if (snapshot.committed) {
+            hasPlayedThisTurn = true; // Met à jour l'état local après un commit réussi
+            showMessage(actionMsgDisplay.id, `Action '${actionType}' enregistrée.`);
+            console.log(`Action '${actionType}' enregistrée pour ${youKey}. hasPlayedThisTurn: ${hasPlayedThisTurn}`);
+        } else {
+            // La transaction a été annulée (par exemple, cooldown du soin actif)
+            const matchData = await get(matchRef).then(s => s.val()); // Récupère les données à jour
+            const playerState = matchData.players[youKey];
+            if (actionType === 'heal' && (playerState.healCooldown || 0) > 0) {
+                showMessage(actionMsgDisplay.id, `Le soin sera disponible dans ${playerState.healCooldown} tour(s).`, false);
+            } else {
+                showMessage(actionMsgDisplay.id, "Vous avez déjà soumis votre action pour ce tour.", false);
+            }
+            enableActionButtons(); // Réactiver les boutons si l'action a été annulée
+            checkHealButtonAvailability(playerState.healCooldown || 0); // Réactiver/désactiver le soin
+        }
     } catch (error) {
         console.error("Erreur lors de l'enregistrement de l'action :", error);
-        showMessage("action-msg", "Erreur lors de l'enregistrement de l'action.");
+        showMessage(actionMsgDisplay.id, "Erreur lors de l'enregistrement de l'action.", false);
         enableActionButtons(); // Réactiver si erreur pour permettre de réessayer
+    }
+}
+
+/**
+ * Vérifie et met à jour l'état du bouton de soin.
+ * @param {number} healCooldown Le cooldown actuel du soin pour le joueur.
+ */
+function checkHealButtonAvailability(healCooldown) {
+    if (actionHealBtn) {
+        actionHealBtn.disabled = (healCooldown > 0);
+        if (actionHealBtn.disabled) {
+            actionHealBtn.textContent = `Soigner (${healCooldown} tours)`;
+        } else {
+            actionHealBtn.textContent = 'Soigner (+15 PV)';
+        }
     }
 }
 
 
 /**
  * Traite les actions des deux joueurs et met à jour l'état du match.
+ * Appelé une fois que les deux joueurs ont soumis leur action pour le tour.
  * @param {object} matchData - Les données actuelles du match.
  */
-export async function processTurn(matchData) {
+async function processTurn(matchData) {
     console.log("processTurn lancé.");
 
     if (isProcessingTurnInternally) {
@@ -312,21 +321,9 @@ export async function processTurn(matchData) {
         return;
     }
     isProcessingTurnInternally = true;
+    stopTurnTimer(); // Arrête le timer pendant le traitement du tour
 
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-        setGlobalTimerInterval(null); // Réinitialise aussi dans main.js
-    }
-    console.log("processTurn: Appel de disableActionButtons au début du traitement du tour.");
-    disableActionButtons();
-
-    // Vérifier si le match n'est pas déjà terminé et si les actions sont bien là
-    if (matchData.status !== 'playing' || !matchData.players.p1.action || !matchData.players.p2.action) {
-        console.warn("processTurn : Annulé, les conditions ne sont pas remplies ou déjà traité (peut être un appel redondant).");
-        isProcessingTurnInternally = false;
-        return;
-    }
+    disableActionButtons(); // S'assurer que les boutons sont désactivés
 
     const matchRef = ref(db, `matches/${currentMatchId}`);
     const p1 = matchData.players.p1;
@@ -335,138 +332,144 @@ export async function processTurn(matchData) {
     let p1Action = p1.action;
     let p2Action = p2.action;
 
-    let p1DmgTaken = 0;
-    let p2DmgTaken = 0;
-    let p1Heal = 0;
-    let p2Heal = 0;
-
-    let historyUpdates = [];
-    const baseDamage = 10;
-    const healAmount = 15;
-
     let p1HealCooldown = Math.max(0, (p1.healCooldown || 0) - 1);
     let p2HealCooldown = Math.max(0, (p2.healCooldown || 0) - 1);
 
-    // Phase de défense (pour les messages d'historique)
+    let newP1Pv = p1.pv;
+    let newP2Pv = p2.pv;
+
+    let historyMessages = [];
+    const baseDamage = 10;
+    const healAmount = 15;
+    const defenseReduction = 5;
+
+    // --- Phase 1: Gestion des actions de défense ---
     if (p1Action === 'defend') {
-        historyUpdates.push(`${p1.pseudo} se prépare à défendre.`);
+        historyMessages.push(`${p1.pseudo} se prépare à défendre.`);
     }
     if (p2Action === 'defend') {
-        historyUpdates.push(`${p2.pseudo} se prépare à défendre.`);
+        historyMessages.push(`${p2.pseudo} se prépare à défendre.`);
     }
 
-    // Phase d'attaque P1
+    // --- Phase 2: Gestion des actions de soin ---
+    if (p1Action === 'heal') {
+        if ((p1.healCooldown || 0) === 0) { // Vérifie le cooldown avant d'appliquer
+            newP1Pv = Math.min(100, newP1Pv + healAmount);
+            p1HealCooldown = 3; // Réinitialise le cooldown après utilisation
+            historyMessages.push(`${p1.pseudo} se soigne pour ${healAmount} PV !`);
+        } else {
+            // Si le soin a été tenté alors qu'il était en cooldown, il n'est pas appliqué.
+            // Le message d'erreur est déjà géré par performAction.
+            // Ici, on incrémente juste son cooldown s'il était déjà en cours.
+            historyMessages.push(`${p1.pseudo} tente de se soigner mais est en cooldown.`);
+        }
+    }
+    if (p2Action === 'heal') {
+        if ((p2.healCooldown || 0) === 0) { // Vérifie le cooldown avant d'appliquer
+            newP2Pv = Math.min(100, newP2Pv + healAmount);
+            p2HealCooldown = 3; // Réinitialise le cooldown après utilisation
+            historyMessages.push(`${p2.pseudo} se soigne pour ${healAmount} PV !`);
+        } else {
+            historyMessages.push(`${p2.pseudo} tente de se soigner mais est en cooldown.`);
+        }
+    }
+
+    // --- Phase 3: Gestion des attaques ---
+    let p1DamageToP2 = 0;
+    let p2DamageToP1 = 0;
+
     if (p1Action === 'attack') {
-        let dmg = baseDamage;
+        p1DamageToP2 = baseDamage;
         if (p2Action === 'defend') {
-            dmg = Math.max(0, dmg - 5);
-            historyUpdates.push(`${p1.pseudo} attaque ${p2.pseudo}, mais les dégâts sont réduits par la défense !`);
+            p1DamageToP2 = Math.max(0, p1DamageToP2 - defenseReduction);
+            historyMessages.push(`${p1.pseudo} attaque ${p2.pseudo}, mais la défense réduit les dégâts à ${p1DamageToP2} !`);
         } else {
-            historyUpdates.push(`${p1.pseudo} attaque ${p2.pseudo} !`);
-        }
-        p2DmgTaken = dmg;
-    } else if (p1Action === 'heal') {
-        if ((p1.healCooldown || 0) === 0) {
-            p1Heal = healAmount;
-            p1HealCooldown = 3; // Réinitialise le cooldown
-            historyUpdates.push(`${p1.pseudo} se soigne pour ${healAmount} PV !`);
-        } else {
-            historyUpdates.push(`${p1.pseudo} tente de se soigner mais est en cooldown (${(p1.healCooldown || 0)} tours restants).`);
+            historyMessages.push(`${p1.pseudo} attaque ${p2.pseudo} pour ${p1DamageToP2} dégâts !`);
         }
     }
-
-    // Phase d'attaque P2
     if (p2Action === 'attack') {
-        let dmg = baseDamage;
+        p2DamageToP1 = baseDamage;
         if (p1Action === 'defend') {
-            dmg = Math.max(0, dmg - 5);
-            historyUpdates.push(`${p2.pseudo} attaque ${p1.pseudo}, mais les dégâts sont réduits par la défense !`);
+            p2DamageToP1 = Math.max(0, p2DamageToP1 - defenseReduction);
+            historyMessages.push(`${p2.pseudo} attaque ${p1.pseudo}, mais la défense réduit les dégâts à ${p2DamageToP1} !`);
         } else {
-            historyUpdates.push(`${p2.pseudo} attaque ${p1.pseudo} !`);
-        }
-        p1DmgTaken = dmg;
-    } else if (p2Action === 'heal') {
-        if ((p2.healCooldown || 0) === 0) {
-            p2Heal = healAmount;
-            p2HealCooldown = 3; // Réinitialise le cooldown
-            historyUpdates.push(`${p2.pseudo} se soigne pour ${healAmount} PV !`);
-        } else {
-            historyUpdates.push(`${p2.pseudo} tente de se soigner mais est en cooldown (${(p2.healCooldown || 0)} tours restants).`);
+            historyMessages.push(`${p2.pseudo} attaque ${p1.pseudo} pour ${p2DamageToP1} dégâts !`);
         }
     }
 
-    let newP1Pv = Math.max(0, Math.min(100, p1.pv - p1DmgTaken + p1Heal));
-    let newP2Pv = Math.max(0, Math.min(100, p2.pv - p2DmgTaken + p2Heal));
+    newP1Pv = Math.max(0, newP1Pv - p2DamageToP1); // Dégâts de P2 à P1
+    newP2Pv = Math.max(0, newP2Pv - p1DamageToP2); // Dégâts de P1 à P2
 
+    // --- Phase 4: Gestion des actions 'pass' ---
+    if (p1Action === 'pass') {
+        historyMessages.push(`${p1.pseudo} passe son tour.`);
+    }
+    if (p2Action === 'pass') {
+        historyMessages.push(`${p2.pseudo} passe son tour.`);
+    }
+
+    // --- Phase 5: Vérification de fin de match et mise à jour ---
     let newStatus = 'playing';
-    let winner = null;
+    let winnerKey = null; // Stocke la clé du joueur gagnant ('p1' ou 'p2')
+    let winnerPseudo = null;
 
     if (newP1Pv <= 0 && newP2Pv <= 0) {
         newStatus = 'finished';
-        winner = 'Égalité'; // Le gagnant est "Égalité" pour ce cas
-        historyUpdates.push(`Les deux joueurs tombent au combat ! C'est une égalité !`);
-        // Mise à jour des stats globales
-        await globalBackToMenu(true); // Retour au menu après égalité
+        winnerKey = 'draw';
+        winnerPseudo = 'Égalité';
+        historyMessages.push(`Les deux joueurs tombent au combat ! C'est une égalité !`);
     } else if (newP1Pv <= 0) {
         newStatus = 'finished';
-        winner = p2.pseudo;
-        historyUpdates.push(`${p1.pseudo} est K.O. ! ${p2.pseudo} a gagné !`);
-        // Mise à jour des stats globales
-        await globalBackToMenu(true); // Retour au menu après défaite
-    }
-    else if (newP2Pv <= 0) {
+        winnerKey = 'p2';
+        winnerPseudo = p2.pseudo;
+        historyMessages.push(`${p1.pseudo} est K.O. ! ${p2.pseudo} a gagné !`);
+    } else if (newP2Pv <= 0) {
         newStatus = 'finished';
-        winner = p1.pseudo;
-        historyUpdates.push(`${p2.pseudo} est K.O. ! ${p1.pseudo} a gagné !`);
-        // Mise à jour des stats globales
-        await globalBackToMenu(true); // Retour au menu après victoire
+        winnerKey = 'p1';
+        winnerPseudo = p1.pseudo;
+        historyMessages.push(`${p2.pseudo} est K.O. ! ${p1.pseudo} a gagné !`);
     }
 
-    const newTurnCounter = (matchData.turnCounter || 0) + 1;
-
-    // Logique pour déterminer le prochain joueur
-    let nextTurnPlayer;
-    if (gameMode === 'PvAI') {
-        // En mode PvAI, après que les deux actions aient été traitées,
-        // c'est toujours au joueur humain (p1) de recommencer le tour.
-        nextTurnPlayer = youKey; // youKey est 'p1' pour le joueur humain
-    } else { // Mode PvP ou autres modes
-        // En mode PvP, les tours alternent.
-        // matchData.turn représente le joueur dont c'était le tour quand processTurn a été appelé.
-        nextTurnPlayer = (matchData.turn === 'p1' ? 'p2' : 'p1'); // Alterne le tour
+    // Déterminer le prochain joueur
+    let nextTurnPlayerKey;
+    if (newStatus === 'finished') {
+        nextTurnPlayerKey = null; // Plus de tour si le match est terminé
+    } else if (gameMode === 'PvAI') {
+        nextTurnPlayerKey = youKey; // En PvAI, c'est toujours le joueur humain qui initie le tour
+    } else { // PvP
+        nextTurnPlayerKey = (matchData.turn === 'p1' ? 'p2' : 'p1'); // Alternance des tours
     }
 
     const updates = {
         [`players/p1/pv`]: newP1Pv,
         [`players/p2/pv`]: newP2Pv,
         [`players/p1/action`]: null, // Réinitialise l'action pour le prochain tour
-        [`players/p2/action`]: null, // Réinitialise l'action pour le prochain tour
-        [`players/p1/lastAction`]: p1Action,
+        [`players/p2/action`]: null,
+        [`players/p1/lastAction`]: p1Action, // Stocke la dernière action pour l'IA ou l'historique
         [`players/p2/lastAction`]: p2Action,
-        [`players/p1/healCooldown`]: p1HealCooldown,
-        [`players/p2/healCooldown`]: p2HealCooldown,
-        history: [...matchData.history, ...historyUpdates],
+        [`players/p1/healCooldown`]: p1HealCooldown, // Met à jour le cooldown du soin
+        [`players/p2/healCooldown`]: p2HealCooldown, // Met à jour le cooldown du soin
+        history: [...(matchData.history || []), ...historyMessages], // Concatène les messages
         lastTurnProcessedAt: serverTimestamp(),
-        turn: nextTurnPlayer, // Utilisez le joueur déterminé pour le prochain tour
-        turnStartTime: serverTimestamp(), // Réinitialiser le timer pour le nouveau tour
+        turn: nextTurnPlayerKey, // Le joueur qui commence le prochain tour
+        turnStartTime: (newStatus === 'finished' ? null : serverTimestamp()), // Réinitialise le timer ou le met à null
         status: newStatus,
-        turnCounter: newTurnCounter
+        turnCounter: (matchData.turnCounter || 0) + 1, // Incrémente le compteur de tour logique
     };
 
     if (newStatus === 'finished') {
-        updates.winner = winner;
+        updates.winner = winnerKey;
     }
 
     try {
         await update(matchRef, updates);
         console.log("Tour traité avec succès. Mise à jour Firebase. Prochain tour pour :", updates.turn);
-        setHasPlayedThisTurn(false); // Réinitialise l'état local
-        setGlobalHasPlayedThisTurn(false); // Réinitialise l'état global
+        hasPlayedThisTurn = false; // Réinitialise le drapeau local pour le nouveau tour
         console.log(`DEBUG game.js: hasPlayedThisTurn réinitialisé à ${hasPlayedThisTurn} après traitement du tour.`);
 
     } catch (error) {
         console.error("Erreur lors du traitement du tour :", error);
-        showMessage("action-msg", "Erreur interne lors du traitement du tour.");
+        showMessage(actionMsgDisplay.id, "Erreur interne lors du traitement du tour.", false);
         enableActionButtons(); // Réactiver les boutons en cas d'erreur
     } finally {
         isProcessingTurnInternally = false;
@@ -474,36 +477,116 @@ export async function processTurn(matchData) {
     }
 }
 
-// Fonction pour gérer le timer du tour
-function startTurnTimer(startTime, currentTurnPlayerKey, currentPlayerKey, matchId) {
+/**
+ * Démarre ou met à jour le compte à rebours pour un tour.
+ * @param {object} matchData Les données actuelles du match.
+ */
+function startOrUpdateTurnTimer(matchData) {
     if (timerInterval) {
         clearInterval(timerInterval);
     }
 
     const timerDuration = 30; // 30 secondes par tour
+    const currentTurnPlayerKey = matchData.turn;
+    const startTimeMillis = matchData.turnStartTime;
+
+    if (!startTimeMillis) {
+        updateTimerUI(timerDuration, timerDuration); // Affiche le temps max si pas de start time
+        return;
+    }
 
     timerInterval = setInterval(async () => {
         const now = new Date().getTime();
-        const elapsed = (now - startTime) / 1000;
+        const elapsed = (now - startTimeMillis) / 1000;
         const timeLeft = Math.max(0, timerDuration - elapsed);
 
-        updateTimerUI(timeLeft, timerDuration); // Mettre à jour l'affichage du timer via utils.js
+        updateTimerUI(timeLeft, timerDuration);
 
         if (timeLeft <= 0) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-            setGlobalTimerInterval(null); // Aussi réinitialiser dans main.js
+            stopTurnTimer();
             console.log("Temps écoulé pour le tour !");
 
             // Si le temps est écoulé et c'est votre tour et que vous n'avez pas joué,
             // soumettez une action par défaut (ex: défendre)
-            if (currentTurnPlayerKey === currentPlayerKey && !hasPlayedThisTurn) {
+            // Assurez-vous que le match est toujours en cours et que c'est bien votre tour logique
+            if (matchData.status === 'playing' && currentTurnPlayerKey === youKey && !hasPlayedThisTurn) {
                 console.log("Le temps est écoulé, soumission automatique de 'defend'.");
-                await performAction('defend');
+                await performAction('defend'); // Soumet une action 'defend' par défaut
             }
         }
-    }, 1000); // Mettre à jour chaque seconde
-    setGlobalTimerInterval(timerInterval); // Stocke la référence dans main.js
+    }, 1000);
 }
 
-console.log("game.js: Fichier entièrement chargé."); // DEBUG: Confirme la fin du chargement du fichier
+/**
+ * Arrête le timer du tour.
+ */
+function stopTurnTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        console.log("Timer de tour arrêté.");
+    }
+}
+
+/**
+ * Gère le retour au menu principal, annulant les opérations de match.
+ * @param {boolean} fromMatchEnd Indique si le retour vient de la fin d'un match.
+ */
+async function returnToMainMenu(fromMatchEnd = false) {
+    console.log("Retour au menu demandé.");
+
+    // Annuler tous les écouteurs Firebase liés au match
+    if (currentMatchId) {
+        const matchRef = ref(db, `matches/${currentMatchId}`);
+        off(matchRef); // Désinscrit tous les listeners pour ce chemin
+        console.log(`Écouteurs Firebase pour le match ${currentMatchId} désactivés.`);
+    }
+
+    // Annuler l'opération onDisconnect si elle existe
+    if (onDisconnectRef) {
+        try {
+            await onDisconnectRef.cancel();
+            console.log("Opération onDisconnect annulée.");
+        } catch (error) {
+            console.warn("Erreur lors de l'annulation de onDisconnect :", error);
+        } finally {
+            onDisconnectRef = null;
+        }
+    }
+
+    // Arrêter le timer de tour
+    stopTurnTimer();
+
+    // Réinitialiser les variables de match globales
+    currentMatchId = null;
+    youKey = null;
+    opponentKey = null;
+    gameMode = null;
+    hasPlayedThisTurn = false; // Réinitialiser le drapeau pour le prochain match
+    isProcessingTurnInternally = false;
+    lastAITurnProcessed = -1; // Réinitialise pour le prochain match
+
+    // Réinitialiser l'interface utilisateur du match
+    clearHistory();
+    updateHealthBar(youHealthBar.id, 100);
+    player1PvDisplay.textContent = "100 PV";
+    updateHealthBar(opponentHealthBar.id, 100);
+    player2PvDisplay.textContent = "100 PV";
+    updateTimerUI(30, 30); // Réinitialise l'affichage du timer à 30s
+    player2PseudoDisplay.textContent = "Adversaire";
+    // Le pseudo du joueur 1 sera mis à jour par main.js lors du retour au menu
+    actionMsgDisplay.textContent = "";
+    opponentActionStatusDisplay.textContent = "";
+    returnToMenuBtn.style.display = 'none'; // Cacher le bouton
+
+    // Cacher l'écran de jeu et montrer le menu principal
+    showMainMenu();
+
+    if (fromMatchEnd) {
+        showMessage('main-menu-msg', "Le match est terminé. Bienvenue au menu principal.");
+    } else {
+        showMessage('main-menu-msg', "Vous avez quitté le match. Bienvenue au menu principal.");
+    }
+}
+
+console.log("game.js: Fichier entièrement chargé.");

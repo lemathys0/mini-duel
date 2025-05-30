@@ -1,84 +1,107 @@
 // js/auth.js
 
-import { db } from "./firebaseConfig.js";
-import { ref, set, get, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-import { showMessage } from "./utils.js";
+import { auth, db, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, ref, set, get } from './firebaseConfig.js';
+import { showMessage } from './utils.js'; // Assurez-vous que showMessage est exporté
+import { handleUserLogin, handleUserLogout } from './main.js'; // Fonctions callback de main.js
 
-// Cette fonction sera appelée par main.js pour gérer la connexion/déconnexion
-// Elle prendra en paramètre les fonctions de main.js pour mettre à jour l'UI
-export function setupAuthListeners(handleUserLogin, handleUserLogout) {
-    const pseudoInput = document.getElementById("pseudo-input");
-    const codeInput = document.getElementById("code-input");
-    const signupBtn = document.getElementById("signup-btn");
-    const loginBtn = document.getElementById("login-btn");
-    const logoutBtn = document.getElementById("logout-btn");
+console.log("auth.js chargé.");
+
+export function setupAuthListeners() {
+    const pseudoInput = document.getElementById('pseudo-input');
+    const codeInput = document.getElementById('code-input');
+    const signupBtn = document.getElementById('signup-btn');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
 
     if (signupBtn) {
-        signupBtn.addEventListener("click", async () => {
-            const pseudo = pseudoInput ? pseudoInput.value.trim() : '';
-            const code = codeInput ? codeInput.value.trim() : '';
+        signupBtn.addEventListener('click', async () => {
+            const pseudo = pseudoInput.value.trim();
+            const code = codeInput.value.trim();
 
-            if (pseudo.length < 2) {
-                showMessage("auth-msg", "Pseudo trop court (min 2 caractères).");
+            if (!pseudo || !code) {
+                showMessage('auth-msg', 'Veuillez remplir tous les champs.', false);
                 return;
             }
-            if (!/^\d{4}$/.test(code)) {
-                showMessage("auth-msg", "Code doit être composé de 4 chiffres.");
+            if (code.length !== 4 || isNaN(code)) {
+                showMessage('auth-msg', 'Le code doit être un nombre à 4 chiffres.', false);
                 return;
             }
 
-            const userRef = ref(db, `users/${pseudo}`);
             try {
-                const snapshot = await get(userRef);
-                if (snapshot.exists()) {
-                    showMessage("auth-msg", "Ce pseudo est déjà pris.");
-                } else {
-                    const initialStats = { wins: 0, losses: 0, draws: 0 };
-                    await set(userRef, { code, stats: initialStats, createdAt: serverTimestamp() });
-                    showMessage("auth-msg", "Inscription réussie ! Vous pouvez maintenant vous connecter.", true);
-                    // Pas de connexion automatique après inscription
-                }
+                // Utiliser une adresse email fictive pour l'authentification Firebase Auth
+                const email = `${pseudo}@miniduel.com`;
+                const userCredential = await createUserWithEmailAndPassword(auth, email, code);
+                const user = userCredential.user;
+
+                // Stocker le pseudo dans la base de données sous l'UID Firebase Auth
+                await set(ref(db, `users/${user.uid}/pseudo`), pseudo);
+                await set(ref(db, `users/${user.uid}/stats`), { wins: 0, losses: 0, draws: 0 }); // Initialiser les stats
+
+                showMessage('auth-msg', 'Inscription réussie !', true);
             } catch (error) {
-                console.error("Signup error:", error);
-                showMessage("auth-msg", "Erreur lors de l'inscription.");
+                console.error("Erreur d'inscription:", error);
+                if (error.code === 'auth/email-already-in-use') {
+                    showMessage('auth-msg', 'Ce pseudo est déjà utilisé. Veuillez vous connecter ou choisir un autre pseudo.', false);
+                } else {
+                    showMessage('auth-msg', `Erreur d'inscription: ${error.message}`, false);
+                }
             }
         });
     }
 
     if (loginBtn) {
-        loginBtn.addEventListener("click", async () => {
-            const pseudo = pseudoInput ? pseudoInput.value.trim() : '';
-            const code = codeInput ? codeInput.value.trim() : '';
+        loginBtn.addEventListener('click', async () => {
+            const pseudo = pseudoInput.value.trim();
+            const code = codeInput.value.trim();
 
             if (!pseudo || !code) {
-                showMessage("auth-msg", "Pseudo et code requis.");
+                showMessage('auth-msg', 'Veuillez remplir tous les champs.', false);
                 return;
             }
 
-            const userRef = ref(db, `users/${pseudo}`);
             try {
-                const snapshot = await get(userRef);
-                if (!snapshot.exists()) {
-                    showMessage("auth-msg", "Pseudo inconnu.");
-                } else {
-                    const data = snapshot.val();
-                    if (data.code === code) {
-                        showMessage("auth-msg", "Connexion réussie !", true);
-                        handleUserLogin(pseudo, data); // Appelle la fonction de main.js
-                    } else {
-                        showMessage("auth-msg", "Code incorrect.");
-                    }
-                }
+                const email = `${pseudo}@miniduel.com`;
+                await signInWithEmailAndPassword(auth, email, code);
+                showMessage('auth-msg', 'Connexion réussie !', true);
             } catch (error) {
-                console.error("Login error:", error);
-                showMessage("auth-msg", "Erreur de base de données.");
+                console.error("Erreur de connexion:", error);
+                if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+                    showMessage('auth-msg', 'Pseudo ou code incorrect.', false);
+                } else {
+                    showMessage('auth-msg', `Erreur de connexion: ${error.message}`, false);
+                }
             }
         });
     }
 
     if (logoutBtn) {
-        logoutBtn.addEventListener("click", () => {
-            handleUserLogout(); // Appelle la fonction de main.js
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                showMessage('auth-msg', 'Déconnexion réussie.', true);
+            } catch (error) {
+                console.error("Erreur de déconnexion:", error);
+                showMessage('auth-msg', `Erreur de déconnexion: ${error.message}`, false);
+            }
         });
     }
+
+    // Écouteur d'état d'authentification
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            // Récupérer le pseudo de l'utilisateur via son UID
+            const pseudoSnapshot = await get(ref(db, `users/${user.uid}/pseudo`));
+            const pseudo = pseudoSnapshot.val();
+            if (pseudo) {
+                // Passage des données de l'utilisateur à main.js
+                handleUserLogin(user.uid, pseudo);
+            } else {
+                console.warn("Pseudo non trouvé pour l'utilisateur connecté :", user.uid);
+                await signOut(auth); // Déconnecte si le pseudo n'est pas trouvé
+                handleUserLogout();
+            }
+        } else {
+            handleUserLogout();
+        }
+    });
 }
