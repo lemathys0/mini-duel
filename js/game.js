@@ -195,6 +195,8 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
         console.log("Tour actuel selon Firebase :", matchData.turn, " | Votre clé de joueur :", youKey);
 
+        // Cette partie du code gère l'affichage et l'activation/désactivation des boutons.
+        // La logique de DECLENCHEMENT de processTurn se fait en dehors de ces if/else.
         if (matchData.turn === youKey) {
             if (!matchData.players[youKey].action) {
                 console.log("C'est votre tour. Vous n'avez pas encore soumis d'action.");
@@ -216,16 +218,6 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                     setTimerInterval(null);
                 }
                 updateTimerUI(timerMax);
-
-                // --- DÉCLENCHEMENT DE L'IA QUAND LE JOUEUR A JOUÉ (PvAI UNIQUEMENT) ---
-                if (gameMode === 'PvAI' && matchData.players[youKey].action && !matchData.players[opponentKey].action) {
-                    console.log("DEBUG IA (APRES JOUEUR): Conditions remplies. Déclenchement de processAITurn.");
-                    await processAITurn(matchData);
-                } else if (gameMode === 'PvAI') {
-                    console.log("DEBUG IA (APRES JOUEUR): Conditions NON remplies pour déclencher l'IA après action du joueur.");
-                    if (!matchData.players[youKey].action) console.log("DEBUG IA (APRES JOUEUR): -> L'action du joueur n'est pas soumise.");
-                    if (matchData.players[opponentKey].action) console.log("DEBUG IA (APRES JOUEUR): -> L'IA a déjà une action.");
-                }
             }
         }
         else { // matchData.turn === opponentKey
@@ -237,22 +229,26 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 setTimerInterval(null);
             }
             updateTimerUI(timerMax);
+        }
 
-            // --- DÉCLENCHEMENT DE L'IA AU DÉBUT DE SON TOUR (PvAI UNIQUEMENT) ---
-            if (gameMode === 'PvAI' && matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
+        // --- DÉCLENCHEMENT DE L'IA SI C'EST SON TOUR OU SI LE JOUEUR A JOUÉ (PvAI UNIQUEMENT) ---
+        if (gameMode === 'PvAI') {
+            // Si c'est le tour de l'IA ET qu'elle n'a pas encore soumis d'action
+            if (matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
                 console.log("DEBUG IA (DEBUT TOUR IA): Conditions remplies. Déclenchement de processAITurn.");
                 await processAITurn(matchData);
-            } else if (gameMode === 'PvAI') {
-                console.log("DEBUG IA (DEBUT TOUR IA): Conditions NON remplies pour déclencher l'IA.");
-                if (matchData.players[opponentKey].action) console.log("DEBUG IA (DEBUT TOUR IA): -> L'IA a déjà une action en attente.");
+            }
+            // Si c'est le tour du joueur MAIS que le joueur a déjà soumis son action ET que l'IA n'a PAS encore soumis son action
+            else if (matchData.turn === youKey && matchData.players[youKey].action && !matchData.players[opponentKey].action) {
+                 console.log("DEBUG IA (APRES JOUEUR): Conditions remplies. Déclenchement de processAITurn.");
+                 await processAITurn(matchData);
             }
         }
 
-        console.log("DEBUG PROCESS TURN: Vérification pour déclencher processTurn. (Passée par l'écouteur onValue)");
 
-        // --- DÉCLENCHEMENT CONDITIONNEL DE PROCESS TURN (AJOUTÉ OU MODIFIÉ) ---
-        // Vérifie si les deux joueurs ont soumis leur action ET que le statut est 'playing'
-        // et qu'un traitement n'est pas déjà en cours.
+        // --- DÉCLENCHEMENT CONDITIONNEL DE PROCESS TURN (AMÉLIORÉ) ---
+        // Appelez processTurn UNIQUEMENT si les deux actions sont présentes
+        // ET qu'aucun traitement n'est en cours.
         if (matchData.status === 'playing' && matchData.players.p1.action && matchData.players.p2.action && !isProcessingTurnInternally) {
             console.log("DEBUG PROCESS TURN: Les deux actions sont soumises. Déclenchement de processTurn.");
             await processTurn(matchData);
