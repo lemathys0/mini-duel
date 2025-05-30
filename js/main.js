@@ -3,10 +3,10 @@
 console.log("main.js chargé."); // DEBUG : Confirme le chargement de main.js
 
 // Importez 'app' et 'db' directement depuis firebaseConfig.js
-import { app, db } from "./firebaseConfig.js";
+import { app, db, ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction, push } from "./firebaseConfig.js"; // <--- MODIFICATION ICI : Importe les fonctions de la base de données depuis firebaseConfig.js
+
 // NOUVEAU : Import de la fonction setupAuthListeners depuis auth.js
 import { setupAuthListeners } from "./auth.js";
-import { ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction, push } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { startMatchMonitoring } from "./game.js"; // Importe la fonction de démarrage du monitoring du match
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons } from "./utils.js"; // Importe les fonctions utilitaires
 
