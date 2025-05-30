@@ -1,525 +1,447 @@
 // js/game.js
 
 // Importer les modules Firebase depuis ton fichier de configuration centralisé
-import { app, db, auth, ref, get, set, runTransaction, onValue, off } from './firebaseConfig.js';
+import { app, db, auth, ref, get, set, runTransaction, onValue, off, push } from './firebaseConfig.js';
 // Note: onAuthStateChanged est importé dans auth.js et main.js pour sa gestion globale
 // mais si tu as besoin de l'utiliser spécifiquement ici, tu devras l'importer aussi depuis firebase-auth.js.
 // Pour l'instant, je le retire car il est géré par auth.js et main.js
+// import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // Removed this line
 
 console.log("game.js chargé.");
 
-
-export let currentUser = null;
+export let currentUser = null; // Should be set by main.js after login
 export let gameDataListener = null;
 export let gameId = null; // ID unique de la session de jeu
 
-// Éléments de l'interface utilisateur
-const gameContainer = document.getElementById('game-container');
-const waitingScreen = document.getElementById('waiting-screen');
-const playerHealthElement = document.getElementById('player-health');
-const playerNameElement = document.getElementById('player-name');
-const playerAvatarElement = document.getElementById('player-avatar');
-const opponentHealthElement = document.getElementById('opponent-health');
-const opponentNameElement = document.getElementById('opponent-name');
-const opponentAvatarElement = document.getElementById('opponent-avatar');
-const attackButton = document.getElementById('attack-button');
-const healButton = document.getElementById('heal-button');
-const gameLog = document.getElementById('game-log');
-const turnIndicator = document.getElementById('turn-indicator');
-const leaveGameButton = document.getElementById('leave-game-button');
-const gameResultElement = document.getElementById('game-result');
-const rematchButton = document.getElementById('rematch-button');
-
-// Références Firebase spécifiques au jeu
-const gameSessionRef = ref(database, 'current_game_session'); // Ajuste ceci si tu gères plusieurs sessions
-
-// --- Initialisation de l'utilisateur et gestion des sessions ---
-
-// onAuthStateChanged doit être géré de manière centralisée, par exemple dans main.js ou auth.js
-// Ici, nous nous attendons à ce que `currentUser` soit défini via une autre partie du code
-// ou que la logique de redirection soit gérée avant d'arriver à game.js.
-
-// Supposons que tu utilises onAuthStateChanged dans main.js et que tu appelles une fonction pour définir currentUser
-// ou que tu as une redirection si l'utilisateur n'est pas connecté.
-// Pour que ce script fonctionne, nous allons ajouter un onAuthStateChanged localement pour la démo,
-// mais dans un projet réel, il est souvent géré globalement.
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-
-onAuthStateChanged(auth, (user) => {
-    if (user) {
-        currentUser = user;
-        console.log("Game.js: Connecté en tant que :", currentUser.uid);
-        checkAndJoinGame();
-    } else {
-        console.log("Game.js: Aucun utilisateur connecté, redirection vers la page de connexion.");
-        // Gérer la redirection si game.html est accessible sans connexion
-        window.location.href = 'index.html';
-    }
-});
+// Variables pour suivre la clé du joueur actuel dans le match (p1 ou p2) et le mode de jeu
+export let youKey = null;
+export let gameMode = null; // 'PvP' ou 'PvAI'
 
 
-async function checkAndJoinGame() {
-    // Tenter de trouver une session existante ou en créer une
-    const snapshot = await get(gameSessionRef);
-    const sessionData = snapshot.val();
+// Éléments de l'interface utilisateur (s'assure que les IDs sont corrects dans ton HTML)
+const gameContainer = document.getElementById('game-screen'); // Using 'game-screen' as per main.js
+const matchmakingStatusSection = document.getElementById('matchmaking-status'); // For waiting
+const player1HealthElement = document.getElementById('player1-pv');
+const player1NameElement = document.getElementById('player1-pseudo');
+const player1HealthBar = document.getElementById('player1-health-bar'); // Assuming you have a health bar element
+const player2HealthElement = document.getElementById('player2-pv');
+const player2NameElement = document.getElementById('player2-pseudo');
+const player2HealthBar = document.getElementById('player2-health-bar'); // Assuming you have a health bar element
 
-    if (sessionData && sessionData.status === 'waiting' && sessionData.player1.uid !== currentUser.uid) {
-        // Rejoindre la partie existante
-        gameId = sessionData.id;
-        await joinGame(gameId, currentUser.uid);
-    } else if (sessionData && sessionData.status === 'playing' && (sessionData.player1.uid === currentUser.uid || sessionData.player2.uid === currentUser.uid)) {
-        // L'utilisateur est déjà dans une partie en cours, reprendre
-        gameId = sessionData.id;
-        console.log("Reprendre la partie existante :", gameId);
-        listenToGameUpdates(gameId);
-        showGameUI();
-    } else if (!sessionData || (sessionData.status !== 'waiting' && sessionData.player1.uid === currentUser.uid)) {
-        // Si aucune session n'existe, ou si la session existante n'est pas 'waiting'
-        // et que vous êtes le player1, créer une nouvelle partie.
-        // Cela empêche un joueur de rejoindre sa propre partie en attente comme player2.
-        gameId = "game_" + Date.now(); // ID de partie simple basé sur le timestamp
-        await createGame(gameId, currentUser.uid);
-    } else {
-        // Cas où une partie existe mais vous ne pouvez pas la rejoindre (ex: déjà 2 joueurs)
-        // et vous n'êtes pas l'un des joueurs.
-        console.log("Partie en cours ou déjà pleine, impossible de rejoindre ou créer.");
-        // Optionnel: Gérer ce cas pour l'utilisateur, par exemple, le rediriger ou lui proposer de chercher une autre partie
-        alert("Une partie est en cours ou pleine. Veuillez réessayer plus tard ou lancer votre propre partie.");
-        window.location.href = 'dashboard.html'; // Exemple de redirection
-    }
-}
+const attackButton = document.getElementById('attack-btn'); // As per main.js
+const healButton = document.getElementById('heal-btn'); // As per main.js
+const gameLog = document.getElementById('game-history'); // As per main.js
 
-async function createGame(newGameId, player1Uid) {
-    try {
-        // Récupérer le nom d'utilisateur et l'avatar depuis la base de données
-        const player1Snapshot = await get(ref(database, `users/${player1Uid}`));
-        const player1Data = player1Snapshot.val() || {};
-        const player1Name = player1Data.pseudo || `Joueur ${player1Uid.substring(0, 4)}`;
-        const player1Avatar = player1Data.avatar || `images/default-avatar.png`; // Assurez-vous d'avoir une image par défaut
+const actionMessageElement = document.getElementById('action-msg'); // As per main.js
+const matchMessageElement = document.getElementById('match-msg'); // As per main.js
+const timerDisplayElement = document.getElementById('timer-display'); // As per main.js
+const returnToMenuButton = document.getElementById('return-to-menu'); // As per main.js
 
-        const initialGameData = {
-            id: newGameId,
-            status: 'waiting', // 'waiting', 'playing', 'finished'
-            turn: 1,
-            activePlayer: null, // UID du joueur dont c'est le tour
-            player1: {
-                uid: player1Uid,
-                username: player1Name,
-                avatar: player1Avatar,
-                health: 100,
-                maxHealth: 100,
-                attack: 10,
-                healAmount: 15,
-                healCooldown: 0, // Tours restants avant que le soin ne soit disponible
-                isHost: true,
-                hasAcceptedRematch: false
-            },
-            player2: null,
-            log: [],
-            winner: null, // UID du gagnant
-            rematchOffer: null // { offererUid: UID, status: 'pending' | 'accepted' | 'declined' }
-        };
+// Import functions from utils.js (assuming you have them)
+import { showMessage, updateHealthBar, updateTimerUI, clearHistory, showGameScreen, showMainMenu, disableActionButtons, enableActionButtons } from './utils.js';
+import { backToMenu, updateMatchResult } from './main.js'; // Import backToMenu from main.js
 
-        await set(gameSessionRef, initialGameData);
-        console.log("Nouvelle partie créée :", newGameId);
-        logEvent(`[${player1Name}] a créé la partie. En attente d'un adversaire...`);
-        listenToGameUpdates(newGameId);
-        showWaitingScreen("En attente d'un adversaire...");
-    } catch (error) {
-        console.error("Erreur lors de la création de la partie :", error);
-        alert("Impossible de créer la partie. Veuillez réessayer.");
-    }
-}
+// --- Core Game Logic ---
 
-async function joinGame(existingGameId, player2Uid) {
-    try {
-        const player2Snapshot = await get(ref(database, `users/${player2Uid}`));
-        const player2Data = player2Snapshot.val() || {};
-        const player2Name = player2Data.pseudo || `Joueur ${player2Uid.substring(0, 4)}`;
-        const player2Avatar = player2Data.avatar || `images/default-avatar.png`;
+/**
+ * Starts monitoring a specific match. This is the main entry point from main.js.
+ * @param {string} matchId The ID of the match to monitor.
+ * @param {string} playerKey 'p1' or 'p2', indicating which player the current user is.
+ * @param {string} mode 'PvP' or 'PvAI'.
+ */
+export function startMatchMonitoring(matchId, playerKey, mode) {
+    gameId = matchId;
+    youKey = playerKey; // 'p1' or 'p2' for the current user
+    gameMode = mode;
+    console.log(`Démarrage du monitoring du match ${gameId} pour ${youKey} en mode ${gameMode}`);
 
-        await runTransaction(gameSessionRef, (currentSession) => {
-            if (currentSession && currentSession.id === existingGameId && currentSession.status === 'waiting' && !currentSession.player2) {
-                currentSession.player2 = {
-                    uid: player2Uid,
-                    username: player2Name,
-                    avatar: player2Avatar,
-                    health: 100,
-                    maxHealth: 100,
-                    attack: 10,
-                    healAmount: 15,
-                    healCooldown: 0,
-                    isHost: false,
-                    hasAcceptedRematch: false
-                };
-                currentSession.status = 'playing';
-                // Déterminer aléatoirement qui commence
-                currentSession.activePlayer = Math.random() < 0.5 ? currentSession.player1.uid : currentSession.player2.uid;
-                logEvent(`[${player2Name}] a rejoint la partie.`, currentSession);
-                logEvent(`[${currentSession.activePlayer === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}] commence le tour ${currentSession.turn}.`, currentSession);
-            }
-            return currentSession;
-        });
+    // Set up UI for game screen
+    showGameScreen();
+    clearHistory(); // Clear previous game history
 
-        console.log("Partie rejointe :", existingGameId);
-        listenToGameUpdates(existingGameId);
-        showGameUI();
-    } catch (error) {
-        console.error("Erreur lors de la jointure de la partie :", error);
-        alert("Impossible de rejoindre la partie. Veuillez réessayer.");
-    }
-}
-
-// --- Écoute des mises à jour de la partie ---
-
-function listenToGameUpdates(id) {
+    // Detach any existing listener to prevent duplicates
     if (gameDataListener) {
-        off(gameSessionRef, 'value', gameDataListener); // Détacher l'ancien écouteur
+        off(ref(db, `matches/${gameDataListener.matchId}`), 'value', gameDataListener.callback);
     }
-    gameDataListener = onValue(gameSessionRef, (snapshot) => {
-        const gameData = snapshot.val();
-        if (gameData && gameData.id === id) { // S'assurer que c'est bien la partie en cours
-            updateGameUI(gameData);
-            if (gameData.status === 'playing') {
-                showGameUI();
-            } else if (gameData.status === 'waiting') {
-                showWaitingScreen("En attente d'un adversaire...");
-            } else if (gameData.status === 'finished') {
-                showGameResult(gameData.winner, gameData.player1, gameData.player2);
+
+    // Attach the new listener
+    const matchRef = ref(db, `matches/${gameId}`);
+    gameDataListener = {
+        matchId: gameId,
+        callback: onValue(matchRef, (snapshot) => {
+            const gameData = snapshot.val();
+            if (gameData) {
+                updateGameUI(gameData);
+                if (gameData.status === 'playing') {
+                    // No specific action needed here beyond UI update,
+                    // turn logic is handled in updateGameUI and performAction
+                } else if (gameData.status === 'finished') {
+                    handleMatchEnd(gameData);
+                } else if (gameData.status === 'waiting' && gameMode === 'PvP') {
+                    // Show waiting status if PvP and still waiting
+                    showWaitingScreen(`En attente d'un adversaire pour le match ${gameId}...`);
+                }
+            } else {
+                // Game session was deleted or does not exist
+                if (gameId === matchId) { // Only if it's the game we were actively monitoring
+                    console.log("La session de jeu a été supprimée ou n'existe plus.");
+                    showMessage(matchMessageElement.id, "La partie a été terminée par votre adversaire ou n'existe plus.", false);
+                    backToMenu(false); // Return to main menu
+                }
             }
-        } else if (!gameData) {
-            // La session a été supprimée (par exemple, par le leave du joueur)
-            console.log("La session de jeu a été supprimée ou n'existe plus.");
-            alert("La partie a été terminée par votre adversaire ou n'existe plus.");
-            window.location.href = 'dashboard.html'; // Retour au tableau de bord
-        }
-    });
+        })
+    };
+
+    // Attach event listeners for game actions
+    attachGameActionListeners();
+    // Enable buttons at start if it's your turn (handled by updateGameUI)
+    enableActionButtons();
+}
+
+function attachGameActionListeners() {
+    // Remove previous listeners to prevent duplicates if startMatchMonitoring is called multiple times
+    attackButton.removeEventListener('click', handleAttack);
+    healButton.removeEventListener('click', handleHeal);
+    returnToMenuButton.removeEventListener('click', handleLeaveGame); // For the 'return to menu' button during game
+
+    attackButton.addEventListener('click', handleAttack);
+    healButton.addEventListener('click', handleHeal);
+    returnToMenuButton.addEventListener('click', handleLeaveGame);
+}
+
+function handleAttack() {
+    performAction('attack');
+}
+
+function handleHeal() {
+    performAction('heal');
+}
+
+function handleLeaveGame() {
+    leaveGame();
 }
 
 // --- Mise à jour de l'interface utilisateur ---
 
 function updateGameUI(gameData) {
-    // S'assurer que currentUser est défini avant d'accéder à ses propriétés
-    if (!currentUser) return;
+    if (!currentUser || !gameData) return;
 
-    const yourPlayerState = gameData.player1.uid === currentUser.uid ? gameData.player1 : gameData.player2;
-    const opponentPlayerState = gameData.player1.uid === currentUser.uid ? gameData.player2 : gameData.player1;
+    // Determine current player and opponent based on `youKey`
+    const yourPlayerState = gameData.players[youKey];
+    const opponentKey = youKey === 'p1' ? 'p2' : 'p1';
+    const opponentPlayerState = gameData.players[opponentKey];
 
     if (!yourPlayerState || !opponentPlayerState) {
-        // Un des joueurs n'est pas encore défini (par exemple, en attente)
+        // One of the players is not yet defined (e.g., still waiting in PvP)
+        // If PvP, and opponent is null, show waiting screen.
+        if (gameMode === 'PvP' && !opponentPlayerState) {
+             showWaitingScreen(`En attente d'un adversaire...`);
+             return;
+        }
         return;
     }
 
-    // Mise à jour de votre joueur
-    playerNameElement.textContent = yourPlayerState.username;
-    playerHealthElement.textContent = `PV: ${yourPlayerState.health}/${yourPlayerState.maxHealth}`;
-    playerAvatarElement.src = yourPlayerState.avatar;
-    playerAvatarElement.alt = `${yourPlayerState.username} avatar`;
+    // Update your player's display
+    player1NameElement.textContent = yourPlayerState.pseudo;
+    updateHealthBar('player1-health-bar', yourPlayerState.pv);
+    player1HealthElement.textContent = `${yourPlayerState.pv} PV`;
+    // Update player avatar (if you have one)
+    // player1AvatarElement.src = yourPlayerState.avatar;
 
-    // Mise à jour de l'adversaire
-    opponentNameElement.textContent = opponentPlayerState.username;
-    opponentHealthElement.textContent = `PV: ${opponentPlayerState.health}/${opponentPlayerState.maxHealth}`;
-    opponentAvatarElement.src = opponentPlayerState.avatar;
-    opponentAvatarElement.alt = `${opponentPlayerState.username} avatar`;
+    // Update opponent's display
+    player2NameElement.textContent = opponentPlayerState.pseudo;
+    updateHealthBar('player2-health-bar', opponentPlayerState.pv);
+    player2HealthElement.textContent = `${opponentPlayerState.pv} PV`;
+    // Update opponent avatar (if you have one)
+    // opponentAvatarElement.src = opponentPlayerState.avatar;
 
-    // Mise à jour du log
-    gameLog.innerHTML = '';
-    gameData.log.forEach(entry => {
-        const p = document.createElement('p');
-        p.textContent = entry;
-        gameLog.appendChild(p);
+    // Update game history/log
+    clearHistory(); // Clears existing content
+    gameData.history.forEach(entry => {
+        showMessage('game-history', entry, false, true); // Append to history, don't clear
     });
-    gameLog.scrollTop = gameLog.scrollHeight; // Scroll vers le bas
 
-    // Mise à jour de l'indicateur de tour
-    const isYourTurn = gameData.activePlayer === currentUser.uid;
-    turnIndicator.textContent = isYourTurn ? "C'est votre tour !" : `Tour de ${opponentPlayerState.username}...`;
-    turnIndicator.className = isYourTurn ? 'your-turn' : 'opponent-turn';
 
-    // Activation/Désactivation des boutons d'action
-    attackButton.disabled = !isYourTurn;
-    // Le bouton de soin est désactivé si ce n'est pas votre tour OU si le cooldown est actif
-    healButton.disabled = !isYourTurn || (yourPlayerState.healCooldown || 0) > 0;
+    // Update turn indicator and button states
+    const isYourTurn = gameData.turn === youKey; // Assuming 'turn' in gameData is 'p1' or 'p2'
+    if (isYourTurn) {
+        showMessage('action-msg', "C'est votre tour ! Choisissez une action.", true);
+        enableActionButtons();
+        // Update heal button text based on cooldown
+        checkHealButtonAvailability(yourPlayerState.healCooldown || 0);
+    } else {
+        showMessage('action-msg', `C'est le tour de ${opponentPlayerState.pseudo}...`, true);
+        disableActionButtons();
+    }
 
-    // Mise à jour du texte du bouton de soin
-    checkHealButtonAvailability(yourPlayerState.healCooldown || 0);
-
-    // Si la partie est terminée, désactiver les boutons d'action
+    // If game is finished, disable all action buttons
     if (gameData.status === 'finished') {
-        attackButton.disabled = true;
-        healButton.disabled = true;
+        disableActionButtons();
+        // Hide return to menu button if it's meant to be only for in-game surrender
+        // returnToMenuButton.style.display = 'none';
+    } else {
+        // Ensure buttons are clickable if game is playing
+        // This handles cases where buttons might be disabled prematurely due to network lag
+        if(isYourTurn) {
+            enableActionButtons();
+        }
+    }
+
+    // Update timer UI (assuming gameData has turnStartTime for countdown)
+    if (gameData.turnStartTime) {
+        // You'll need to pass the initial total time for a turn here (e.g., 30 seconds)
+        updateTimerUI(30, gameData.turnStartTime); // You'll need to adjust updateTimerUI to use serverTimestamp or calculate remaining time
     }
 }
 
 function checkHealButtonAvailability(healCooldown) {
     if (healCooldown > 0) {
-        healButton.textContent = `Soigner (${healCooldown} tours)`;
+        healButton.textContent = `Soin (${healCooldown} tours)`;
+        healButton.disabled = true; // Disable if on cooldown
         healButton.classList.add('cooldown');
     } else {
-        healButton.textContent = `Soigner (+15 PV)`;
+        healButton.textContent = `Soin`;
         healButton.classList.remove('cooldown');
+        // Only enable if it's your turn AND not on cooldown
+        if (!attackButton.disabled) { // check if other buttons are enabled (i.e., it's your turn)
+            healButton.disabled = false;
+        }
     }
-}
-
-function showGameUI() {
-    waitingScreen.classList.add('hidden');
-    gameContainer.classList.remove('hidden');
-    gameResultElement.classList.add('hidden');
-    rematchButton.classList.add('hidden');
-    leaveGameButton.classList.remove('hidden'); // Assurez-vous que le bouton est visible pendant le jeu
 }
 
 function showWaitingScreen(message) {
-    waitingScreen.querySelector('p').textContent = message;
-    waitingScreen.classList.remove('hidden');
-    gameContainer.classList.add('hidden');
-    gameResultElement.classList.add('hidden');
+    showMessage('matchmaking-message', message, true);
+    // You might need to hide game-screen and show matchmaking-status section
+    showMainMenu(); // Or a specific waiting screen function if you have one
 }
 
-function showGameResult(winnerUid, player1, player2) {
-    gameContainer.classList.add('hidden');
-    waitingScreen.classList.add('hidden');
-    gameResultElement.classList.remove('hidden');
-    rematchButton.classList.remove('hidden');
-    leaveGameButton.classList.remove('hidden'); // Laisser le bouton de quitter visible
-
-    const winnerName = winnerUid === player1.uid ? player1.username : player2.username;
-    const resultMessage = winnerUid === currentUser.uid ? `Vous avez gagné ! Félicitations, ${winnerName} !` : `${winnerName} a gagné ! Vous avez perdu.`;
-    gameResultElement.querySelector('h2').textContent = "Partie terminée !";
-    gameResultElement.querySelector('p').textContent = resultMessage;
-
-    // Reset l'état du rematch pour le joueur actuel
-    resetRematchState(currentUser.uid);
-}
 
 // --- Fonctions d'action de jeu ---
 
-attackButton.addEventListener('click', () => performAction('attack'));
-healButton.addEventListener('click', () => performAction('heal'));
-leaveGameButton.addEventListener('click', () => leaveGame());
-rematchButton.addEventListener('click', () => offerRematch());
-
 async function performAction(actionType) {
-    if (!currentUser || !gameId) return;
-
-    attackButton.disabled = true; // Désactiver immédiatement pour éviter les doubles clics
-    healButton.disabled = true;
-
-    try {
-        await runTransaction(gameSessionRef, (currentSession) => {
-            if (currentSession && currentSession.id === gameId && currentSession.status === 'playing') {
-                const yourPlayerKey = currentSession.player1.uid === currentUser.uid ? 'player1' : 'player2';
-                const opponentPlayerKey = currentSession.player1.uid === currentUser.uid ? 'player2' : 'player1';
-
-                const yourPlayer = currentSession[yourPlayerKey];
-                const opponentPlayer = currentSession[opponentPlayerKey];
-
-                if (currentSession.activePlayer !== currentUser.uid) {
-                    logEvent(`[Erreur] Ce n'est pas votre tour.`, currentSession);
-                    // Retourner undefined pour annuler la transaction sans erreur
-                    return undefined; // Transaction annulée
-                }
-
-                let actionMessage = '';
-
-                if (actionType === 'attack') {
-                    const damage = yourPlayer.attack;
-                    opponentPlayer.health -= damage;
-                    actionMessage = `[${yourPlayer.username}] attaque [${opponentPlayer.username}] et lui inflige ${damage} points de dégâts.`;
-                } else if (actionType === 'heal') {
-                    if ((yourPlayer.healCooldown || 0) > 0) {
-                        actionMessage = `[Erreur] Le soin sera disponible dans ${yourPlayer.healCooldown} tour(s).`;
-                        // Retourner undefined pour annuler la transaction
-                        return undefined; // Transaction annulée
-                    }
-                    yourPlayer.health += yourPlayer.healAmount;
-                    if (yourPlayer.health > yourPlayer.maxHealth) {
-                        yourPlayer.health = yourPlayer.maxHealth;
-                    }
-                    yourPlayer.healCooldown = 3; // Mettre en place un cooldown de 3 tours
-                    actionMessage = `[${yourPlayer.username}] utilise Soin et regagne ${yourPlayer.healAmount} points de vie.`;
-                }
-
-                logEvent(actionMessage, currentSession);
-
-                // Vérifier la fin de partie
-                if (opponentPlayer.health <= 0) {
-                    opponentPlayer.health = 0; // S'assurer que la vie ne descend pas en dessous de zéro
-                    currentSession.winner = yourPlayer.uid;
-                    currentSession.status = 'finished';
-                    logEvent(`[${opponentPlayer.username}] a été vaincu !`, currentSession);
-                    logEvent(`[${yourPlayer.username}] remporte la partie !`, currentSession);
-                } else {
-                    // Passage au tour suivant et réduction des cooldowns
-                    currentSession.turn++;
-                    currentSession.activePlayer = (currentSession.activePlayer === currentSession.player1.uid) ? currentSession.player2.uid : currentSession.player1.uid;
-
-                    // Réduire le cooldown de soin pour les deux joueurs
-                    if (currentSession.player1.healCooldown > 0) {
-                        currentSession.player1.healCooldown--;
-                    }
-                    if (currentSession.player2.healCooldown > 0) {
-                        currentSession.player2.healCooldown--;
-                    }
-                    logEvent(`C'est le tour ${currentSession.turn}. C'est au tour de [${currentSession.activePlayer === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}].`, currentSession);
-                }
-            }
-            return currentSession; // Retourner les données mises à jour pour les enregistrer
-        });
-    } catch (error) {
-        console.error("Erreur lors de l'action :", error);
-        // Si la transaction est annulée par un "return undefined", cette erreur ne sera pas déclenchée.
-        // Sinon, réactiver les boutons ici si une vraie erreur se produit
-        attackButton.disabled = false;
-        healButton.disabled = false;
-    }
-}
-
-function logEvent(message, gameData = null) {
-    if (gameData) {
-        if (!gameData.log) {
-            gameData.log = [];
-        }
-        gameData.log.push(message);
-        // Limiter la taille du log pour éviter qu'il ne devienne trop grand
-        if (gameData.log.length > 50) {
-            gameData.log.shift(); // Supprimer l'entrée la plus ancienne
-        }
-    } else {
-        // Si appelé sans gameData (ex: avant la création complète)
-        const p = document.createElement('p');
-        p.textContent = message;
-        gameLog.appendChild(p);
-        gameLog.scrollTop = gameLog.scrollHeight;
-    }
-}
-
-// --- Rematch et fin de partie ---
-
-async function offerRematch() {
-    if (!currentUser || !gameId) return;
-
-    rematchButton.disabled = true; // Désactiver le bouton après avoir offert
-
-    try {
-        await runTransaction(gameSessionRef, (currentSession) => {
-            if (currentSession && currentSession.id === gameId && currentSession.status === 'finished') {
-                const yourPlayerKey = currentSession.player1.uid === currentUser.uid ? 'player1' : 'player2';
-                const opponentPlayerKey = currentSession.player1.uid === currentUser.uid ? 'player2' : 'player1';
-
-                currentSession[yourPlayerKey].hasAcceptedRematch = true;
-                logEvent(`[${currentSession[yourPlayerKey].username}] a proposé une revanche.`, currentSession);
-
-                if (currentSession[opponentPlayerKey].hasAcceptedRematch) {
-                    // Les deux joueurs ont accepté, démarrer une nouvelle partie
-                    const initialHealth = 100;
-                    currentSession.status = 'playing';
-                    currentSession.turn = 1;
-                    currentSession.activePlayer = Math.random() < 0.5 ? currentSession.player1.uid : currentSession.player2.uid;
-                    currentSession.player1.health = initialHealth;
-                    currentSession.player2.health = initialHealth;
-                    currentSession.player1.healCooldown = 0;
-                    currentSession.player2.healCooldown = 0;
-                    currentSession.player1.hasAcceptedRematch = false;
-                    currentSession.player2.hasAcceptedRematch = false;
-                    currentSession.log = []; // Réinitialiser le log
-                    currentSession.winner = null; // Réinitialiser le gagnant
-                    logEvent(`[${currentSession.player1.username}] et [${currentSession.player2.username}] ont accepté la revanche ! Nouvelle partie commencée.`, currentSession);
-                    logEvent(`[${currentSession.activePlayer === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}] commence le tour ${currentSession.turn}.`, currentSession);
-                }
-            }
-            return currentSession;
-        });
-    } catch (error) {
-        console.error("Erreur lors de l'offre de revanche :", error);
-        rematchButton.disabled = false; // Réactiver en cas d'erreur
-    }
-}
-
-async function resetRematchState(playerUid) {
-    try {
-        await runTransaction(gameSessionRef, (currentSession) => {
-            if (currentSession && currentSession.id === gameId) {
-                if (currentSession.player1 && currentSession.player1.uid === playerUid) {
-                    currentSession.player1.hasAcceptedRematch = false;
-                } else if (currentSession.player2 && currentSession.player2.uid === playerUid) {
-                    currentSession.player2.hasAcceptedRematch = false;
-                }
-            }
-            return currentSession;
-        });
-    } catch (error) {
-        console.error("Erreur lors de la réinitialisation de l'état de revanche :", error);
-    }
-}
-
-async function leaveGame() {
-    if (!currentUser || !gameId) return;
-
-    if (!confirm("Voulez-vous vraiment quitter la partie ? La partie sera perdue pour vous.")) {
+    if (!currentUser || !gameId || !youKey) {
+        console.error("Impossible d'effectuer l'action : utilisateur ou partie non définis.");
         return;
     }
 
-    try {
-        // Détacher l'écouteur de la session de jeu pour éviter des mises à jour après le départ
-        if (gameDataListener) {
-            off(gameSessionRef, 'value', gameDataListener);
-            gameDataListener = null;
-        }
+    disableActionButtons(); // Désactiver immédiatement pour éviter les doubles clics
 
-        await runTransaction(gameSessionRef, (currentSession) => {
-            if (currentSession && currentSession.id === gameId) {
-                // Si l'autre joueur existe et la partie n'est pas déjà terminée par un gagnant
-                if (currentSession.player1 && currentSession.player2 && !currentSession.winner) {
-                    const opponentUid = currentSession.player1.uid === currentUser.uid ? currentSession.player2.uid : currentSession.player1.uid;
-                    currentSession.winner = opponentUid;
-                    currentSession.status = 'finished';
-                    logEvent(`[${currentUser.uid === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}] a quitté la partie.`, currentSession);
-                    logEvent(`[${opponentUid === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}] remporte la partie par forfait !`, currentSession);
-                } else if (currentSession.status === 'waiting' && currentSession.player1.uid === currentUser.uid && !currentSession.player2) {
-                     // Si c'est l'hôte et qu'il est en attente, on peut simplement supprimer la session
-                     return null; // Supprime la session
-                }
+    const matchRef = ref(db, `matches/${gameId}`);
+
+    try {
+        await runTransaction(matchRef, (currentMatch) => {
+            if (!currentMatch || currentMatch.status !== 'playing' || currentMatch.turn !== youKey) {
+                console.log("Transaction annulée: Ce n'est pas votre tour ou la partie n'est pas en cours.");
+                return undefined; // Abort the transaction
             }
-            return currentSession;
+
+            const yourPlayer = currentMatch.players[youKey];
+            const opponentKey = youKey === 'p1' ? 'p2' : 'p1';
+            const opponentPlayer = currentMatch.players[opponentKey];
+
+            let actionMessage = '';
+
+            if (actionType === 'attack') {
+                const damage = yourPlayer.attack || 10; // Default attack
+                opponentPlayer.pv -= damage;
+                actionMessage = `[${yourPlayer.pseudo}] attaque [${opponentPlayer.pseudo}] et lui inflige ${damage} points de dégâts.`;
+            } else if (actionType === 'heal') {
+                if ((yourPlayer.healCooldown || 0) > 0) {
+                    actionMessage = `[Erreur] Le soin sera disponible dans ${yourPlayer.healCooldown} tour(s).`;
+                    // This will be displayed in log, but transaction will still proceed to next turn.
+                    // If you want to completely block and not advance turn for invalid heal,
+                    // you would return undefined here and re-enable buttons.
+                    console.log(actionMessage);
+                    // Re-enable buttons if this was an invalid heal attempt
+                    enableActionButtons();
+                    return undefined; // Abort transaction if heal is not allowed
+                }
+                const healAmount = yourPlayer.healAmount || 15; // Default heal
+                yourPlayer.pv += healAmount;
+                if (yourPlayer.pv > 100) { // Assuming max health is 100
+                    yourPlayer.pv = 100;
+                }
+                yourPlayer.healCooldown = 3; // Set cooldown
+                actionMessage = `[${yourPlayer.pseudo}] utilise Soin et regagne ${healAmount} points de vie.`;
+            }
+
+            // Add action message to history
+            if (!currentMatch.history) {
+                currentMatch.history = [];
+            }
+            currentMatch.history.push(actionMessage);
+
+            // Decrease heal cooldown for both players for the *next* turn
+            if (currentMatch.players.p1.healCooldown > 0) {
+                currentMatch.players.p1.healCooldown--;
+            }
+            if (currentMatch.players.p2.healCooldown > 0) {
+                currentMatch.players.p2.healCooldown--;
+            }
+
+            // Check for game end
+            if (opponentPlayer.pv <= 0) {
+                opponentPlayer.pv = 0; // Ensure health doesn't go negative
+                currentMatch.winner = youKey;
+                currentMatch.status = 'finished';
+                currentMatch.history.push(`[${opponentPlayer.pseudo}] a été vaincu !`);
+                currentMatch.history.push(`[${yourPlayer.pseudo}] remporte la partie !`);
+                console.log("Match terminé. Vainqueur:", yourPlayer.pseudo);
+            } else {
+                // Advance turn
+                currentMatch.turn = opponentKey; // Pass turn to opponent
+                currentMatch.turnCounter = (currentMatch.turnCounter || 0) + 1; // Increment turn counter
+                // Reset timer for next turn
+                currentMatch.turnStartTime = Date.now(); // Use client timestamp for immediate update, serverTimestamp() for server accuracy
+                currentMatch.history.push(`C'est le tour ${currentMatch.turnCounter + 1}. C'est au tour de [${opponentPlayer.pseudo}].`);
+            }
+
+            // Update disconnected status to false as player just made a move
+            yourPlayer.disconnected = false;
+
+            return currentMatch; // Return the updated data to commit the transaction
         });
 
-        console.log("Partie quittée.");
-        window.location.href = 'dashboard.html'; // Rediriger vers le tableau de bord
+        // After successful transaction, UI will update via onValue listener
+        // The buttons will be re-enabled or disabled based on whose turn it is
     } catch (error) {
-        console.error("Erreur lors de la sortie de partie :", error);
-        alert("Impossible de quitter la partie. Veuillez réessayer.");
+        console.error("Erreur lors de l'action ou de la transaction:", error);
+        showMessage(actionMessageElement.id, `Erreur lors de l'action : ${error.message}`, false);
+        enableActionButtons(); // Re-enable if transaction failed unexpectedly
     }
 }
 
-// Gérer la déconnexion inattendue ou la fermeture de l'onglet
-window.addEventListener('beforeunload', async () => {
-    // Cette fonction tente de marquer le joueur comme perdant en cas de déconnexion inattendue.
-    // Elle n'est pas garantie de s'exécuter à 100% dans tous les scénarios de fermeture de navigateur.
-    // Pour une robustesse totale, il est souvent recommandé d'utiliser des fonctions Cloud Firebase
-    // et des mécanismes de "présence" en plus.
-    if (currentUser && gameId) {
-        try {
-            const snapshot = await get(gameSessionRef);
-            const gameData = snapshot.val();
-            if (gameData && gameData.id === gameId && gameData.status === 'playing' && !gameData.winner) {
-                // Si la partie est en cours et qu'il n'y a pas encore de gagnant
-                const opponentUid = gameData.player1.uid === currentUser.uid ? gameData.player2.uid : gameData.player1.uid;
-                await runTransaction(gameSessionRef, (currentSession) => {
-                    if (currentSession && currentSession.id === gameId && currentSession.status === 'playing' && !currentSession.winner) {
-                        currentSession.winner = opponentUid;
-                        currentSession.status = 'finished';
-                        logEvent(`[${currentUser.uid === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}] s'est déconnecté.`, currentSession);
-                        logEvent(`[${opponentUid === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}] remporte la partie par forfait !`, currentSession);
-                    }
-                    return currentSession;
-                });
-            } else if (gameData && gameData.id === gameId && gameData.status === 'waiting' && gameData.player1.uid === currentUser.uid && !gameData.player2) {
-                 // Si c'est l'hôte et qu'il est en attente, on peut simplement supprimer la session
-                 await set(gameSessionRef, null); // Supprime la session
+async function handleMatchEnd(gameData) {
+    disableActionButtons(); // Ensure buttons are disabled
+    gameContainer.classList.add('hidden'); // Hide game UI
+
+    let resultMsg = '';
+    let winOrLoss = '';
+
+    if (gameData.winner === youKey) {
+        resultMsg = `Félicitations ! Vous avez gagné la partie contre ${gameData.players[youKey === 'p1' ? 'p2' : 'p1'].pseudo} !`;
+        winOrLoss = 'win';
+    } else if (gameData.winner && gameData.winner !== youKey) {
+        resultMsg = `Dommage ! Vous avez perdu la partie contre ${gameData.players[gameData.winner].pseudo}.`;
+        winOrLoss = 'loss';
+    } else { // Should ideally not happen if a winner is always set
+        resultMsg = "La partie est terminée, c'est une égalité ou un résultat inattendu.";
+        winOrLoss = 'draw';
+    }
+
+    showMessage(matchMessageElement.id, `Partie terminée ! ${resultMsg}`, true);
+    document.getElementById('game-result-text').textContent = resultMsg; // Update specific result text area if you have one
+
+    // Show rematch button if it's PvP (PvAI might not have rematch)
+    if (gameMode === 'PvP') {
+        // Implement rematch UI elements and logic if you have them
+        // For now, let's just log it and assume main.js handles full transition back to menu
+        console.log("Partie terminée, affichage de l'option de revanche si PvP.");
+    }
+    
+    // Update player stats
+    if (winOrLoss && currentUser && currentUser.uid) {
+        await updateMatchResult(winOrLoss); // Call the update function from main.js
+    }
+
+    // Give a short delay then return to main menu
+    setTimeout(() => {
+        backToMenu(true); // Indicate that it's from a match end
+    }, 5000); // Wait 5 seconds before going back to menu
+}
+
+
+async function leaveGame() {
+    if (!currentUser || !gameId || !youKey) return;
+
+    if (!confirm("Voulez-vous vraiment quitter la partie ? La partie sera enregistrée comme une défaite pour vous.")) {
+        return;
+    }
+
+    const matchRef = ref(db, `matches/${gameId}`);
+
+    try {
+        // Detach listener immediately to avoid further updates for this game
+        if (gameDataListener) {
+            off(matchRef, 'value', gameDataListener.callback);
+            gameDataListener = null;
+        }
+
+        await runTransaction(matchRef, (currentMatch) => {
+            if (currentMatch && currentMatch.status === 'playing' && !currentMatch.winner) {
+                const opponentKey = youKey === 'p1' ? 'p2' : 'p1';
+                currentMatch.winner = opponentKey; // Opponent wins by default
+                currentMatch.status = 'finished';
+                if (!currentMatch.history) currentMatch.history = [];
+                currentMatch.history.push(`[${currentMatch.players[youKey].pseudo}] a quitté la partie.`);
+                currentMatch.history.push(`[${currentMatch.players[opponentKey].pseudo}] remporte la partie par forfait !`);
+                console.log(`Partie terminée par forfait de ${currentMatch.players[youKey].pseudo}`);
+            } else if (currentMatch && currentMatch.status === 'waiting' && currentMatch.players[youKey] && !currentMatch.players[opponentKey]) {
+                // If it's a waiting PvP match and you are the only one, delete the match
+                return null; // This deletes the match node
             }
+            return currentMatch; // Return updated data or null for deletion
+        });
+
+        showMessage(matchMessageElement.id, "Vous avez quitté la partie.", true);
+        backToMenu(false); // Return to main menu, not as a match end
+    } catch (error) {
+        console.error("Erreur lors de la sortie de partie :", error);
+        showMessage(matchMessageElement.id, `Erreur lors de la sortie : ${error.message}`, false);
+    }
+}
+
+// Gérer la déconnexion inattendue ou la fermeture de l'onglet (pour PvAI, on supprime le match; pour PvP, on marque comme défaite)
+window.addEventListener('beforeunload', async () => {
+    // This is a best-effort attempt and not guaranteed to run in all browser closing scenarios.
+    // For robust presence, Cloud Functions and real-time presence systems are recommended.
+    if (currentUser && gameId && youKey) {
+        const matchRef = ref(db, `matches/${gameId}`);
+        try {
+            await runTransaction(matchRef, (currentMatch) => {
+                if (currentMatch) {
+                    if (gameMode === 'PvAI' && currentMatch.status === 'playing') {
+                        // For PvAI, simply delete the match if the player leaves
+                        return null; // Deletes the match
+                    } else if (gameMode === 'PvP' && currentMatch.status === 'playing' && !currentMatch.winner) {
+                        const opponentKey = youKey === 'p1' ? 'p2' : 'p1';
+                        if (currentMatch.players[opponentKey]) { // Ensure opponent exists
+                            currentMatch.winner = opponentKey;
+                            currentMatch.status = 'finished';
+                            if (!currentMatch.history) currentMatch.history = [];
+                            currentMatch.history.push(`[${currentMatch.players[youKey].pseudo}] s'est déconnecté.`);
+                            currentMatch.history.push(`[${currentMatch.players[opponentKey].pseudo}] remporte la partie par forfait !`);
+                        }
+                    } else if (gameMode === 'PvP' && currentMatch.status === 'waiting' && currentMatch.players[youKey] && !currentMatch.players[youKey === 'p1' ? 'p2' : 'p1']) {
+                        // If it's a waiting PvP match and you are the only one, delete it
+                        return null;
+                    }
+                }
+                return currentMatch;
+            });
+            console.log("Traitement de déconnexion inattendue pour le match effectué.");
         } catch (error) {
             console.warn("Échec de la gestion de la déconnexion inattendue:", error);
         }
     }
 });
+
+// The following functions (checkAndJoinGame, createGame, joinGame, etc.)
+// are no longer directly called in game.js due to the startMatchMonitoring
+// function being the entry point from main.js.
+// Their logic has been replaced or adapted into startMatchMonitoring and related game functions.
+// I'm commenting them out to avoid confusion and redundant logic.
+
+/*
+async function checkAndJoinGame() {
+    // Logic moved to main.js and startMatchMonitoring
+}
+
+async function createGame(newGameId, player1Uid) {
+    // Logic moved to main.js's handlePlayAI and findOrCreatePvPMatch
+}
+
+async function joinGame(existingGameId, player2Uid) {
+    // Logic moved to main.js's findOrCreatePvPMatch
+}
+*/
