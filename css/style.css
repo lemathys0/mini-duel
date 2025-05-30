@@ -1,4 +1,3 @@
- 
 /* Base Styles */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -97,11 +96,14 @@ button:disabled {
     color: #00ff88;
 }
 
-#auth, #match, #game {
+/* --- MODIFICATION ICI : Seules les sections non visibles au démarrage sont masquées --- */
+#main-menu,
+#matchmaking-status,
+#game-screen {
     display: none;
 }
 
-#game {
+#game { /* This ID is not in your HTML, consider removing if unused */
     text-align: left;
 }
 
