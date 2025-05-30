@@ -73,8 +73,13 @@ export function startMatchMonitoring(matchId, playerKey, mode) {
             if (gameData) {
                 updateGameUI(gameData);
                 if (gameData.status === 'playing') {
-                    // No specific action needed here beyond UI update,
-                    // turn logic is handled in updateGameUI and performAction
+                    // Check if it's AI's turn
+                    const opponentKey = youKey === 'p1' ? 'p2' : 'p1';
+                    if (gameMode === 'PvAI' && gameData.turn === opponentKey && gameData.players[opponentKey].uid === 'AI') {
+                        // It's AI's turn, process AI decision
+                        console.log("C'est le tour de l'IA. Traitement de la décision de l'IA...");
+                        processAIDecision(gameData);
+                    }
                 } else if (gameData.status === 'finished') {
                     handleMatchEnd(gameData);
                 } else if (gameData.status === 'waiting' && gameMode === 'PvP') {
@@ -135,8 +140,8 @@ function updateGameUI(gameData) {
         // One of the players is not yet defined (e.g., still waiting in PvP)
         // If PvP, and opponent is null, show waiting screen.
         if (gameMode === 'PvP' && !opponentPlayerState) {
-             showWaitingScreen(`En attente d'un adversaire...`);
-             return;
+            showWaitingScreen(`En attente d'un adversaire...`);
+            return;
         }
         return;
     }
@@ -157,9 +162,11 @@ function updateGameUI(gameData) {
 
     // Update game history/log
     clearHistory(); // Clears existing content
-    gameData.history.forEach(entry => {
-        showMessage('game-history', entry, false, true); // Append to history, don't clear
-    });
+    if (gameData.history) { // Ensure history exists before iterating
+        gameData.history.forEach(entry => {
+            showMessage('game-history', entry, false, true); // Append to history, don't clear
+        });
+    }
 
 
     // Update turn indicator and button states
@@ -177,14 +184,15 @@ function updateGameUI(gameData) {
     // If game is finished, disable all action buttons
     if (gameData.status === 'finished') {
         disableActionButtons();
-        // Hide return to menu button if it's meant to be only for in-game surrender
-        // returnToMenuButton.style.display = 'none';
+        // Show return to menu button if it's meant to be only for in-game surrender
+        returnToMenuButton.style.display = 'block';
     } else {
         // Ensure buttons are clickable if game is playing
-        // This handles cases where buttons might be disabled prematurely due to network lag
         if(isYourTurn) {
             enableActionButtons();
         }
+        // Always show return to menu button during active game
+        returnToMenuButton.style.display = 'block';
     }
 
     // Update timer UI (assuming gameData has turnStartTime for countdown)
@@ -212,7 +220,10 @@ function checkHealButtonAvailability(healCooldown) {
 function showWaitingScreen(message) {
     showMessage('matchmaking-message', message, true);
     // You might need to hide game-screen and show matchmaking-status section
-    showMainMenu(); // Or a specific waiting screen function if you have one
+    // showMainMenu(); // Or a specific waiting screen function if you have one
+    document.getElementById('main-menu').classList.add('hidden');
+    document.getElementById('game-screen').classList.add('hidden');
+    document.getElementById('matchmaking-status').classList.remove('hidden');
 }
 
 
@@ -232,7 +243,9 @@ async function performAction(actionType) {
         await runTransaction(matchRef, (currentMatch) => {
             if (!currentMatch || currentMatch.status !== 'playing' || currentMatch.turn !== youKey) {
                 console.log("Transaction annulée: Ce n'est pas votre tour ou la partie n'est pas en cours.");
-                return undefined; // Abort the transaction
+                // If it's not your turn but buttons were enabled by mistake, re-enable them later
+                // This 'undefined' aborts, but the UI might stay disabled until next onValue update
+                return undefined;
             }
 
             const yourPlayer = currentMatch.players[youKey];
@@ -242,21 +255,18 @@ async function performAction(actionType) {
             let actionMessage = '';
 
             if (actionType === 'attack') {
-                const damage = yourPlayer.attack || 10; // Default attack
+                const damage = 10; // Default attack
                 opponentPlayer.pv -= damage;
                 actionMessage = `[${yourPlayer.pseudo}] attaque [${opponentPlayer.pseudo}] et lui inflige ${damage} points de dégâts.`;
             } else if (actionType === 'heal') {
                 if ((yourPlayer.healCooldown || 0) > 0) {
                     actionMessage = `[Erreur] Le soin sera disponible dans ${yourPlayer.healCooldown} tour(s).`;
-                    // This will be displayed in log, but transaction will still proceed to next turn.
-                    // If you want to completely block and not advance turn for invalid heal,
-                    // you would return undefined here and re-enable buttons.
                     console.log(actionMessage);
-                    // Re-enable buttons if this was an invalid heal attempt
-                    enableActionButtons();
-                    return undefined; // Abort transaction if heal is not allowed
+                    // If heal is not allowed, abort transaction and re-enable buttons
+                    enableActionButtons(); // Re-enable buttons immediately as action was invalid
+                    return undefined;
                 }
-                const healAmount = yourPlayer.healAmount || 15; // Default heal
+                const healAmount = 15; // Default heal
                 yourPlayer.pv += healAmount;
                 if (yourPlayer.pv > 100) { // Assuming max health is 100
                     yourPlayer.pv = 100;
@@ -272,6 +282,10 @@ async function performAction(actionType) {
             currentMatch.history.push(actionMessage);
 
             // Decrease heal cooldown for both players for the *next* turn
+            // This logic should probably be done *after* the turn advances
+            // or applied to the player whose turn it just was.
+            // Let's apply to *all* players who have a cooldown, before checking for winner.
+            // This ensures cooldowns tick down correctly regardless of who played.
             if (currentMatch.players.p1.healCooldown > 0) {
                 currentMatch.players.p1.healCooldown--;
             }
@@ -311,9 +325,134 @@ async function performAction(actionType) {
     }
 }
 
+/**
+ * Logic for AI to make a move.
+ * @param {object} gameData The current state of the game.
+ */
+async function processAIDecision(gameData) {
+    if (!gameData || gameData.status !== 'playing') {
+        return; // Only process if game is playing
+    }
+
+    const matchRef = ref(db, `matches/${gameId}`);
+    const aiKey = 'p2'; // AI is always p2
+    const playerKey = 'p1';
+    const aiPlayer = gameData.players[aiKey];
+    const player = gameData.players[playerKey];
+
+    // Check if it's genuinely AI's turn
+    if (gameData.turn !== aiKey) {
+        return;
+    }
+
+    // Small delay to simulate AI "thinking"
+    await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 seconds delay
+
+    let aiAction = '';
+    const difficulty = gameData.difficulty || 'easy'; // Default to easy
+
+    // Basic AI logic based on difficulty
+    if (difficulty === 'easy') {
+        // Easy AI: Randomly attack or heal (if cooldown allows)
+        if (aiPlayer.pv < 50 && aiPlayer.healCooldown === 0 && Math.random() > 0.5) {
+            aiAction = 'heal';
+        } else {
+            aiAction = 'attack';
+        }
+    } else if (difficulty === 'normal') {
+        // Normal AI: Prioritize heal if low HP and cooldown ready, otherwise attack
+        if (aiPlayer.pv < 60 && aiPlayer.healCooldown === 0) {
+            aiAction = 'heal';
+        } else if (player.pv > 30 && aiPlayer.healCooldown > 0 && aiPlayer.pv < 80) {
+            // If player has high HP, and AI needs to heal soon but not critically low, wait.
+            // This is a simple heuristic, adjust as needed.
+            aiAction = 'attack';
+        }
+        else {
+            aiAction = 'attack';
+        }
+    } else if (difficulty === 'hard') {
+        // Hard AI: More strategic. Prioritize heal if low HP. If not, attack or heal strategically.
+        if (aiPlayer.pv < 40 && aiPlayer.healCooldown === 0) {
+            aiAction = 'heal'; // Critical heal
+        } else if (aiPlayer.pv < 70 && aiPlayer.healCooldown === 0 && player.pv > 50) {
+            aiAction = 'heal'; // Strategic heal if player is also healthy
+        }
+        else {
+            aiAction = 'attack';
+        }
+    }
+
+    try {
+        await runTransaction(matchRef, (currentMatch) => {
+            if (!currentMatch || currentMatch.status !== 'playing' || currentMatch.turn !== aiKey) {
+                return undefined; // Abort if game state changed
+            }
+
+            const currentAiPlayer = currentMatch.players[aiKey];
+            const currentPlayer = currentMatch.players[playerKey];
+            let actionMessage = '';
+
+            if (aiAction === 'attack') {
+                const damage = 10;
+                currentPlayer.pv -= damage;
+                actionMessage = `[${currentAiPlayer.pseudo}] attaque [${currentPlayer.pseudo}] et lui inflige ${damage} points de dégâts.`;
+            } else if (aiAction === 'heal') {
+                // Double check cooldown within transaction, though AI logic above tries to prevent this
+                if ((currentAiPlayer.healCooldown || 0) > 0) {
+                    // Fallback to attack if heal not ready (should be rare with good AI logic)
+                    const damage = 10;
+                    currentPlayer.pv -= damage;
+                    actionMessage = `[${currentAiPlayer.pseudo}] tente de se soigner mais c'est en recharge. Il attaque à la place et inflige ${damage} points de dégâts.`;
+                } else {
+                    const healAmount = 15;
+                    currentAiPlayer.pv += healAmount;
+                    if (currentAiPlayer.pv > 100) {
+                        currentAiPlayer.pv = 100;
+                    }
+                    currentAiPlayer.healCooldown = 3;
+                    actionMessage = `[${currentAiPlayer.pseudo}] utilise Soin et regagne ${healAmount} points de vie.`;
+                }
+            }
+
+            // Update history and cooldowns
+            if (!currentMatch.history) currentMatch.history = [];
+            currentMatch.history.push(actionMessage);
+
+            if (currentMatch.players.p1.healCooldown > 0) {
+                currentMatch.players.p1.healCooldown--;
+            }
+            if (currentMatch.players.p2.healCooldown > 0) {
+                currentMatch.players.p2.healCooldown--;
+            }
+
+            // Check for game end
+            if (currentPlayer.pv <= 0) {
+                currentPlayer.pv = 0;
+                currentMatch.winner = aiKey;
+                currentMatch.status = 'finished';
+                currentMatch.history.push(`[${currentPlayer.pseudo}] a été vaincu !`);
+                currentMatch.history.push(`[${currentAiPlayer.pseudo}] (IA) remporte la partie !`);
+                console.log("Match terminé. Vainqueur (IA):", currentAiPlayer.pseudo);
+            } else {
+                currentMatch.turn = playerKey; // Pass turn back to player
+                currentMatch.turnCounter = (currentMatch.turnCounter || 0) + 1;
+                currentMatch.turnStartTime = Date.now();
+                currentMatch.history.push(`C'est le tour ${currentMatch.turnCounter + 1}. C'est au tour de [${currentPlayer.pseudo}].`);
+            }
+            return currentMatch;
+        });
+        console.log("AI action completed.");
+    } catch (error) {
+        console.error("Erreur lors de l'action de l'IA ou de la transaction:", error);
+        showMessage(actionMessageElement.id, `Erreur lors de l'action de l'IA : ${error.message}`, false);
+    }
+}
+
+
 async function handleMatchEnd(gameData) {
     disableActionButtons(); // Ensure buttons are disabled
-    gameContainer.classList.add('hidden'); // Hide game UI
+    returnToMenuButton.style.display = 'block'; // Make sure the return to menu button is visible at the end
 
     let resultMsg = '';
     let winOrLoss = '';
@@ -330,15 +469,9 @@ async function handleMatchEnd(gameData) {
     }
 
     showMessage(matchMessageElement.id, `Partie terminée ! ${resultMsg}`, true);
-    document.getElementById('game-result-text').textContent = resultMsg; // Update specific result text area if you have one
+    // You might want to update a dedicated game-result-text element if you have one
+    // document.getElementById('game-result-text').textContent = resultMsg;
 
-    // Show rematch button if it's PvP (PvAI might not have rematch)
-    if (gameMode === 'PvP') {
-        // Implement rematch UI elements and logic if you have them
-        // For now, let's just log it and assume main.js handles full transition back to menu
-        console.log("Partie terminée, affichage de l'option de revanche si PvP.");
-    }
-    
     // Update player stats
     if (winOrLoss && currentUser && currentUser.uid) {
         await updateMatchResult(winOrLoss); // Call the update function from main.js
@@ -348,6 +481,25 @@ async function handleMatchEnd(gameData) {
     setTimeout(() => {
         backToMenu(true); // Indicate that it's from a match end
     }, 5000); // Wait 5 seconds before going back to menu
+}
+
+
+export function returnToMainMenu() {
+    console.log("Nettoyage de l'état de game.js et désactivation des écouteurs.");
+    if (gameDataListener) {
+        off(ref(db, `matches/${gameDataListener.matchId}`), 'value', gameDataListener.callback);
+        gameDataListener = null;
+    }
+
+    // Reset global game variables
+    gameId = null;
+    youKey = null;
+    gameMode = null;
+
+    // Detach event listeners for game actions to prevent memory leaks
+    attackButton.removeEventListener('click', handleAttack);
+    healButton.removeEventListener('click', handleHeal);
+    returnToMenuButton.removeEventListener('click', handleLeaveGame); // For the 'return to menu' button during game
 }
 
 
@@ -370,13 +522,24 @@ async function leaveGame() {
         await runTransaction(matchRef, (currentMatch) => {
             if (currentMatch && currentMatch.status === 'playing' && !currentMatch.winner) {
                 const opponentKey = youKey === 'p1' ? 'p2' : 'p1';
-                currentMatch.winner = opponentKey; // Opponent wins by default
-                currentMatch.status = 'finished';
-                if (!currentMatch.history) currentMatch.history = [];
-                currentMatch.history.push(`[${currentMatch.players[youKey].pseudo}] a quitté la partie.`);
-                currentMatch.history.push(`[${currentMatch.players[opponentKey].pseudo}] remporte la partie par forfait !`);
-                console.log(`Partie terminée par forfait de ${currentMatch.players[youKey].pseudo}`);
-            } else if (currentMatch && currentMatch.status === 'waiting' && currentMatch.players[youKey] && !currentMatch.players[opponentKey]) {
+                // Only mark as winner if the opponent exists and is not AI (for PvP, if AI, AI wins)
+                if (currentMatch.players[opponentKey] && currentMatch.players[opponentKey].uid !== 'AI') {
+                    currentMatch.winner = opponentKey; // Opponent wins by default
+                    currentMatch.status = 'finished';
+                    if (!currentMatch.history) currentMatch.history = [];
+                    currentMatch.history.push(`[${currentMatch.players[youKey].pseudo}] a quitté la partie.`);
+                    currentMatch.history.push(`[${currentMatch.players[opponentKey].pseudo}] remporte la partie par forfait !`);
+                    console.log(`Partie terminée par forfait de ${currentMatch.players[youKey].pseudo}`);
+                } else if (currentMatch.players[opponentKey] && currentMatch.players[opponentKey].uid === 'AI') {
+                    // If AI is the opponent, AI wins
+                    currentMatch.winner = opponentKey;
+                    currentMatch.status = 'finished';
+                    if (!currentMatch.history) currentMatch.history = [];
+                    currentMatch.history.push(`[${currentMatch.players[youKey].pseudo}] a quitté la partie.`);
+                    currentMatch.history.push(`L'IA remporte la partie par forfait !`);
+                    console.log(`Partie PvAI terminée par forfait du joueur.`);
+                }
+            } else if (currentMatch && currentMatch.status === 'waiting' && currentMatch.players[youKey] && !currentMatch.players[youKey === 'p1' ? 'p2' : 'p1']) {
                 // If it's a waiting PvP match and you are the only one, delete the match
                 return null; // This deletes the match node
             }
