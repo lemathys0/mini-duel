@@ -33,9 +33,7 @@ import { handleUserLogin, handleUserLogout } from './main.js'; // Assurez-vous q
 
 console.log("auth.js chargé.");
 
-// SUPPRIMEZ CETTE LIGNE :
-// export const auth = getAuth(app);
-// Elle est redondante car 'auth' est déjà importé depuis firebaseConfig.js.
+
 
 // Variables pour stocker le confirmationResult pour l'authentification par téléphone
 let confirmationResult = null;
