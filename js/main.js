@@ -4,7 +4,7 @@ console.log("main.js chargé.");
 
 import { auth, db, ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction } from "./firebaseConfig.js";
 import { setupAuthListeners } from "./auth.js"; // Import de la fonction d'écouteurs d'authentification
-import { startMatchMonitoring, gameId, youKey, gameMode } from "./game.js"; // Importe les fonctions de démarrage du monitoring du match
+import { startMatchMonitoring, gameId } from "./game.js"; // Importe les fonctions de démarrage du monitoring du match
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons, showAuthScreen, showMainMenu, showMatchmakingScreen, showGameScreen } from "./utils.js"; // Importe les fonctions utilitaires
 
 // Variables globales de l'état de l'application
@@ -46,7 +46,7 @@ function createAIDifficultySelect() {
     const existingSelect = document.getElementById('ai-difficulty-select');
     if (existingSelect) return; // Si déjà là, ne rien faire
 
-    const select = document.createElement('select');
+    const select = document(createElement('select');
     select.id = 'ai-difficulty-select';
     select.innerHTML = `
         <option value="easy">Facile</option>
@@ -126,7 +126,7 @@ async function loadPlayerStats(uid) {
         const snapshot = await get(statsRef);
         const stats = snapshot.val();
         if (stats) {
-            updateUserStatsDisplay(stats);
+            updatePlayerStatsDisplay(stats);
         } else {
             playerStatsDiv.innerHTML = '<p>Pas de statistiques disponibles.</p>';
         }
@@ -322,7 +322,7 @@ async function findOrCreatePvPMatch() {
                 if (matchData && matchData.status === 'waiting') {
                     await remove(newMatchRef);
                     console.log(`Match ${newMatchId} supprimé car aucun adversaire n'a rejoint.`);
-                    if (currentMatchId === newMatchId) { // Si c'est le match actuel que l'utilisateur attend
+                    if (gameId === newMatchId) { // Si c'est le match actuel que l'utilisateur attend
                         backToMenu(false); // Retour au menu
                         showMessage('main-menu-msg', 'Votre recherche d\'adversaire a expiré.', false);
                     }
@@ -340,12 +340,40 @@ async function findOrCreatePvPMatch() {
  * Annule le matchmaking en cours.
  */
 async function cancelMatchmaking() {
-    if (currentMatchId && gameMode === 'PvP') {
-        const matchRef = ref(db, `matches/${currentMatchId}`);
+    // Note: 'gameMode' and 'gameId' are now imported from game.js
+    // If you need these here, ensure game.js exports them.
+    // Assuming gameId and gameMode are globally accessible or passed around.
+    // If you still have issues with `gameMode` being undefined, it means it's not correctly
+    // being made available here, even after the import fix for the SyntaxError.
+    // The previous fix only resolved the *syntax error* of trying to import it when not exported.
+    // If you need its *value* here, you might need to adjust how game.js sets and exposes it.
+    // For now, I'm assuming 'gameId' from the import is what you mean by currentMatchId
+    // and that 'gameMode' will somehow be available if the previous game.js exports it correctly.
+    // However, given the previous context, `gameMode` was a parameter, not an export.
+    // This `if (gameMode === 'PvP')` condition might be problematic if gameMode isn't available globally.
+    // Consider how `gameMode` is actually set and accessed after `startMatchMonitoring` is called.
+    // For this exact `cancelMatchmaking` function, if `gameId` is indeed the `currentMatchId`,
+    // you might need a way to store `gameMode` in `main.js` after `startMatchMonitoring` is called,
+    // or pass it around.
+    // As `gameId` is exported by game.js, let's use that.
+    // The `gameMode` variable here is still problematic if game.js doesn't export it.
+    // You might need a global state variable in main.js, or get it from the match data.
+
+    // Let's assume for now that if gameId is set, you are in a match, and you can fetch
+    // the gameMode from the match data if needed, or pass it from `startMatchMonitoring`.
+    // For simplicity, let's remove the direct reliance on `gameMode` for this function
+    // unless it's explicitly exported by game.js and truly represents the active mode.
+    // A better approach would be to have a global `activeGameMode` variable in main.js
+    // that gets set when `startMatchMonitoring` is called.
+    // For now, let's assume `gameId` being present is enough for cancellation logic.
+
+    if (gameId) { // Using gameId from import, assuming it tracks the current active match.
+        const matchRef = ref(db, `matches/${gameId}`);
         try {
             await runTransaction(matchRef, (currentData) => {
-                if (currentData && currentData.status === 'waiting' && currentData.players.p1.uid === currentUser.uid) {
-                    // Supprimer le match si le joueur P1 annule et qu'il n'y a personne d'autre
+                // Check if the match is still waiting and if the current user is P1
+                // This logic correctly uses currentUser.uid
+                if (currentData && currentData.status === 'waiting' && currentData.players.p1 && currentData.players.p1.uid === currentUser.uid) {
                     return null; // Supprime le nœud
                 }
                 return undefined; // Abort the transaction
@@ -362,6 +390,7 @@ async function cancelMatchmaking() {
             backToMenu(false);
         }
     } else {
+        // If no matchId is set, just go back to menu.
         backToMenu(false);
     }
 }
@@ -379,10 +408,10 @@ export async function backToMenu(fromMatchEnd = false) {
     console.log("Retour au menu demandé depuis main.js.");
 
     // Annuler tous les écouteurs Firebase liés au match
-    if (currentMatchId) {
-        const matchRef = ref(db, `matches/${currentMatchId}`);
+    if (gameId) { // Use gameId from import
+        const matchRef = ref(db, `matches/${gameId}`);
         off(matchRef); // Désinscrit tous les listeners pour ce chemin
-        console.log(`Écouteurs Firebase pour le match ${currentMatchId} désactivés.`);
+        console.log(`Écouteurs Firebase pour le match ${gameId} désactivés.`);
     }
 
     // Effacer le timeout de suppression du match
@@ -425,18 +454,24 @@ export async function backToMenu(fromMatchEnd = false) {
         // L'idéal serait de passer le résultat du match (win/loss/draw) directement à cette fonction si elle est appelée depuis processTurn de game.js.
 
         // Exemple (logique à affiner pour récupérer le résultat correct)
-        // if (currentMatchId) {
-        //     const matchRef = ref(db, `matches/${currentMatchId}`);
+        // if (gameId) {
+        //     const matchRef = ref(db, `matches/${gameId}`);
         //     const snapshot = await get(matchRef);
         //     const matchData = snapshot.val();
         //     if (matchData && matchData.status === 'finished') {
-        //         if (matchData.winner === youKey) {
-        //             await updateMatchResult('win');
-        //         } else if (matchData.winner === opponentKey) {
-        //             await updateMatchResult('loss');
-        //         } else if (matchData.winner === 'draw') {
-        //             await updateMatchResult('draw');
-        //         }
+        //         // You would need 'youKey' here, which isn't directly imported or globally available in main.js
+        //         // You'd need to either:
+        //         // 1. Export `youKey` from `game.js` (if it's a stable, global identifier for the current player in a match)
+        //         // 2. Pass the result (win/loss/draw) directly from `game.js` when calling `backToMenu`.
+        //         // 3. Store `youKey` as a local state in `main.js` when `startMatchMonitoring` is called.
+        //         // For now, this block remains commented as it depends on `youKey` and `opponentKey` being available.
+        //         // if (matchData.winner === youKey) {
+        //         //     await updateMatchResult('win');
+        //         // } else if (matchData.winner === opponentKey) {
+        //         //     await updateMatchResult('loss');
+        //         // } else if (matchData.winner === 'draw') {
+        //         //     await updateMatchResult('draw');
+        //         // }
         //     }
         // }
         showMessage(mainMenuMsgDisplay.id, "Le match est terminé. Bienvenue au menu principal.");

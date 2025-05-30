@@ -9,8 +9,8 @@ import { app, db, auth, ref, get, set, runTransaction, onValue, off } from './fi
 console.log("game.js chargé.");
 
 
-let currentUser = null;
-let gameDataListener = null;
+export let currentUser = null;
+export let gameDataListener = null;
 export let gameId = null; // ID unique de la session de jeu
 
 // Éléments de l'interface utilisateur
