@@ -42,8 +42,11 @@ h2 {
     font-size: 1.6em; /* Slightly smaller for mobile */
 }
 
+/* Styles pour tous les champs d'entrée */
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+input[type="email"], /* Ajouté */
+input[type="tel"] {   /* Ajouté */
     width: calc(100% - 20px); /* Account for padding */
     padding: 10px; /* Smaller padding */
     margin-bottom: 12px; /* Smaller margin */
@@ -92,13 +95,17 @@ button:disabled {
     color: #ff4d6d;
     font-size: 0.95em; /* Adjusted font size */
 }
-.message[style*="00ff88"] {
-    color: #00ff88;
+/* Votre classe .message[style*="00ff88"] n'est pas standard. Mieux vaut utiliser des classes CSS. */
+/* Renommé .message.success et .message.error dans la section #auth */
+.message.success { /* Ajouté pour un style générique de succès */
+    color: #00e676;
+}
+.message.error { /* Ajouté pour un style générique d'erreur */
+    color: #ff4d6d;
 }
 
 /* --- DÉBUT DES MODIFICATIONS POUR LA SECTION AUTHENTIFICATION --- */
 /* Cache par défaut les sections qui ne doivent pas être visibles au démarrage */
-/* La section 'auth' (authentification) doit être visible par défaut, donc elle n'est PAS incluse ici. */
 #main-menu,
 #matchmaking-status,
 #game-screen {
@@ -106,102 +113,180 @@ button:disabled {
 }
 
 #auth {
-    display: flex; /* Utilise flexbox pour un meilleur alignement */
-    flex-direction: column; /* Empile les éléments verticalement */
-    align-items: center; /* Centre les éléments horizontalement */
-    justify-content: center; /* Centre les éléments verticalement (si le conteneur a une hauteur fixe) */
-    padding: 30px; /* Plus de padding pour l'espace */
-    border-radius: 15px; /* Bordures arrondies comme le container */
-    background: rgba(10, 20, 30, 0.8); /* Fond plus sombre pour contraster */
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.6); /* Ombre plus prononcée */
-    margin-bottom: 20px; /* Espace sous la section auth */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    border-radius: 15px;
+    background: rgba(10, 20, 30, 0.8);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.6);
+    margin-bottom: 20px;
 }
 
 #auth h2 {
-    color: #00e676; /* Une couleur vive pour le titre d'authentification */
-    font-size: 2.5em; /* Plus grand */
-    margin-bottom: 25px; /* Plus d'espace après le titre */
-    text-shadow: 0 0 10px rgba(0, 230, 118, 0.5); /* Effet lumineux */
+    color: #00e676;
+    font-size: 2.5em;
+    margin-bottom: 25px;
+    text-shadow: 0 0 10px rgba(0, 230, 118, 0.5);
+}
+
+#auth h3 { /* Style pour les sous-titres des méthodes d'auth */
+    color: #f1c40f; /* Reprend la couleur des h2 généraux pour la cohérence */
+    margin-top: 25px; /* Espace au-dessus des sous-titres */
+    margin-bottom: 15px;
+    font-size: 1.4em;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 #auth #user-info {
     font-size: 1.1em;
-    color: #90a4ae; /* Couleur plus douce pour les infos utilisateur */
+    color: #90a4ae;
     margin-bottom: 20px;
 }
 
+/* Styles pour TOUS les inputs dans la section auth */
 #auth input[type="text"],
-#auth input[type="password"] {
-    width: 80%; /* Largeur définie */
-    max-width: 300px; /* Limite la largeur pour ne pas être trop étiré */
-    padding: 15px; /* Plus de padding */
-    margin-bottom: 18px; /* Plus d'espace entre les inputs */
-    border: 2px solid #00e676; /* Bordure colorée */
-    border-radius: 10px; /* Bordures plus arrondies */
-    background-color: #1a1a1a; /* Fond très sombre */
-    color: #e0f2f1; /* Texte clair */
-    font-size: 1.1em; /* Texte plus grand */
-    text-align: center; /* Texte centré dans l'input */
-    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5); /* Ombre interne */
+#auth input[type="password"],
+#auth input[type="email"], /* Ajouté */
+#auth input[type="tel"] {   /* Ajouté */
+    width: 80%;
+    max-width: 300px;
+    padding: 15px;
+    margin-bottom: 18px;
+    border: 2px solid #00e676;
+    border-radius: 10px;
+    background-color: #1a1a1a;
+    color: #e0f2f1;
+    font-size: 1.1em;
+    text-align: center;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
     transition: all 0.3s ease;
 }
 
 #auth input[type="text"]:focus,
-#auth input[type="password"]:focus {
-    border-color: #00ff88; /* Bordure plus vive au focus */
-    box-shadow: 0 0 15px rgba(0, 255, 136, 0.7), inset 0 2px 5px rgba(0, 0, 0, 0.5); /* Effet lumineux au focus */
-    outline: none; /* Supprime le contour par défaut */
+#auth input[type="password"]:focus,
+#auth input[type="email"]:focus, /* Ajouté */
+#auth input[type="tel"]:focus {   /* Ajouté */
+    border-color: #00ff88;
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.7), inset 0 2px 5px rgba(0, 0, 0, 0.5);
+    outline: none;
 }
 
+/* Styles pour TOUS les boutons dans la section auth */
 #auth button {
-    width: 70%; /* Largeur définie pour les boutons */
+    width: 70%;
     max-width: 250px;
-    padding: 15px 30px; /* Plus de padding */
-    margin: 10px 0; /* Plus d'espace vertical entre les boutons */
-    border-radius: 10px; /* Plus arrondi */
-    font-size: 1.2em; /* Texte plus grand */
+    padding: 15px 30px;
+    margin: 10px 0;
+    border-radius: 10px;
+    font-size: 1.2em;
     font-weight: bold;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4); /* Ombre plus marquée */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
     transition: all 0.3s ease;
 }
 
-#auth #signup-btn {
-    background-color: #27ae60; /* Bouton vert pour l'inscription */
+/* Couleurs spécifiques pour les nouveaux boutons */
+#auth #signup-email-btn { /* Renommé */
+    background-color: #27ae60;
 }
 
-#auth #signup-btn:hover {
+#auth #signup-email-btn:hover { /* Renommé */
     background-color: #2ecc71;
     transform: translateY(-3px);
 }
 
-#auth #login-btn {
-    background-color: #3498db; /* Bouton bleu pour la connexion */
+#auth #login-email-btn { /* Renommé */
+    background-color: #3498db;
 }
 
-#auth #login-btn:hover {
+#auth #login-email-btn:hover { /* Renommé */
     background-color: #2980b9;
     transform: translateY(-3px);
 }
 
-#auth #auth-msg {
-    margin-top: 25px; /* Plus d'espace pour le message */
-    font-size: 1em;
-    padding: 10px;
-    border-radius: 5px;
+#auth #login-google-btn { /* Nouveau bouton */
+    background-color: #db4437; /* Rouge Google */
 }
 
-/* Styles pour les messages de succès/erreur */
-#auth #auth-msg.success {
+#auth #login-google-btn:hover { /* Nouveau bouton */
+    background-color: #c1352b;
+    transform: translateY(-3px);
+}
+
+#auth #send-otp-btn { /* Nouveau bouton */
+    background-color: #28a745; /* Vert pour envoyer le code */
+}
+
+#auth #send-otp-btn:hover { /* Nouveau bouton */
+    background-color: #218838;
+    transform: translateY(-3px);
+}
+
+#auth #verify-otp-btn { /* Nouveau bouton */
+    background-color: #17a2b8; /* Bleu clair pour vérifier le code */
+}
+
+#auth #verify-otp-btn:hover { /* Nouveau bouton */
+    background-color: #138496;
+    transform: translateY(-3px);
+}
+
+/* Styles pour les messages d'authentification spécifiques */
+#auth-msg-email.success,
+#auth-msg-google.success,
+#auth-msg-phone.success {
     color: #00e676; /* Vert pour le succès */
     background-color: rgba(0, 230, 118, 0.1);
     border: 1px solid #00e676;
 }
 
-#auth #auth-msg.error {
+#auth-msg-email.error,
+#auth-msg-google.error,
+#auth-msg-phone.error {
     color: #ff1744; /* Rouge pour l'erreur */
     background-color: rgba(255, 23, 68, 0.1);
     border: 1px solid #ff1744;
 }
+
+/* Cache initial pour le champ OTP et le bouton de vérification (affichés par JS après envoi du SMS) */
+#otp-input,
+#verify-otp-btn {
+    display: none;
+}
+
+/* Style de la ligne de séparation */
+hr {
+    border: none;
+    border-top: 1px dashed #555; /* Ligne pointillée grise */
+    margin: 30px 0; /* Plus d'espace au-dessus et en dessous */
+    width: 80%; /* La largeur pour la visibilité */
+}
+
+/* Style pour le conteneur reCAPTCHA (si visible) */
+#recaptcha-container {
+    margin: 15px auto;
+    /* Ajoutez des styles si vous utilisez un reCAPTCHA visible ('size': 'normal') */
+}
+
+/* Assurez-vous que le bouton de déconnexion est bien centré et stylé */
+#logout-btn {
+    display: none; /* Masqué par défaut, affiché par JS quand connecté */
+    background-color: #e74c3c; /* Rouge pour la déconnexion */
+    margin-top: 25px; /* Plus d'espace */
+}
+#logout-btn:hover {
+    background-color: #c0392b;
+}
+
+/* Le bouton de déconnexion dans le menu principal */
+#logout-btn-menu {
+    background-color: #e74c3c; /* Rouge pour la déconnexion */
+}
+#logout-btn-menu:hover {
+    background-color: #c0392b;
+}
+
 
 /* --- FIN DES MODIFICATIONS POUR LA SECTION AUTHENTIFICATION --- */
 
@@ -450,8 +535,11 @@ button:disabled {
         font-size: 1.8em;
     }
 
+    /* Adapter les inputs pour les écrans plus larges */
     input[type="text"],
-    input[type="password"] {
+    input[type="password"],
+    input[type="email"], /* Ajouté */
+    input[type="tel"] {   /* Ajouté */
         padding: 12px;
         margin-bottom: 15px;
         font-size: 1em;
