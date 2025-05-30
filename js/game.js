@@ -450,6 +450,7 @@ function returnToMenu() {
 
     // Afficher l'écran de menu et masquer l'écran de jeu
     document.getElementById('game-screen').classList.add('hidden');
-    document.getElementById('menu-screen').classList.remove('hidden');
+    // CORRECTION : Utiliser 'main-menu' car c'est l'ID dans index.html
+    document.getElementById('main-menu').classList.remove('hidden');
     showMessage("match-info", ""); // Effacer les messages d'info match
 }

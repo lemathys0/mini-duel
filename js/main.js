@@ -146,19 +146,20 @@ export async function backToMenu(fromMatchEnd = false) {
     // Réinitialiser l'interface utilisateur du match
     clearHistory();
     updateHealthBar("you-health-bar", 100);
-    document.getElementById("you-pv-display").textContent = "100 PV";
+    document.getElementById("player1-pv").textContent = "100 PV"; // Utilise player1-pv
     updateHealthBar("opponent-health-bar", 100);
-    document.getElementById("opponent-pv-display").textContent = "100 PV";
+    document.getElementById("player2-pv").textContent = "100 PV"; // Utilise player2-pv
     updateTimerUI(timerMax); // Réinitialise l'affichage du timer
     document.getElementById("current-match").textContent = "Aucun";
-    document.getElementById("opponent-name").textContent = "Adversaire";
-    document.getElementById("you-name").textContent = "Vous";
+    document.getElementById("player2-pseudo").textContent = "Adversaire"; // Utilise player2-pseudo
+    document.getElementById("player1-pseudo").textContent = "Vous"; // Utilise player1-pseudo
     showMessage("action-msg", "");
     showMessage("match-msg", ""); // Effacer le message de fin de match
     enableActionButtons(); // S'assurer que les boutons sont activés pour un nouveau match
 
     // Cacher l'écran de jeu et montrer le menu principal
-    document.getElementById("game").style.display = "none";
+    // CORRECTION : Utiliser 'game-screen' comme dans index.html
+    document.getElementById("game-screen").style.display = "none";
     document.getElementById("main-menu").style.display = "block";
 
     if (fromMatchEnd) {
@@ -282,32 +283,50 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 await set(ref(db, `matches/${matchId}`), initialMatchData);
                 console.log(`Match IA créé avec ID: ${matchId}`);
-                startMatchMonitoring(matchId, 'p1', 'PvAI'); // On passe directement 'p1' ici.
-                showMessage("main-menu-msg", "Match contre l'IA lancé !");
+
+                // CORRECTION : Affiche l'écran de jeu et masque le menu principal
+                document.getElementById('main-menu').style.display = 'none';
+                document.getElementById('game-screen').style.display = 'block'; // Utilise 'block' car ton CSS utilise 'display:none;'
+
+                startMatchMonitoring(matchId, 'p1', 'PvAI');
             } catch (error) {
                 console.error("Erreur lors de la création du match IA :", error);
-                showMessage("main-menu-msg", "Échec de la création du match IA.");
+                showMessage("main-menu-msg", "Erreur lors de la création du match IA.");
             }
         });
     }
 
+    // Le reste de tes écouteurs d'événements pour les autres boutons (play-player-btn, etc.)
+    // devrait être ici, en s'assurant qu'ils ont une logique similaire pour afficher/masquer les sections.
+
     const playPlayerBtn = document.getElementById("play-player-btn");
     if (playPlayerBtn) {
-        playPlayerBtn.addEventListener("click", async () => {
-            showMessage("main-menu-msg", "Fonctionnalité 'Jouer contre un joueur' en développement.");
+        playPlayerBtn.addEventListener("click", () => {
+            showMessage("main-menu-msg", "Fonctionnalité 'Jouer contre un autre joueur' à implémenter.");
+            // Logique pour le matchmaking ou rejoindre un match PvP
+            // N'oubliez pas de gérer l'affichage de 'matchmaking-status'
+            // et ensuite 'game-screen' une fois le match trouvé/créé.
         });
     }
 
     const howToPlayBtn = document.getElementById("how-to-play-btn");
     if (howToPlayBtn) {
         howToPlayBtn.addEventListener("click", () => {
-            alert("Comment jouer : Attaque pour infliger des dégâts, Défend pour réduire les dégâts entrants, Soigne pour restaurer des PV (avec cooldown). Le premier à 0 PV perd !");
+            showMessage("main-menu-msg", "Instructions de jeu à afficher ici.");
         });
     }
 
-    // Initialisation de l'affichage du timer au chargement initial
-    updateTimerUI(timerMax);
+    const logoutBtn = document.getElementById("logout-btn");
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", async () => {
+            // La déconnexion est gérée par auth.js et appellera handleUserLogout
+            // Tu n'as pas besoin d'appeler handleUserLogout ici directement
+            // car auth.js s'en charge après la déconnexion Firebase.
+            showMessage("auth-msg", "Déconnexion...");
+        });
+    }
 
-    // Initialiser l'état de l'interface au chargement (déconnecté par défaut)
-    handleUserLogout(); // Assure que l'écran d'auth est visible au début
-}); // Fin de DOMContentLoaded
+    // Initialisation de l'affichage en fonction de l'état de connexion au démarrage
+    // Ceci est géré par setupAuthListeners qui appellera handleUserLogin/handleUserLogout
+    // après avoir vérifié la session utilisateur.
+});
