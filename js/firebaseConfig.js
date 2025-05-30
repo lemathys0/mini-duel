@@ -3,6 +3,8 @@
 // Importe initializeApp pour initialiser l'application Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 
+import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // <-- AJOUTE CETTE LIGNE
+
 // Importe TOUTES les fonctions nécessaires de Firebase Realtime Database
 import {
     getDatabase,
