@@ -1,8 +1,8 @@
 // js/firebaseConfig.js
 // Importe les fonctions nécessaires depuis les URLs CDN de Firebase
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js';
-import { getDatabase, ref, set, get, query, orderByChild, equalTo, push, remove, onValue, serverTimestamp, off, update, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { getAuth, onAuthStateChanged  } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js';
+import { getDatabase, ref, set, get, query, orderByChild, equalTo, push, remove, onValue, serverTimestamp, off, update } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
 
 console.log("firebaseConfig.js chargé.");
 
