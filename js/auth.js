@@ -9,11 +9,11 @@ import {
     signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
-    GoogleAuthProvider,     // Ajout pour Google Auth
-    signInWithPopup,        // Ajout pour Google Auth
-    PhoneAuthProvider,      // Ajout pour Phone Auth
-    signInWithPhoneNumber,  // Ajout pour Phone Auth
-    RecaptchaVerifier       // Ajout pour Phone Auth (reCAPTCHA)
+    GoogleAuthProvider,       // Ajout pour Google Auth
+    signInWithPopup,          // Ajout pour Google Auth
+    PhoneAuthProvider,        // Ajout pour Phone Auth
+    signInWithPhoneNumber,    // Ajout pour Phone Auth
+    RecaptchaVerifier         // Ajout pour Phone Auth (reCAPTCHA)
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // L'URL doit correspondre à ta version de Firebase
 
 // Assurez-vous que ces chemins sont corrects pour vos autres fichiers
@@ -321,14 +321,4 @@ export function setupAuthListeners() {
             logoutBtn.style.display = 'none';
         }
     });
-}
-
-// Fonction utilitaire showMessage (si elle n'est pas déjà dans utils.js)
-// Pour la rendre compatible avec les nouveaux éléments de message
-function showMessage(element, message, isSuccess) {
-    if (element) {
-        element.textContent = message;
-        element.className = 'message ' + (isSuccess ? 'success' : 'error');
-        element.style.display = 'block'; // S'assurer que le message est visible
-    }
 }
