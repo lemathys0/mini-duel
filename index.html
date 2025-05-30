@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini Duel de Cartes</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 </head>
 <body>
     <div class="bg-shapes">
@@ -18,11 +19,34 @@
             <h2>Authentification</h2>
             <p id="user-info">Non connecté</p>
 
-            <input type="text" id="pseudo-input" placeholder="Votre Pseudo">
-            <input type="password" id="code-input" placeholder="Votre Code (4 chiffres)">
-            <button id="signup-btn">S'inscrire</button>
-            <button id="login-btn">Se connecter</button>
-            <p id="auth-msg" class="message"></p>
+            <h3>Pseudo / Email & Mot de passe</h3>
+            <input type="text" id="pseudo-input" placeholder="Votre Pseudo (pour le jeu)">
+            <input type="email" id="email-input" placeholder="Votre Email (pour la connexion)">
+            <input type="password" id="password-input" placeholder="Mot de passe (min. 6 caractères)">
+            <button id="signup-email-btn">S'inscrire (Email/Mdp)</button>
+            <button id="login-email-btn">Se connecter (Email/Mdp)</button>
+            <p id="auth-msg-email" class="message"></p>
+
+            <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
+
+            <h3>Ou via Google</h3>
+            <button id="login-google-btn" style="background-color: #db4437;">Se connecter avec Google</button>
+            <p id="auth-msg-google" class="message"></p>
+
+            <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
+
+            <h3>Ou via Téléphone</h3>
+            <input type="tel" id="phone-input" placeholder="Votre numéro de téléphone (+33...)">
+            <div id="recaptcha-container"></div>
+            <button id="send-otp-btn" style="background-color: #28a745;">Envoyer Code SMS</button>
+            <input type="text" id="otp-input" placeholder="Code de vérification SMS (OTP)">
+            <button id="verify-otp-btn" style="background-color: #17a2b8;">Vérifier Code</button>
+            <p id="auth-msg-phone" class="message"></p>
+
+
+            <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
+
+            <button id="logout-btn" class="menu-button" style="margin-top: 20px; display:none;">Déconnexion</button>
         </div>
 
         <div id="main-menu" class="menu-section" style="display:none;">
@@ -41,7 +65,7 @@
                 <button id="how-to-play-btn" style="flex: 1 1 auto; margin: 5px; background-color: #f39c12;">Comment jouer ?</button>
             </div>
             
-            <button id="logout-btn" class="menu-button" style="margin-top: 20px;">Déconnexion</button>
+            <button id="logout-btn-menu" class="menu-button" style="margin-top: 20px;">Déconnexion</button>
         </div>
 
         <div id="matchmaking-status" class="menu-section" style="display:none;">
