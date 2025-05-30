@@ -282,7 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 await set(ref(db, `matches/${matchId}`), initialMatchData);
                 console.log(`Match IA créé avec ID: ${matchId}`);
-                startMatchMonitoring(matchId, currentUser, 'p1', 'PvAI'); // Démarre la surveillance
+                startMatchMonitoring(matchId, 'p1', 'PvAI'); // On passe directement 'p1' ici.
                 showMessage("main-menu-msg", "Match contre l'IA lancé !");
             } catch (error) {
                 console.error("Erreur lors de la création du match IA :", error);
