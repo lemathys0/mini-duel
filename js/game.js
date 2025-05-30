@@ -22,7 +22,7 @@ import {
     updateUserStats
 } from "./main.js";
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons } from "./utils.js";
-import { processAITurn } from "./aiLogic.js"; // <-- MODIFICATION ICI : Suppression de 'isAIProcessingTurn'
+import { processAITurn } from "./aiLogic.js"; // Importe processAITurn
 
 // Variable pour annuler l'écouteur onValue principal du match
 let currentMatchUnsubscribe = null;
@@ -250,6 +250,18 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
         console.log("DEBUG PROCESS TURN: Vérification pour déclencher processTurn. (Passée par l'écouteur onValue)");
 
+        // --- DÉCLENCHEMENT CONDITIONNEL DE PROCESS TURN (AJOUTÉ OU MODIFIÉ) ---
+        // Vérifie si les deux joueurs ont soumis leur action ET que le statut est 'playing'
+        // et qu'un traitement n'est pas déjà en cours.
+        if (matchData.status === 'playing' && matchData.players.p1.action && matchData.players.p2.action && !isProcessingTurnInternally) {
+            console.log("DEBUG PROCESS TURN: Les deux actions sont soumises. Déclenchement de processTurn.");
+            await processTurn(matchData);
+        } else if (isProcessingTurnInternally) {
+            console.log("DEBUG PROCESS TURN: Un traitement est déjà en cours, pas de nouveau déclenchement.");
+        } else {
+            console.log("DEBUG PROCESS TURN: Les conditions pour déclencher processTurn ne sont pas encore remplies.");
+        }
+
     }, (error) => {
         console.error("Erreur d'écoute sur le match :", error);
         showMessage("match-msg", "Erreur de connexion au match.");
@@ -306,8 +318,9 @@ export async function processTurn(matchData) { // Exportez processTurn
     }
     disableActionButtons();
 
+    // Cette condition est désormais moins critique ici car le déclencheur dans onValue est plus précis
     if (matchData.status !== 'playing' || !matchData.players.p1.action || !matchData.players.p2.action) {
-        console.warn("processTurn : Annulé, les conditions ne sont pas remplies ou déjà traité.");
+        console.warn("processTurn : Annulé, les conditions ne sont pas remplies ou déjà traité (peut être un appel redondant).");
         isProcessingTurnInternally = false;
         return;
     }
