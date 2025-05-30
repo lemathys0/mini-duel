@@ -35,7 +35,7 @@ export function startMatchMonitoring(matchId, playerKey, mode) {
     console.log("--- DÉBOGAGE onDisconnect ---");
     console.log("1. Valeur de db :", db);
     console.log("2. Valeur de playerPresenceRef :", playerPresenceRef);
-    onDisconnect(playerPresenceRef).set(true))
+    onDisconnect(playerPresenceRef).set(true)
         .then(() => {
             console.log(`Opérations onDisconnect configurées pour ${youKey}`);
         })
