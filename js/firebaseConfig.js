@@ -1,10 +1,26 @@
 // firebaseConfig.js
-// Pas besoin d'importer initializeApp ou getDatabase ici si vous ne les exportez pas directement.
-// Mais pour la clarté et si d'autres modules en avaient besoin, on peut les garder.
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getDatabase } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 
-// Définir la configuration
+// Importe initializeApp pour initialiser l'application Firebase
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+
+// Importe TOUTES les fonctions nécessaires de Firebase Realtime Database
+import {
+    getDatabase,
+    ref,
+    set,
+    get,
+    update,
+    remove,
+    onValue,
+    off,
+    serverTimestamp,
+    runTransaction,
+    push,
+    onDisconnect // <-- C'est celle qui manquait pour la dernière erreur !
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+
+// Définir la configuration de ton projet Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyA-e19z8T3c1K46YmJY8s9EAbO9BRes7fA",
     authDomain: "mini-duel-de-cartes.firebaseapp.com",
@@ -22,5 +38,17 @@ export const app = initializeApp(firebaseConfig);
 // Obtenir l'instance de la base de données
 export const db = getDatabase(app);
 
-// Si vous avez besoin d'exporter la config elle-même pour une raison, faites-le nommément
-// export const firebaseConfigData = firebaseConfig; // Renommez-la pour éviter la confusion
+// EXPORTE TOUTES LES FONCTIONS DE LA BASE DE DONNÉES POUR LES AUTRES MODULES
+export {
+    ref,
+    set,
+    get,
+    update,
+    remove,
+    onValue,
+    off,
+    serverTimestamp,
+    runTransaction,
+    push,
+    onDisconnect
+};
