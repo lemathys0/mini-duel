@@ -2,7 +2,7 @@
 
 import { db } from "./firebaseConfig.js";
 import { ref, update, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-import { currentMatchId, opponentKey, gameMode, youKey } from "./main.js";
+import { currentMatchId, opponentKey, gameMode, youKey } from "./main.js"; // Importez les variables de main.js
 
 export let isAITurnCurrentlyProcessing = false;
 export let lastAITurnProcessed = null; // Stocke le turnCounter du dernier tour où l'IA a joué
@@ -22,7 +22,6 @@ export async function processAITurn(matchData) {
         return;
     }
 
-    // Capture le turnCounter actuel au début de l'appel
     const currentMatchTurnCounter = matchData.turnCounter || 0;
 
     if (isAITurnCurrentlyProcessing) {
@@ -36,24 +35,15 @@ export async function processAITurn(matchData) {
         return;
     }
 
-    // Nouvel ajout : Si l'IA a déjà été traitée pour ce turnCounter, on ne la traite pas à nouveau.
-    // Cela gère les déclenchements multiples de onValue APRÈS que l'IA ait agi pour le tour courant.
+    // Si l'IA a déjà été traitée pour ce turnCounter, on ne la traite pas à nouveau.
     if (lastAITurnProcessed === currentMatchTurnCounter) {
         console.log(`processAITurn : L'IA a déjà agi pour le tour ${currentMatchTurnCounter}. Annulation d'un appel redondant.`);
         return;
     }
 
-    // Vérifier si c'est le tour de l'adversaire ou si le joueur vient de jouer et que l'IA n'a pas encore agi
-    const isOpponentTurn = matchData.turn === opponentKey;
-    const playerJustActed = matchData.turn === youKey && matchData.players[youKey].action;
-
-    if (!isOpponentTurn && !playerJustActed) {
-        console.log("processAITurn : Ce n'est pas le tour de l'IA et le joueur n'a pas encore agi. Annulation.");
-        return;
-    }
-
-    isAITurnCurrentlyProcessing = true;
     // Mettre à jour lastAITurnProcessed *avant* le délai et l'action
+    // Ceci marque le tour comme "en cours de traitement par l'IA" pour éviter les doubles déclenchements.
+    isAITurnCurrentlyProcessing = true;
     lastAITurnProcessed = currentMatchTurnCounter;
 
     console.log("processAITurn : Début du traitement de l'action de l'IA...");
@@ -63,6 +53,7 @@ export async function processAITurn(matchData) {
 
     let aiAction = '';
 
+    // Logique de décision de l'IA
     if (aiPlayer.pv < 30 && (aiPlayer.healCooldown || 0) === 0) {
         aiAction = 'heal';
         console.log("IA : Santé basse, choisit de se soigner.");
@@ -71,10 +62,10 @@ export async function processAITurn(matchData) {
         console.log("IA : Santé de l'adversaire très basse, choisit d'attaquer pour achever.");
     } else {
         const random = Math.random();
-        if (random < 0.6) {
+        if (random < 0.6) { // 60% chance d'attaquer
             aiAction = 'attack';
             console.log("IA : Bonne santé, choisit d'attaquer.");
-        } else {
+        } else { // 40% chance de défendre
             aiAction = 'defend';
             console.log("IA : Bonne santé, choisit de défendre occasionnellement.");
         }
@@ -82,6 +73,7 @@ export async function processAITurn(matchData) {
 
     const matchRef = ref(db, `matches/${currentMatchId}`);
 
+    // Simule un temps de réflexion de l'IA
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
@@ -90,7 +82,7 @@ export async function processAITurn(matchData) {
     } catch (error) {
         console.error("Erreur lors de l'enregistrement de l'action de l'IA :", error);
     } finally {
-        isAITurnCurrentlyProcessing = false;
+        isAITurnCurrentlyProcessing = false; // Relâcher le verrou
         console.log("processAITurn : Verrou isAITurnCurrentlyProcessing relâché.");
     }
 }
