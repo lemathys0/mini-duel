@@ -32,7 +32,7 @@
 
             <h3>Vos Statistiques</h3>
             <div id="player-stats" class="stats-display">
-                </div>
+            </div>
 
             <h3>Choisissez un mode de jeu</h3>
             <div style="display: flex; flex-wrap: wrap; justify-content: center; margin-top: 10px;">
@@ -50,23 +50,23 @@
             <button id="cancel-matchmaking-btn" class="menu-button">Annuler la recherche</button>
         </div>
 
-        <div id="game" class="menu-section" style="display:none;">
+        <div id="game-screen" class="menu-section" style="display:none;">
             <h2>Match: <span id="current-match" style="color:#f1c40f;"></span></h2>
 
             <div class="player-info you">
-                <span id="you-name" class="player-name">Vous</span>
+                <span id="player1-pseudo" class="player-name">Vous</span>
                 <div class="health-bar-container">
                     <div class="health-bar" id="you-health-bar"></div>
                 </div>
-                <span class="pv-display" id="you-pv-display">100 PV</span>
+                <span class="pv-display" id="player1-pv">100 PV</span>
             </div>
 
             <div class="player-info opponent">
-                <span id="opponent-name" class="player-name">Adversaire</span>
+                <span id="player2-pseudo" class="player-name">Adversaire</span>
                 <div class="health-bar-container">
                     <div class="health-bar opponent-bar" id="opponent-health-bar"></div>
                 </div>
-                <span class="pv-display" id="opponent-pv-display">100 PV</span>
+                <span class="pv-display" id="player2-pv">100 PV</span>
                 <span id="opponent-action-status"></span>
             </div>
 
@@ -75,7 +75,7 @@
                 <div class="timer-bar-wrapper">
                     <div class="timer-progress-bar" id="timer-progress-bar"></div>
                 </div>
-                <span class="timer-value" id="timer-value">20</span>
+                <span class="timer-value" id="timer-display">20</span>
             </div>
 
             <div class="game-controls action-buttons">
@@ -89,7 +89,7 @@
                 <h3>Historique du match</h3>
                 <div id="history"></div>
             </div>
-            <button id="back-to-menu-btn" style="margin-top: 20px; background-color: #9b59b6;">Retour au Menu</button>
+            <button id="return-to-menu" style="margin-top: 20px; background-color: #9b59b6;">Retour au Menu</button>
         </div>
     </div>
 
