@@ -22,7 +22,7 @@ import {
     updateUserStats
 } from "./main.js";
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons } from "./utils.js";
-import { processAITurn, isAIProcessingTurn } from "./aiLogic.js"; // Importe processAITurn et son verrou
+import { processAITurn } from "./aiLogic.js"; // <-- MODIFICATION ICI : Suppression de 'isAIProcessingTurn'
 
 // Variable pour annuler l'écouteur onValue principal du match
 let currentMatchUnsubscribe = null;
