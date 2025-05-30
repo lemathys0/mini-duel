@@ -31,74 +31,98 @@ import { handleUserLogin, handleUserLogout } from './main.js';
 
 console.log("auth.js chargé.");
 
-// Variable pour stocker le confirmationResult pour l'authentification par téléphone
+// Variables pour stocker le confirmationResult pour l'authentification par téléphone
 let confirmationResult = null;
 let recaptchaVerifierInstance = null; // Variable pour garder l'instance reCAPTCHA
 let recaptchaInitialized = false; // Drapeau pour s'assurer que reCAPTCHA n'est initialisé qu'une fois
+let recaptchaInitTimeout = null; // Pour gérer la temporisation de l'initialisation
+
+// --- ID des éléments de message pour showMessage (CONSTANTES) ---
+// Utiliser des constantes rend le code plus lisible et moins sujet aux erreurs de frappe
+const AUTH_MSG_EMAIL_ID = 'auth-msg-email';
+const AUTH_MSG_GOOGLE_ID = 'auth-msg-google';
+const AUTH_MSG_PHONE_ID = 'auth-msg-phone';
+const GLOBAL_AUTH_MESSAGE_ID = 'global-auth-message'; // Assurez-vous que cet ID existe dans votre HTML !
 
 export function setupAuthListeners() {
-    // Éléments pour Email/Mot de passe (on récupère les références DOM ici)
+    // Références aux éléments du DOM
     const pseudoInput = document.getElementById('pseudo-input');
     const emailInput = document.getElementById('email-input');
     const passwordInput = document.getElementById('password-input');
     const signupEmailBtn = document.getElementById('signup-email-btn');
     const loginEmailBtn = document.getElementById('login-email-btn');
-    // On va passer l'ID de l'élément à showMessage, pas l'élément lui-même
-    const authMsgEmailId = 'auth-msg-email';
 
-    // Éléments pour Google
     const loginGoogleBtn = document.getElementById('login-google-btn');
-    const authMsgGoogleId = 'auth-msg-google';
 
-    // Éléments pour Téléphone
     const phoneInput = document.getElementById('phone-input');
     const sendOtpBtn = document.getElementById('send-otp-btn');
     const otpInput = document.getElementById('otp-input');
     const verifyOtpBtn = document.getElementById('verify-otp-btn');
-    const recaptchaContainer = document.getElementById('recaptcha-container'); // Cet élément est passé tel quel à RecaptchaVerifier
-    const authMsgPhoneId = 'auth-msg-phone';
+    const recaptchaContainer = document.getElementById('recaptcha-container');
 
-    // Boutons de déconnexion
     const logoutBtn = document.getElementById('logout-btn');
     const logoutBtnMenu = document.getElementById('logout-btn-menu');
 
 
-    // --- Fonction d'initialisation de reCAPTCHA (appelée une seule fois et au bon moment) ---
+    // --- Fonction d'initialisation de reCAPTCHA (AVEC TEMPORISATION ET ROBUSTESSE) ---
     const initializeRecaptcha = () => {
-        // S'assure que auth est défini, que reCAPTCHA n'a pas déjà été initialisé, et que le conteneur existe
-        if (!auth || recaptchaInitialized || !recaptchaContainer) {
-            if (!auth) console.warn("Firebase Auth instance is not available yet for reCAPTCHA initialization.");
-            if (recaptchaInitialized) console.warn("reCAPTCHA already initialized. Skipping.");
-            if (!recaptchaContainer) console.warn("reCAPTCHA container (#recaptcha-container) not found in DOM. Skipping initialization.");
+        // Nettoie tout timeout précédent pour éviter les appels multiples ou en boucle
+        if (recaptchaInitTimeout) {
+            clearTimeout(recaptchaInitTimeout);
+            recaptchaInitTimeout = null;
+        }
+
+        if (recaptchaInitialized) {
+            console.log("reCAPTCHA already initialized. Skipping.");
+            return;
+        }
+
+        // VÉRIFIE LA DISPONIBILITÉ DE 'auth' ET 'recaptchaContainer'
+        if (!auth) {
+            console.warn("Firebase Auth instance is not available yet for reCAPTCHA initialization. Retrying in 500ms.");
+            recaptchaInitTimeout = setTimeout(initializeRecaptcha, 500);
+            return;
+        }
+        if (!recaptchaContainer) {
+            console.warn("reCAPTCHA container (#recaptcha-container) not found in DOM. Retrying in 500ms.");
+            recaptchaInitTimeout = setTimeout(initializeRecaptcha, 500);
             return;
         }
 
         try {
+            console.log("Attempting to initialize reCAPTCHA...");
             recaptchaVerifierInstance = new RecaptchaVerifier(auth, recaptchaContainer, {
                 'size': 'invisible',
                 'callback': (response) => {
-                    console.log("reCAPTCHA résolu !");
+                    console.log("reCAPTCHA solved!");
                 },
                 'expired-callback': () => {
-                    showMessage(authMsgPhoneId, 'Le reCAPTCHA a expiré, veuillez réessayer.', false);
+                    showMessage(AUTH_MSG_PHONE_ID, 'Le reCAPTCHA a expiré, veuillez réessayer.', false);
                     if (recaptchaVerifierInstance && recaptchaVerifierInstance.clear) {
                         recaptchaVerifierInstance.clear();
                     }
                 }
             });
-            recaptchaVerifierInstance.render().catch(err => {
+            recaptchaVerifierInstance.render().then(() => {
+                window.recaptchaVerifier = recaptchaVerifierInstance; // Pour un accès global si nécessaire
+                recaptchaInitialized = true;
+                console.log("reCAPTCHA initialisé avec succès.");
+            }).catch(err => {
                 console.error("Erreur lors du rendu reCAPTCHA:", err);
-                showMessage(authMsgPhoneId, "Impossible de charger le reCAPTCHA. Veuillez rafraîchir la page.", false);
+                showMessage(AUTH_MSG_PHONE_ID, "Impossible de charger le reCAPTCHA. Veuillez rafraîchir la page.", false);
             });
-            window.recaptchaVerifier = recaptchaVerifierInstance; // Pour un accès global si nécessaire
-            recaptchaInitialized = true; // Met le drapeau à true
-            console.log("reCAPTCHA initialisé avec succès.");
+
         } catch (error) {
-            console.error("Erreur d'initialisation reCAPTCHA (dans try-catch):", error);
+            console.error("Erreur d'initialisation reCAPTCHA (dans try-catch principal):", error);
+            // Ce message d'erreur est très important pour le debug.
+            // Si vous êtes en local avec appVerificationDisabledForTesting=true, ce TypeError est attendu
+            // et est un "faux positif" d'erreur, car le reCAPTCHA est désactivé intentionnellement.
             if (error instanceof TypeError && error.message.includes("appVerificationDisabledForTesting")) {
-                showMessage(authMsgPhoneId, "Erreur d'initialisation reCAPTCHA: Firebase Auth n'est pas encore prêt. (Si vous êtes en local, c'est normal, la vérification est désactivée.)", false);
+                console.log("DEBUG: TypeError 'appVerificationDisabledForTesting' est attendu en environnement de test local.");
+                showMessage(AUTH_MSG_PHONE_ID, "Vérification reCAPTCHA désactivée pour le test local. (Comportement normal)", true);
+                recaptchaInitialized = true; // On considère qu'il est "initialisé" pour le test
             } else {
-                showMessage(authMsgPhoneId, `Erreur d'initialisation reCAPTCHA: ${error.message}`, false);
+                showMessage(AUTH_MSG_PHONE_ID, `Erreur critique d'initialisation reCAPTCHA: ${error.message}`, false);
             }
         }
     };
@@ -111,22 +135,13 @@ export function setupAuthListeners() {
             const email = emailInput.value.trim();
             const password = passwordInput.value.trim();
 
-            if (!pseudo || !email || !password) {
-                showMessage(authMsgEmailId, 'Veuillez remplir tous les champs.', false);
-                return;
-            }
-            if (password.length < 6) {
-                showMessage(authMsgEmailId, 'Le mot de passe doit contenir au moins 6 caractères.', false);
-                return;
-            }
+            if (!pseudo || !email || !password) { showMessage(AUTH_MSG_EMAIL_ID, 'Veuillez remplir tous les champs.', false); return; }
+            if (password.length < 6) { showMessage(AUTH_MSG_EMAIL_ID, 'Le mot de passe doit contenir au moins 6 caractères.', false); return; }
 
             try {
                 const pseudoQuery = query(ref(db, 'users'), orderByChild('pseudo'), equalTo(pseudo));
                 const pseudoSnapshot = await get(pseudoQuery);
-                if (pseudoSnapshot.exists()) {
-                    showMessage(authMsgEmailId, 'Ce pseudo est déjà utilisé. Veuillez en choisir un autre.', false);
-                    return;
-                }
+                if (pseudoSnapshot.exists()) { showMessage(AUTH_MSG_EMAIL_ID, 'Ce pseudo est déjà utilisé. Veuillez en choisir un autre.', false); return; }
 
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
@@ -134,13 +149,13 @@ export function setupAuthListeners() {
                 await set(ref(db, `users/${user.uid}/pseudo`), pseudo);
                 await set(ref(db, `users/${user.uid}/stats`), { wins: 0, losses: 0, draws: 0 });
 
-                showMessage(authMsgEmailId, 'Inscription réussie !', true);
+                showMessage(AUTH_MSG_EMAIL_ID, 'Inscription réussie !', true);
             } catch (error) {
                 console.error("Erreur d'inscription (Email/Mdp):", error);
-                if (error.code === 'auth/email-already-in-use') { showMessage(authMsgEmailId, 'Cette adresse e-mail est déjà utilisée.', false); }
-                else if (error.code === 'auth/invalid-email') { showMessage(authMsgEmailId, 'Adresse e-mail invalide.', false); }
-                else if (error.code === 'auth/weak-password') { showMessage(authMsgEmailId, 'Mot de passe trop faible (min. 6 caractères).', false); }
-                else { showMessage(authMsgEmailId, `Erreur d'inscription: ${error.message}`, false); }
+                if (error.code === 'auth/email-already-in-use') { showMessage(AUTH_MSG_EMAIL_ID, 'Cette adresse e-mail est déjà utilisée.', false); }
+                else if (error.code === 'auth/invalid-email') { showMessage(AUTH_MSG_EMAIL_ID, 'Adresse e-mail invalide.', false); }
+                else if (error.code === 'auth/weak-password') { showMessage(AUTH_MSG_EMAIL_ID, 'Mot de passe trop faible (min. 6 caractères).', false); }
+                else { showMessage(AUTH_MSG_EMAIL_ID, `Erreur d'inscription: ${error.message}`, false); }
             }
         });
     }
@@ -150,18 +165,15 @@ export function setupAuthListeners() {
             const email = emailInput.value.trim();
             const password = passwordInput.value.trim();
 
-            if (!email || !password) {
-                showMessage(authMsgEmailId, 'Veuillez remplir tous les champs.', false);
-                return;
-            }
+            if (!email || !password) { showMessage(AUTH_MSG_EMAIL_ID, 'Veuillez remplir tous les champs.', false); return; }
 
             try {
                 await signInWithEmailAndPassword(auth, email, password);
-                showMessage(authMsgEmailId, 'Connexion réussie !', true);
+                showMessage(AUTH_MSG_EMAIL_ID, 'Connexion réussie !', true);
             } catch (error) {
                 console.error("Erreur de connexion (Email/Mdp):", error);
-                if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') { showMessage(authMsgEmailId, 'Email ou mot de passe incorrect.', false); }
-                else { showMessage(authMsgEmailId, `Erreur de connexion: ${error.message}`, false); }
+                if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') { showMessage(AUTH_MSG_EMAIL_ID, 'Email ou mot de passe incorrect.', false); }
+                else { showMessage(AUTH_MSG_EMAIL_ID, `Erreur de connexion: ${error.message}`, false); }
             }
         });
     }
@@ -172,44 +184,44 @@ export function setupAuthListeners() {
             try {
                 const provider = new GoogleAuthProvider();
                 await signInWithPopup(auth, provider);
-                showMessage(authMsgGoogleId, 'Connexion réussie avec Google !', true);
+                showMessage(AUTH_MSG_GOOGLE_ID, 'Connexion réussie avec Google !', true);
             } catch (error) {
                 console.error("Erreur de connexion Google:", error);
-                if (error.code === 'auth/popup-closed-by-user') { showMessage(authMsgGoogleId, 'Connexion Google annulée.', false); }
-                else { showMessage(authMsgGoogleId, `Erreur de connexion Google: ${error.message}`, false); }
+                if (error.code === 'auth/popup-closed-by-user') { showMessage(AUTH_MSG_GOOGLE_ID, 'Connexion Google annulée.', false); }
+                else { showMessage(AUTH_MSG_GOOGLE_ID, `Erreur de connexion Google: ${error.message}`, false); }
             }
         });
     }
 
     // --- Authentification Téléphone ---
-    if (sendOtpBtn && recaptchaContainer) { // Assure-toi que les deux éléments existent
-        // Appelle initializeRecaptcha ici une fois que les éléments DOM sont disponibles
+    if (sendOtpBtn && recaptchaContainer) {
+        // Appelle initializeRecaptcha une fois que le bouton et le conteneur sont disponibles
+        // L'auto-retry dans initializeRecaptcha gérera le timing.
         initializeRecaptcha();
 
         sendOtpBtn.addEventListener('click', async () => {
             const phoneNumber = phoneInput.value.trim();
 
-            if (!phoneNumber) { showMessage(authMsgPhoneId, 'Veuillez entrer un numéro de téléphone.', false); return; }
-            if (!/^\+\d{1,3}\d{6,14}$/.test(phoneNumber)) { showMessage(authMsgPhoneId, 'Format de numéro invalide. Ex: +33612345678', false); return; }
+            if (!phoneNumber) { showMessage(AUTH_MSG_PHONE_ID, 'Veuillez entrer un numéro de téléphone.', false); return; }
+            if (!/^\+\d{1,3}\d{6,14}$/.test(phoneNumber)) { showMessage(AUTH_MSG_PHONE_ID, 'Format de numéro invalide. Ex: +33612345678', false); return; }
 
-            // Vérifier si reCAPTCHA est bien initialisé avant d'envoyer le code
-            if (!recaptchaVerifierInstance) {
-                 showMessage(authMsgPhoneId, 'Le système de vérification (reCAPTCHA) n\'est pas prêt. Veuillez réessayer.', false);
+            if (!recaptchaVerifierInstance && !auth.settings.appVerificationDisabledForTesting) { // Vérifie l'instance ET si le test est désactivé
+                 showMessage(AUTH_MSG_PHONE_ID, 'Le système de vérification (reCAPTCHA) n\'est pas prêt. Veuillez réessayer.', false);
                  return;
             }
 
             try {
-                showMessage(authMsgPhoneId, 'Envoi du code...', true);
+                showMessage(AUTH_MSG_PHONE_ID, 'Envoi du code...', true);
                 confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifierInstance);
-                showMessage(authMsgPhoneId, 'Code envoyé ! Veuillez vérifier vos SMS.', true);
+                showMessage(AUTH_MSG_PHONE_ID, 'Code envoyé ! Veuillez vérifier vos SMS.', true);
                 sendOtpBtn.style.display = 'none';
                 otpInput.style.display = 'block';
                 verifyOtpBtn.style.display = 'block';
             } catch (error) {
                 console.error("Erreur d'envoi du code SMS:", error);
-                if (error.code === 'auth/too-many-requests') { showMessage(authMsgPhoneId, 'Trop de tentatives, veuillez réessayer plus tard.', false); }
-                else if (error.code === 'auth/invalid-phone-number') { showMessage(authMsgPhoneId, 'Numéro de téléphone invalide.', false); }
-                else { showMessage(authMsgPhoneId, `Erreur: ${error.message}`, false); }
+                if (error.code === 'auth/too-many-requests') { showMessage(AUTH_MSG_PHONE_ID, 'Trop de tentatives, veuillez réessayer plus tard.', false); }
+                else if (error.code === 'auth/invalid-phone-number') { showMessage(AUTH_MSG_PHONE_ID, 'Numéro de téléphone invalide.', false); }
+                else { showMessage(AUTH_MSG_PHONE_ID, `Erreur: ${error.message}`, false); }
                 if (recaptchaVerifierInstance && recaptchaVerifierInstance.clear) { recaptchaVerifierInstance.clear(); }
             }
         });
@@ -219,19 +231,19 @@ export function setupAuthListeners() {
         verifyOtpBtn.addEventListener('click', async () => {
             const otpCode = otpInput.value.trim();
 
-            if (!otpCode) { showMessage(authMsgPhoneId, 'Veuillez entrer le code de vérification.', false); return; }
+            if (!otpCode) { showMessage(AUTH_MSG_PHONE_ID, 'Veuillez entrer le code de vérification.', false); return; }
 
             if (confirmationResult) {
                 try {
                     await confirmationResult.confirm(otpCode);
-                    showMessage(authMsgPhoneId, 'Connexion réussie par téléphone !', true);
+                    showMessage(AUTH_MSG_PHONE_ID, 'Connexion réussie par téléphone !', true);
                 } catch (error) {
                     console.error("Erreur de vérification du code:", error);
-                    if (error.code === 'auth/invalid-verification-code') { showMessage(authMsgPhoneId, 'Code de vérification invalide.', false); }
-                    else { showMessage(authMsgPhoneId, `Erreur de vérification: ${error.message}`, false); }
+                    if (error.code === 'auth/invalid-verification-code') { showMessage(AUTH_MSG_PHONE_ID, 'Code de vérification invalide.', false); }
+                    else { showMessage(AUTH_MSG_PHONE_ID, `Erreur de vérification: ${error.message}`, false); }
                 }
             } else {
-                showMessage(authMsgPhoneId, 'Veuillez d\'abord envoyer un code de vérification.', false);
+                showMessage(AUTH_MSG_PHONE_ID, 'Veuillez d\'abord envoyer un code de vérification.', false);
             }
         });
     }
@@ -241,11 +253,11 @@ export function setupAuthListeners() {
         logoutBtn.addEventListener('click', async () => {
             try {
                 await signOut(auth);
-                // Utilise l'ID de l'élément pour le message de déconnexion
-                showMessage(authMsgEmailId, 'Déconnexion réussie.', true);
+                // Utilise le bon ID pour le message de déconnexion
+                showMessage(GLOBAL_AUTH_MESSAGE_ID, 'Déconnexion réussie.', true);
             } catch (error) {
                 console.error("Erreur de déconnexion:", error);
-                showMessage(authMsgEmailId, `Erreur de déconnexion: ${error.message}`, false);
+                showMessage(GLOBAL_AUTH_MESSAGE_ID, `Erreur de déconnexion: ${error.message}`, false);
             }
         });
     }
@@ -254,10 +266,10 @@ export function setupAuthListeners() {
         logoutBtnMenu.addEventListener('click', async () => {
             try {
                 await signOut(auth);
-                showMessage(authMsgEmailId, 'Déconnexion réussie.', true);
+                showMessage(GLOBAL_AUTH_MESSAGE_ID, 'Déconnexion réussie.', true);
             } catch (error) {
                 console.error("Erreur de déconnexion:", error);
-                showMessage(authMsgEmailId, `Erreur de déconnexion: ${error.message}`, false);
+                showMessage(GLOBAL_AUTH_MESSAGE_ID, `Erreur de déconnexion: ${error.message}`, false);
             }
         });
     }
@@ -294,7 +306,7 @@ export function setupAuthListeners() {
                         await set(ref(db, `users/${currentUserId}/pseudo`), pseudoTrimmed);
                         await set(ref(db, `users/${currentUserId}/stats`), { wins: 0, losses: 0, draws: 0 });
                         pseudo = pseudoTrimmed;
-                        showMessage(authMsgEmailId, `Bienvenue ${pseudo} !`, true);
+                        showMessage(GLOBAL_AUTH_MESSAGE_ID, `Bienvenue ${pseudo} !`, true); // Utilise l'ID global
                     } else {
                         alert("Le pseudo ne peut pas être vide.");
                         await signOut(auth);
@@ -324,4 +336,8 @@ export function setupAuthListeners() {
             if (logoutBtn) logoutBtn.style.display = 'none';
         }
     });
+
+    // Appel initial pour lancer l'initialisation de reCAPTCHA dès que setupAuthListeners est exécuté.
+    // La fonction initializeRecaptcha elle-même gérera si auth n'est pas encore prêt.
+    initializeRecaptcha();
 }
