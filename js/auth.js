@@ -2,7 +2,7 @@
 
 // 1. Importe les instances 'auth' et 'db' ET toutes les fonctions de la DB depuis ton fichier de configuration Firebase
 import {
-    auth,
+    auth, // <-- C'EST ICI QUE 'auth' EST DÉJÀ IMPORTÉ
     db,
     ref,
     set,
@@ -20,20 +20,22 @@ import {
     onAuthStateChanged,
     GoogleAuthProvider,
     signInWithPopup,
-    PhoneAuthProvider, // Note: PhoneAuthProvider n'est généralement pas exporté ou utilisé directement comme une classe,
-                       // mais signInWithPhoneNumber le gère en interne. Gardez-le si votre version l'exige.
+    // PhoneAuthProvider n'est généralement pas utilisé directement comme une classe,
+    // mais signInWithPhoneNumber le gère en interne. Gardez-le si votre version l'exige.
     signInWithPhoneNumber,
     RecaptchaVerifier
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // L'URL doit correspondre à ta version de Firebase
 
 // Assurez-vous que ces chemins sont corrects pour vos autres fichiers
-import { showMessage, showAuthScreen } from './utils.js'; // showMessage prend un ID de string, showAuthScreen pour réafficher l'écran d'authentification
+import { afficherMessage, afficherEcranAuth } from './utils.js'; // showMessage prend un ID de string, showAuthScreen pour réafficher l'écran d'authentification
 // Import de handleUserLogin et handleUserLogout depuis main.js
-import { handleUserLogin, handleUserLogout } from './main.js';
+import { handleUserLogin, handleUserLogout } from './main.js'; // Assurez-vous que ces fonctions sont bien exportées dans main.js
 
 console.log("auth.js chargé.");
 
-export const auth = getAuth(app);
+// SUPPRIMEZ CETTE LIGNE :
+// export const auth = getAuth(app);
+// Elle est redondante car 'auth' est déjà importé depuis firebaseConfig.js.
 
 // Variables pour stocker le confirmationResult pour l'authentification par téléphone
 let confirmationResult = null;
@@ -96,7 +98,7 @@ export function setupAuthListeners() {
             // Pas besoin de vérifier auth.settings.appVerificationDisabledForTesting ici car c'est configuré
             // globalement dans firebaseConfig.js et affecte le comportement de signInWithPhoneNumber.
             console.log("DEBUG: reCAPTCHA est désactivé pour le test. Marqué comme initialisé.");
-            showMessage(AUTH_MSG_PHONE_ID, "Vérification reCAPTCHA désactivée pour le test local. (Comportement normal)", true);
+            afficherMessage(AUTH_MSG_PHONE_ID, "Vérification reCAPTCHA désactivée pour le test local. (Comportement normal)", true);
             recaptchaInitialized = true;
             return;
         }
@@ -109,7 +111,7 @@ export function setupAuthListeners() {
                     console.log("reCAPTCHA résolu !");
                 },
                 'expired-callback': () => {
-                    showMessage(AUTH_MSG_PHONE_ID, 'Le reCAPTCHA a expiré, veuillez réessayer.', false);
+                    afficherMessage(AUTH_MSG_PHONE_ID, 'Le reCAPTCHA a expiré, veuillez réessayer.', false);
                     if (recaptchaVerifierInstance && recaptchaVerifierInstance.clear) {
                         recaptchaVerifierInstance.clear();
                     }
@@ -121,12 +123,12 @@ export function setupAuthListeners() {
                 console.log("reCAPTCHA initialisé avec succès.");
             }).catch(err => {
                 console.error("Erreur lors du rendu reCAPTCHA:", err);
-                showMessage(AUTH_MSG_PHONE_ID, "Impossible de charger le reCAPTCHA. Veuillez rafraîchir la page.", false);
+                afficherMessage(AUTH_MSG_PHONE_ID, "Impossible de charger le reCAPTCHA. Veuillez rafraîchir la page.", false);
             });
 
         } catch (error) {
             console.error("Erreur d'initialisation reCAPTCHA (dans try-catch principal):", error);
-            showMessage(AUTH_MSG_PHONE_ID, `Erreur critique d'initialisation reCAPTCHA: ${error.message}`, false);
+            afficherMessage(AUTH_MSG_PHONE_ID, `Erreur critique d'initialisation reCAPTCHA: ${error.message}`, false);
         }
     };
 
@@ -138,14 +140,14 @@ export function setupAuthListeners() {
             const email = emailInput.value.trim();
             const password = passwordInput.value.trim();
 
-            if (!pseudo || !email || !password) { showMessage(AUTH_MSG_EMAIL_ID, 'Veuillez remplir tous les champs.', false); return; }
-            if (password.length < 6) { showMessage(AUTH_MSG_EMAIL_ID, 'Le mot de passe doit contenir au moins 6 caractères.', false); return; }
+            if (!pseudo || !email || !password) { afficherMessage(AUTH_MSG_EMAIL_ID, 'Veuillez remplir tous les champs.', false); return; }
+            if (password.length < 6) { afficherMessage(AUTH_MSG_EMAIL_ID, 'Le mot de passe doit contenir au moins 6 caractères.', false); return; }
 
             try {
                 // Vérifier l'unicité du pseudo avant de créer l'utilisateur
                 const pseudoQuery = query(ref(db, 'users'), orderByChild('pseudo'), equalTo(pseudo));
                 const pseudoSnapshot = await get(pseudoQuery);
-                if (pseudoSnapshot.exists()) { showMessage(AUTH_MSG_EMAIL_ID, 'Ce pseudo est déjà utilisé. Veuillez en choisir un autre.', false); return; }
+                if (pseudoSnapshot.exists()) { afficherMessage(AUTH_MSG_EMAIL_ID, 'Ce pseudo est déjà utilisé. Veuillez en choisir un autre.', false); return; }
 
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
@@ -154,17 +156,17 @@ export function setupAuthListeners() {
                 await set(ref(db, `users/${user.uid}/pseudo`), pseudo);
                 await set(ref(db, `users/${user.uid}/stats`), { wins: 0, losses: 0, draws: 0 });
 
-                showMessage(AUTH_MSG_EMAIL_ID, 'Inscription réussie !', true);
+                afficherMessage(AUTH_MSG_EMAIL_ID, 'Inscription réussie !', true);
                 // handleUserLogin sera appelé par onAuthStateChanged
             } catch (error) {
                 console.error("Erreur d'inscription (Email/Mdp):", error);
-                if (error.code === 'auth/email-already-in-use') { showMessage(AUTH_MSG_EMAIL_ID, 'Cette adresse e-mail est déjà utilisée.', false); }
-                else if (error.code === 'auth/invalid-email') { showMessage(AUTH_MSG_EMAIL_ID, 'Adresse e-mail invalide.', false); }
-                else if (error.code === 'auth/weak-password') { showMessage(AUTH_MSG_EMAIL_ID, 'Mot de passe trop faible (min. 6 caractères).', false); }
+                if (error.code === 'auth/email-already-in-use') { afficherMessage(AUTH_MSG_EMAIL_ID, 'Cette adresse e-mail est déjà utilisée.', false); }
+                else if (error.code === 'auth/invalid-email') { afficherMessage(AUTH_MSG_EMAIL_ID, 'Adresse e-mail invalide.', false); }
+                else if (error.code === 'auth/weak-password') { afficherMessage(AUTH_MSG_EMAIL_ID, 'Mot de passe trop faible (min. 6 caractères).', false); }
                 else if (error.message && error.message.includes("Index not defined")) {
-                    showMessage(AUTH_MSG_EMAIL_ID, "Erreur de base de données: Index 'pseudo' manquant. Vérifiez vos règles Firebase (Realtime Database -> Rules).", false);
+                    afficherMessage(AUTH_MSG_EMAIL_ID, "Erreur de base de données: Index 'pseudo' manquant. Vérifiez vos règles Firebase (Realtime Database -> Rules).", false);
                 }
-                else { showMessage(AUTH_MSG_EMAIL_ID, `Erreur d'inscription: ${error.message}`, false); }
+                else { afficherMessage(AUTH_MSG_EMAIL_ID, `Erreur d'inscription: ${error.message}`, false); }
             }
         });
     }
@@ -174,16 +176,16 @@ export function setupAuthListeners() {
             const email = emailInput.value.trim();
             const password = passwordInput.value.trim();
 
-            if (!email || !password) { showMessage(AUTH_MSG_EMAIL_ID, 'Veuillez remplir tous les champs.', false); return; }
+            if (!email || !password) { afficherMessage(AUTH_MSG_EMAIL_ID, 'Veuillez remplir tous les champs.', false); return; }
 
             try {
                 await signInWithEmailAndPassword(auth, email, password);
-                showMessage(AUTH_MSG_EMAIL_ID, 'Connexion réussie !', true);
+                afficherMessage(AUTH_MSG_EMAIL_ID, 'Connexion réussie !', true);
                 // handleUserLogin sera appelé par onAuthStateChanged
             } catch (error) {
                 console.error("Erreur de connexion (Email/Mdp):", error);
-                if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') { showMessage(AUTH_MSG_EMAIL_ID, 'Email ou mot de passe incorrect.', false); }
-                else { showMessage(AUTH_MSG_EMAIL_ID, `Erreur de connexion: ${error.message}`, false); }
+                if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') { afficherMessage(AUTH_MSG_EMAIL_ID, 'Email ou mot de passe incorrect.', false); }
+                else { afficherMessage(AUTH_MSG_EMAIL_ID, `Erreur de connexion: ${error.message}`, false); }
             }
         });
     }
@@ -194,21 +196,22 @@ export function setupAuthListeners() {
             try {
                 const provider = new GoogleAuthProvider();
                 await signInWithPopup(auth, provider);
-                showMessage(AUTH_MSG_GOOGLE_ID, 'Connexion réussie avec Google !', true);
+                afficherMessage(AUTH_MSG_GOOGLE_ID, 'Connexion réussie avec Google !', true);
                 // handleUserLogin sera appelé par onAuthStateChanged
             } catch (error) {
                 console.error("Erreur de connexion Google:", error);
-                if (error.code === 'auth/popup-closed-by-user') { showMessage(AUTH_MSG_GOOGLE_ID, 'Connexion Google annulée.', false); }
+                if (error.code === 'auth/popup-closed-by-user') { afficherMessage(AUTH_MSG_GOOGLE_ID, 'Connexion Google annulée.', false); }
                 else if (error.code === 'auth/unauthorized-domain') {
-                    showMessage(AUTH_MSG_GOOGLE_ID, "Erreur: Domaine non autorisé. Ajoutez 'subtle-donut-ebec90.netlify.app' dans Firebase Console (Authentication -> Settings -> Authorized domains).", false);
+                    afficherMessage(AUTH_MSG_GOOGLE_ID, "Erreur: Domaine non autorisé. Ajoutez 'subtle-donut-ebec90.netlify.app' dans Firebase Console (Authentication -> Settings -> Authorized domains).", false);
                 }
-                else { showMessage(AUTH_MSG_GOOGLE_ID, `Erreur de connexion Google: ${error.message}`, false); }
+                else { afficherMessage(AUTH_MSG_GOOGLE_ID, `Erreur de connexion Google: ${error.message}`, false); }
             }
         });
     }
 
     // --- Authentification Téléphone ---
     // Appel initial à initializeRecaptcha lorsque le bouton d'envoi OTP est disponible
+    // et que le container recaptcha est là.
     if (sendOtpBtn && recaptchaContainer) {
         initializeRecaptcha(); // Initialise reCAPTCHA quand ces éléments sont présents
     }
@@ -217,28 +220,28 @@ export function setupAuthListeners() {
         sendOtpBtn.addEventListener('click', async () => {
             const phoneNumber = phoneInput.value.trim();
 
-            if (!phoneNumber) { showMessage(AUTH_MSG_PHONE_ID, 'Veuillez entrer un numéro de téléphone.', false); return; }
-            if (!/^\+\d{1,3}\d{6,14}$/.test(phoneNumber)) { showMessage(AUTH_MSG_PHONE_ID, 'Format de numéro invalide. Ex: +33612345678', false); return; }
+            if (!phoneNumber) { afficherMessage(AUTH_MSG_PHONE_ID, 'Veuillez entrer un numéro de téléphone.', false); return; }
+            if (!/^\+\d{1,3}\d{6,14}$/.test(phoneNumber)) { afficherMessage(AUTH_MSG_PHONE_ID, 'Format de numéro invalide. Ex: +33612345678', false); return; }
 
             // Vérifie que reCAPTCHA est prêt avant d'envoyer le code
             if (!recaptchaInitialized || !recaptchaVerifierInstance) {
-                showMessage(AUTH_MSG_PHONE_ID, 'Le système de vérification (reCAPTCHA) n\'est pas prêt. Veuillez réessayer.', false);
+                afficherMessage(AUTH_MSG_PHONE_ID, 'Le système de vérification (reCAPTCHA) n\'est pas prêt. Veuillez réessayer.', false);
                 initializeRecaptcha(); // Tente de réinitialiser/s'assurer qu'il est prêt
                 return;
             }
 
             try {
-                showMessage(AUTH_MSG_PHONE_ID, 'Envoi du code...', true);
+                afficherMessage(AUTH_MSG_PHONE_ID, 'Envoi du code...', true);
                 confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifierInstance);
-                showMessage(AUTH_MSG_PHONE_ID, 'Code envoyé ! Veuillez vérifier vos SMS.', true);
+                afficherMessage(AUTH_MSG_PHONE_ID, 'Code envoyé ! Veuillez vérifier vos SMS.', true);
                 sendOtpBtn.style.display = 'none';
                 otpInput.style.display = 'block';
                 verifyOtpBtn.style.display = 'block';
             } catch (error) {
                 console.error("Erreur d'envoi du code SMS:", error);
-                if (error.code === 'auth/too-many-requests') { showMessage(AUTH_MSG_PHONE_ID, 'Trop de tentatives, veuillez réessayer plus tard.', false); }
-                else if (error.code === 'auth/invalid-phone-number') { showMessage(AUTH_MSG_PHONE_ID, 'Numéro de téléphone invalide.', false); }
-                else { showMessage(AUTH_MSG_PHONE_ID, `Erreur: ${error.message}`, false); }
+                if (error.code === 'auth/too-many-requests') { afficherMessage(AUTH_MSG_PHONE_ID, 'Trop de tentatives, veuillez réessayer plus tard.', false); }
+                else if (error.code === 'auth/invalid-phone-number') { afficherMessage(AUTH_MSG_PHONE_ID, 'Numéro de téléphone invalide.', false); }
+                else { afficherMessage(AUTH_MSG_PHONE_ID, `Erreur: ${error.message}`, false); }
                 // Clear reCAPTCHA sur erreur pour permettre une nouvelle tentative
                 if (recaptchaVerifierInstance && recaptchaVerifierInstance.clear) { recaptchaVerifierInstance.clear(); }
             }
@@ -249,29 +252,26 @@ export function setupAuthListeners() {
         verifyOtpBtn.addEventListener('click', async () => {
             const otpCode = otpInput.value.trim();
 
-            if (!otpCode) { showMessage(AUTH_MSG_PHONE_ID, 'Veuillez entrer le code de vérification.', false); return; }
+            if (!otpCode) { afficherMessage(AUTH_MSG_PHONE_ID, 'Veuillez entrer le code de vérification.', false); return; }
 
             if (confirmationResult) {
                 try {
                     await confirmationResult.confirm(otpCode);
-                    showMessage(AUTH_MSG_PHONE_ID, 'Connexion réussie par téléphone !', true);
+                    afficherMessage(AUTH_MSG_PHONE_ID, 'Connexion réussie par téléphone !', true);
                     // handleUserLogin sera appelé par onAuthStateChanged
                 } catch (error) {
                     console.error("Erreur de vérification du code:", error);
-                    if (error.code === 'auth/invalid-verification-code') { showMessage(AUTH_MSG_PHONE_ID, 'Code de vérification invalide.', false); }
-                    else { showMessage(AUTH_MSG_PHONE_ID, `Erreur de vérification: ${error.message}`, false); }
+                    if (error.code === 'auth/invalid-verification-code') { afficherMessage(AUTH_MSG_PHONE_ID, 'Code de vérification invalide.', false); }
+                    else { afficherMessage(AUTH_MSG_PHONE_ID, `Erreur de vérification: ${error.message}`, false); }
                 }
             } else {
-                showMessage(AUTH_MSG_PHONE_ID, 'Veuillez d\'abord envoyer un code de vérification.', false);
+                afficherMessage(AUTH_MSG_PHONE_ID, 'Veuillez d\'abord envoyer un code de vérification.', false);
             }
         });
     }
 
     // --- Écouteur d'état d'authentification (commun à toutes les méthodes) ---
     onAuthStateChanged(auth, async (user) => {
-        // Supprimez l'appel à initializeRecaptcha() ici.
-        // Il est appelé de manière ciblée plus haut ou via utils.js.
-
         if (user) {
             let pseudo = null;
             const currentUserId = user.uid;
@@ -322,10 +322,7 @@ export function setupAuthListeners() {
         } else {
             // Appelle handleUserLogout de main.js quand l'utilisateur est déconnecté
             handleUserLogout(); // Utilise handleUserLogout de main.js
-            showAuthScreen(); // S'assure que l'écran d'authentification est affiché après la déconnexion
+            afficherEcranAuth(); // S'assure que l'écran d'authentification est affiché après la déconnexion
         }
     });
-
-    // Supprimez l'appel à initializeRecaptcha() ici.
-    // Il est maintenant appelé de manière ciblée plus haut.
 }
