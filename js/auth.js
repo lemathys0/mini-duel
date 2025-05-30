@@ -16,7 +16,7 @@ import {
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
-    signOut,
+    signOut, // Importe signOut ici
     onAuthStateChanged,
     GoogleAuthProvider,
     signInWithPopup,
@@ -64,7 +64,6 @@ export function setupAuthListeners() {
 
     // Les boutons de déconnexion sont gérés dans main.js maintenant, mais les laissons ici pour l'écouteur d'état d'auth
     const logoutBtn = document.getElementById('logout-btn');
-    // const logoutBtnMenu = document.getElementById('logout-btn-menu'); // Si ce bouton existe toujours
 
 
     // --- Fonction d'initialisation de reCAPTCHA (AVEC TEMPORISATION ET ROBUSTESSE) ---
@@ -93,12 +92,11 @@ export function setupAuthListeners() {
         }
 
         try {
-            // **LA MODIFICATION EST ICI : on vérifie si auth.settings existe avant de l'utiliser**
             if (auth.settings && auth.settings.appVerificationDisabledForTesting) {
                 console.log("DEBUG: reCAPTCHA is disabled for testing. Marking as initialized.");
                 showMessage(AUTH_MSG_PHONE_ID, "Vérification reCAPTCHA désactivée pour le test local. (Comportement normal)", true);
-                recaptchaInitialized = true; // On initialise pour le test
-                return; // Sort de la fonction, pas besoin de créer RecaptchaVerifier
+                recaptchaInitialized = true;
+                return;
             }
 
             console.log("Attempting to initialize reCAPTCHA...");
@@ -115,8 +113,8 @@ export function setupAuthListeners() {
                 }
             });
             recaptchaVerifierInstance.render().then(() => {
-                window.recaptchaVerifier = recaptchaVerifierInstance; // Pour un accès global si nécessaire
-                recaptchaInitialized = true; // SEULEMENT ICI si le rendu a réussi !
+                window.recaptchaVerifier = recaptchaVerifierInstance;
+                recaptchaInitialized = true;
                 console.log("reCAPTCHA initialisé avec succès.");
             }).catch(err => {
                 console.error("Erreur lors du rendu reCAPTCHA:", err);
@@ -124,8 +122,6 @@ export function setupAuthListeners() {
             });
 
         } catch (error) {
-            // Ce bloc catch devrait être atteint uniquement pour d'autres erreurs inattendues,
-            // car l'erreur appVerificationDisabledForTesting est maintenant gérée plus tôt.
             console.error("Erreur d'initialisation reCAPTCHA (dans try-catch principal):", error);
             showMessage(AUTH_MSG_PHONE_ID, `Erreur critique d'initialisation reCAPTCHA: ${error.message}`, false);
         }
@@ -143,7 +139,6 @@ export function setupAuthListeners() {
             if (password.length < 6) { showMessage(AUTH_MSG_EMAIL_ID, 'Le mot de passe doit contenir au moins 6 caractères.', false); return; }
 
             try {
-                // Cette requête nécessite l'index "pseudo" dans les règles de la Realtime Database
                 const pseudoQuery = query(ref(db, 'users'), orderByChild('pseudo'), equalTo(pseudo));
                 const pseudoSnapshot = await get(pseudoQuery);
                 if (pseudoSnapshot.exists()) { showMessage(AUTH_MSG_EMAIL_ID, 'Ce pseudo est déjà utilisé. Veuillez en choisir un autre.', false); return; }
@@ -160,7 +155,6 @@ export function setupAuthListeners() {
                 if (error.code === 'auth/email-already-in-use') { showMessage(AUTH_MSG_EMAIL_ID, 'Cette adresse e-mail est déjà utilisée.', false); }
                 else if (error.code === 'auth/invalid-email') { showMessage(AUTH_MSG_EMAIL_ID, 'Adresse e-mail invalide.', false); }
                 else if (error.code === 'auth/weak-password') { showMessage(AUTH_MSG_EMAIL_ID, 'Mot de passe trop faible (min. 6 caractères).', false); }
-                // Ajout d'une condition pour l'erreur d'index manquant
                 else if (error.message && error.message.includes("Index not defined")) {
                     showMessage(AUTH_MSG_EMAIL_ID, "Erreur de base de données: Index 'pseudo' manquant. Vérifiez vos règles Firebase (Realtime Database -> Rules).", false);
                 }
@@ -197,7 +191,6 @@ export function setupAuthListeners() {
             } catch (error) {
                 console.error("Erreur de connexion Google:", error);
                 if (error.code === 'auth/popup-closed-by-user') { showMessage(AUTH_MSG_GOOGLE_ID, 'Connexion Google annulée.', false); }
-                // Ajout d'une condition pour l'erreur de domaine non autorisé
                 else if (error.code === 'auth/unauthorized-domain') {
                     showMessage(AUTH_MSG_GOOGLE_ID, "Erreur: Domaine non autorisé. Ajoutez 'subtle-donut-ebec90.netlify.app' dans Firebase Console (Authentication -> Settings -> Authorized domains).", false);
                 }
@@ -208,8 +201,6 @@ export function setupAuthListeners() {
 
     // --- Authentification Téléphone ---
     if (sendOtpBtn && recaptchaContainer) {
-        // Appelle initializeRecaptcha une fois que le bouton et le conteneur sont disponibles
-        // L'auto-retry dans initializeRecaptcha gérera le timing.
         initializeRecaptcha();
 
         sendOtpBtn.addEventListener('click', async () => {
@@ -218,10 +209,9 @@ export function setupAuthListeners() {
             if (!phoneNumber) { showMessage(AUTH_MSG_PHONE_ID, 'Veuillez entrer un numéro de téléphone.', false); return; }
             if (!/^\+\d{1,3}\d{6,14}$/.test(phoneNumber)) { showMessage(AUTH_MSG_PHONE_ID, 'Format de numéro invalide. Ex: +33612345678', false); return; }
 
-            // Vérifie si reCAPTCHA est bien initialisé OU si le mode de test est activé
             if (!recaptchaVerifierInstance && (!auth.settings || !auth.settings.appVerificationDisabledForTesting)) {
-                 showMessage(AUTH_MSG_PHONE_ID, 'Le système de vérification (reCAPTCHA) n\'est pas prêt. Veuillez réessayer.', false);
-                 return;
+                    showMessage(AUTH_MSG_PHONE_ID, 'Le système de vérification (reCAPTCHA) n\'est pas prêt. Veuillez réessayer.', false);
+                    return;
             }
 
             try {
@@ -262,27 +252,8 @@ export function setupAuthListeners() {
         });
     }
 
-    // --- Déconnexion (gérée ici mais le bouton est écouté dans main.js) ---
-    // Les boutons de déconnexion sont maintenant écoutés dans main.js et appellent signOut(auth) directement.
-    // Cette partie est maintenue pour la clarté mais l'écouteur de bouton n'est plus ici.
-    /*
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', async () => {
-            try {
-                await signOut(auth);
-            } catch (error) {
-                console.error("Erreur de déconnexion:", error);
-                showMessage(GLOBAL_AUTH_MESSAGE_ID, `Erreur de déconnexion: ${error.message}`, false);
-            }
-        });
-    }
-    */
-
     // --- Écouteur d'état d'authentification (commun à toutes les méthodes) ---
     onAuthStateChanged(auth, async (user) => {
-        // Appelle initializeRecaptcha ici aussi pour s'assurer qu'il est initialisé dès que
-        // l'instance 'auth' est prête, même si l'utilisateur ne tente pas une connexion téléphone
-        // tout de suite. Le drapeau `recaptchaInitialized` empêchera les doublons.
         initializeRecaptcha();
 
         if (user) {
@@ -303,14 +274,13 @@ export function setupAuthListeners() {
                         if (existingPseudoSnapshot.exists()) {
                             alert("Ce pseudo est déjà pris. Veuillez en choisir un autre.");
                             await signOut(auth); // Déconnecte l'utilisateur si le pseudo est pris
-                            handleUserLogout(); // Appelle la fonction de main.js pour réinitialiser l'UI
+                            handleUserLogout();
                             return;
                         }
 
                         await set(ref(db, `users/${currentUserId}/pseudo`), pseudoTrimmed);
                         await set(ref(db, `users/${currentUserId}/stats`), { wins: 0, losses: 0, draws: 0 });
                         pseudo = pseudoTrimmed;
-                        // Le message de bienvenue sera géré par handleUserLogin dans main.js
                     } else {
                         alert("Le pseudo ne peut pas être vide.");
                         await signOut(auth);
@@ -325,6 +295,7 @@ export function setupAuthListeners() {
                 }
             }
             // Appelle handleUserLogin de main.js avec les infos de l'utilisateur
+            // Cela assurera la redirection vers le menu principal.
             handleUserLogin(currentUserId, pseudo);
 
         } else {
@@ -333,7 +304,5 @@ export function setupAuthListeners() {
         }
     });
 
-    // Appel initial pour lancer l'initialisation de reCAPTCHA dès que setupAuthListeners est exécuté.
-    // La fonction initializeRecaptcha elle-même gérera si auth n'est pas encore prêt.
     initializeRecaptcha();
 }

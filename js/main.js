@@ -6,12 +6,13 @@ console.log("main.js chargé.");
 import { auth, db, ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction, push } from "./firebaseConfig.js";
 import { setupAuthListeners } from "./auth.js"; // Import de la fonction d'écouteurs d'authentification
 // Importe les fonctions et variables nécessaires de game.js
-import { startMatchMonitoring, returnToMainMenu, gameId } from "./game.js"; // 'processAIDecision' removed
+import { startMatchMonitoring, returnToMainMenu, gameId } from "./game.js";
 // Importe les fonctions utilitaires
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons, showAuthScreen, showMainMenu, showMatchmakingScreen, showGameScreen, showLeaderboardScreen, showHowToPlayScreen } from "./utils.js";
+import { signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // Importe signOut ici pour la déconnexion
 
 // Constante pour l'ID du message global (pour showMessage)
-const GLOBAL_AUTH_MESSAGE_ID = 'global-auth-message'; // Assurez-vous que cet ID existe dans votre HTML !
+const GLOBAL_AUTH_MESSAGE_ID = 'global-auth-message';
 
 // Variables globales de l'état de l'application
 export let currentUser = null; // Contient { uid, pseudo }
@@ -22,8 +23,8 @@ const authSection = document.getElementById('auth');
 const mainMenuSection = document.getElementById('main-menu');
 const matchmakingStatusSection = document.getElementById('matchmaking-status');
 const gameScreenSection = document.getElementById('game-screen');
-const leaderboardScreen = document.getElementById('leaderboard-screen'); // Ajout
-const howToPlayScreen = document.getElementById('how-to-play-screen'); // Ajout
+const leaderboardScreen = document.getElementById('leaderboard-screen');
+const howToPlayScreen = document.getElementById('how-to-play-screen');
 
 const userInfoDisplay = document.getElementById('user-info');
 const playerNameDisplay = document.getElementById('player-name');
@@ -35,7 +36,6 @@ const playIaBtn = document.getElementById('play-ia-btn');
 const playPlayerBtn = document.getElementById('play-player-btn');
 const howToPlayBtn = document.getElementById('how-to-play-btn');
 const cancelMatchmakingBtn = document.getElementById('cancel-matchmaking-btn');
-// Assurez-vous que aiDifficultySelect est récupéré après sa potentielle création dynamique
 let aiDifficultySelect = document.getElementById('ai-difficulty-select');
 
 // Boutons de retour au menu
@@ -48,20 +48,18 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM entièrement chargé et analysé.");
     setupAuthListeners(); // Configure les écouteurs d'authentification
 
-    // Création du sélecteur de difficulté de l'IA s'il n'existe pas déjà
     createAIDifficultySelect(); // Appelle cette fonction pour s'assurer que le select existe
-    // Mettre à jour la référence après la création si elle a eu lieu
-    aiDifficultySelect = document.getElementById('ai-difficulty-select');
+    aiDifficultySelect = document.getElementById('ai-difficulty-select'); // Mettre à jour la référence après la création
 
     attachMenuListeners(); // Attache les écouteurs des boutons du menu
-    showAuthScreen(); // Affiche l'écran d'authentification par défaut
+    showAuthScreen(); // Affiche l'écran d'authentification par défaut (sera caché par handleUserLogin si connecté)
 });
 
 
 // Fonction pour créer le sélecteur de difficulté (si non présent dans le HTML)
 function createAIDifficultySelect() {
     const existingSelect = document.getElementById('ai-difficulty-select');
-    if (existingSelect) return; // Si déjà là, ne rien faire
+    if (existingSelect) return;
 
     const select = document.createElement('select');
     select.id = 'ai-difficulty-select';
@@ -79,7 +77,6 @@ function createAIDifficultySelect() {
         border: 1px solid #2c3e50;
         font-size: 0.9em;
     `;
-    // Insérer avant le bouton "Jouer contre l'IA"
     const playIaButton = document.getElementById('play-ia-btn');
     if (playIaButton && playIaButton.parentNode) {
         playIaButton.parentNode.insertBefore(select, playIaButton);
@@ -96,7 +93,7 @@ function attachMenuListeners() {
         playPlayerBtn.addEventListener('click', () => handlePlayPlayer());
     }
     if (howToPlayBtn) {
-        howToPlayBtn.addEventListener('click', () => showHowToPlayScreen()); // Utilise la fonction de utils.js
+        howToPlayBtn.addEventListener('click', () => showHowToPlayScreen());
     }
     if (cancelMatchmakingBtn) {
         cancelMatchmakingBtn.addEventListener('click', () => cancelMatchmaking());
@@ -105,15 +102,13 @@ function attachMenuListeners() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
             try {
-                await signOut(auth); // Utilise la méthode signOut de Firebase Auth
-                // handleUserLogout sera appelé par onAuthStateChanged dans auth.js
+                await signOut(auth);
             } catch (error) {
                 console.error("Erreur de déconnexion:", error);
                 showMessage(GLOBAL_AUTH_MESSAGE_ID, `Erreur de déconnexion: ${error.message}`, false);
             }
         });
     }
-    // Écouteurs pour les boutons "Retour au menu" des autres écrans
     if (document.getElementById('back-to-menu-btn-game')) {
         document.getElementById('back-to-menu-btn-game').addEventListener('click', () => backToMenu(false));
     }
@@ -123,7 +118,7 @@ function attachMenuListeners() {
     if (backToMenuBtnHowToPlay) {
         backToMenuBtnHowToPlay.addEventListener('click', () => showMainMenu());
     }
-    if (document.getElementById('leaderboard-btn')) { // Ajout de l'écouteur pour le classement
+    if (document.getElementById('leaderboard-btn')) {
         document.getElementById('leaderboard-btn').addEventListener('click', displayLeaderboard);
     }
 }
@@ -139,6 +134,7 @@ export async function handleUserLogin(uid, pseudo) {
     if (pseudoDisplay) pseudoDisplay.textContent = `Pseudo: ${currentUser.pseudo}`;
 
     await loadPlayerStats(currentUser.uid);
+    // C'est ici que tu t'assures d'être sur le bon écran après la connexion.
     showMainMenu();
     showMessage(mainMenuMsgDisplay.id, `Bienvenue, ${currentUser.pseudo} ! Choisissez un mode de jeu.`, true);
 }
@@ -147,11 +143,10 @@ export function handleUserLogout() {
     currentUser = null;
     console.log("Utilisateur déconnecté.");
     if (userInfoDisplay) userInfoDisplay.textContent = 'Non connecté';
-    if (playerNameDisplay) playerNameDisplay.textContent = 'Invité'; // Réinitialise l'affichage
+    if (playerNameDisplay) playerNameDisplay.textContent = 'Invité';
     if (pseudoDisplay) pseudoDisplay.textContent = 'Pseudo: N/A';
     if (playerStatsDiv) playerStatsDiv.innerHTML = '<p>Connectez-vous pour voir vos statistiques.</p>';
     showAuthScreen();
-    // Utilise l'ID de message global pour les messages d'authentification
     showMessage(GLOBAL_AUTH_MESSAGE_ID, 'Connectez-vous pour commencer à jouer.', true);
 }
 
@@ -221,9 +216,9 @@ async function handlePlayAI() {
         return;
     }
 
-    const difficulty = aiDifficultySelect ? aiDifficultySelect.value : 'easy'; // Récupère la difficulté
+    const difficulty = aiDifficultySelect ? aiDifficultySelect.value : 'easy';
 
-    const newMatchRef = push(ref(db, 'matches')); // Crée un nouvel ID de match unique
+    const newMatchRef = push(ref(db, 'matches'));
     const newMatchId = newMatchRef.key;
 
     const initialMatchData = {
@@ -236,7 +231,7 @@ async function handlePlayAI() {
                 healCooldown: 0,
                 disconnected: false
             },
-            p2: { // L'IA est considérée comme P2
+            p2: {
                 uid: 'AI',
                 pseudo: `IA (${difficulty})`,
                 pv: 100,
@@ -246,8 +241,8 @@ async function handlePlayAI() {
             }
         },
         status: 'playing',
-        turn: 'p1', // Le joueur commence toujours
-        turnCounter: 0, // Compteur de tours pour la synchronisation
+        turn: 'p1',
+        turnCounter: 0,
         turnStartTime: serverTimestamp(),
         matchMode: 'PvAI',
         difficulty: difficulty,
@@ -256,7 +251,6 @@ async function handlePlayAI() {
 
     try {
         await set(newMatchRef, initialMatchData);
-        // Lance le monitoring du match depuis game.js
         startMatchMonitoring(newMatchId, 'p1', 'PvAI');
         showMessage(mainMenuMsgDisplay.id, `Match contre l'IA (${difficulty}) créé !`, true);
     } catch (error) {
@@ -285,19 +279,16 @@ async function findOrCreatePvPMatch() {
     const publicMatchesRef = ref(db, 'matches');
     let foundMatchId = null;
 
-    // Tente de trouver un match en attente
-    const snapshot = await get(query(publicMatchesRef, orderByChild('status'), equalTo('waiting'))); // Query pour les matchs en attente
+    const snapshot = await get(query(publicMatchesRef, orderByChild('status'), equalTo('waiting')));
     snapshot.forEach((childSnapshot) => {
         const match = childSnapshot.val();
-        // S'assurer que le match est en attente, en mode PvP, et que ce n'est pas nous-mêmes qui l'avons créé
         if (match.matchMode === 'PvP' && match.players.p1 && match.players.p1.uid !== currentUser.uid) {
             foundMatchId = childSnapshot.key;
-            return true; // Arrête la boucle forEach
+            return true;
         }
     });
 
     if (foundMatchId) {
-        // Rejoindre un match existant
         const matchToJoinRef = ref(db, `matches/${foundMatchId}`);
         try {
             await runTransaction(matchToJoinRef, (currentMatch) => {
@@ -311,24 +302,22 @@ async function findOrCreatePvPMatch() {
                         disconnected: false
                     };
                     currentMatch.status = 'playing';
-                    currentMatch.turn = 'p1'; // P1 commence toujours en PvP
+                    currentMatch.turn = 'p1';
                     currentMatch.turnCounter = 0;
                     currentMatch.turnStartTime = serverTimestamp();
                     currentMatch.history = [...(currentMatch.history || []), `${currentUser.pseudo} a rejoint le match !`];
                     return currentMatch;
                 }
-                return undefined; // Abort the transaction
+                return undefined;
             });
-            // Si la transaction a réussi
             showMessage('matchmaking-message', 'Match trouvé et rejoint !', true);
-            startMatchMonitoring(foundMatchId, 'p2', 'PvP'); // On est P2
+            startMatchMonitoring(foundMatchId, 'p2', 'PvP');
         } catch (error) {
             console.error("Erreur lors de la tentative de rejoindre un match:", error);
             showMessage('matchmaking-message', `Erreur lors de la jonction du match: ${error.message}`, false);
-            showMainMenu(); // Retour au menu en cas d'échec
+            showMainMenu();
         }
     } else {
-        // Créer un nouveau match si aucun n'est trouvé
         const newMatchRef = push(publicMatchesRef);
         const newMatchId = newMatchRef.key;
         try {
@@ -344,34 +333,30 @@ async function findOrCreatePvPMatch() {
                     }
                 },
                 status: 'waiting',
-                turn: 'p1', // P1 commence, mais seulement quand un adversaire rejoint
+                turn: 'p1',
                 turnCounter: 0,
-                turnStartTime: null, // Pas de timer tant qu'un adversaire n'a pas rejoint
+                turnStartTime: null,
                 matchMode: 'PvP',
                 history: [`${currentUser.pseudo} a créé un match en attente.`],
-                difficulty: 'N/A' // Non pertinent pour PvP
+                difficulty: 'N/A'
             });
             showMessage('matchmaking-message', 'Match créé, en attente d\'un adversaire...', true);
-            startMatchMonitoring(newMatchId, 'p1', 'PvP'); // On surveille le match en tant que P1 en attente
+            startMatchMonitoring(newMatchId, 'p1', 'PvP');
 
-            // Configurer un timeout pour supprimer le match s'il n'est pas rejoint (ex: 5 minutes)
             matchmakingTimeout = setTimeout(async () => {
                 const matchSnapshot = await get(newMatchRef);
                 const matchData = matchSnapshot.val();
                 if (matchData && matchData.status === 'waiting') {
                     await remove(newMatchRef);
                     console.log(`Match ${newMatchId} supprimé car aucun adversaire n'a rejoint.`);
-                    // Si c'est le match actuel que l'utilisateur attend
-                    // La vérification gameId === newMatchId est redondante car startMatchMonitoring gère déjà l'état
-                    // On appelle simplement backToMenu pour nettoyer l'UI et le game.js s'occupera du reste
                     backToMenu(false);
                     showMessage(mainMenuMsgDisplay.id, 'Votre recherche d\'adversaire a expiré.', false);
                 }
-            }, 5 * 60 * 1000); // 5 minutes
+            }, 5 * 60 * 1000);
         } catch (error) {
             console.error("Erreur lors de la création du match PvP:", error);
             showMessage('matchmaking-message', `Erreur lors de la création du match PvP: ${error.message}`, false);
-            showMainMenu(); // Retour au menu en cas d'échec
+            showMainMenu();
         }
     }
 }
@@ -380,15 +365,14 @@ async function findOrCreatePvPMatch() {
  * Annule le matchmaking en cours.
  */
 async function cancelMatchmaking() {
-    if (gameId) { // gameId est l'ID du match en cours de surveillance
+    if (gameId) {
         const matchRef = ref(db, `matches/${gameId}`);
         try {
             await runTransaction(matchRef, (currentData) => {
-                // S'assurer que le match est en attente et que c'est bien notre match créé
                 if (currentData && currentData.status === 'waiting' && currentData.players.p1 && currentData.players.p1.uid === currentUser.uid) {
-                    return null; // Supprime le nœud
+                    return null;
                 }
-                return undefined; // Abort the transaction si ce n'est pas le cas
+                return undefined;
             });
             showMessage(mainMenuMsgDisplay.id, 'Recherche annulée.', false);
         } catch (error) {
@@ -399,10 +383,9 @@ async function cancelMatchmaking() {
                 clearTimeout(matchmakingTimeout);
                 matchmakingTimeout = null;
             }
-            backToMenu(false); // Retour au menu principal et nettoyage de l'état
+            backToMenu(false);
         }
     } else {
-        // Si aucun gameId n'est défini, juste retourner au menu
         backToMenu(false);
     }
 }
@@ -412,7 +395,7 @@ async function cancelMatchmaking() {
  * Affiche le classement.
  */
 async function displayLeaderboard() {
-    showLeaderboardScreen(); // Utilise la fonction de utils.js
+    showLeaderboardScreen();
     const leaderboardList = document.getElementById('leaderboard-list');
     leaderboardList.innerHTML = '<li>Chargement du classement...</li>';
 
@@ -451,21 +434,17 @@ async function displayLeaderboard() {
 }
 
 // Fonction pour revenir au menu principal (appelée par game.js ou main.js)
-// Cette fonction est le point central pour quitter un match et nettoyer l'UI.
 export async function backToMenu(fromMatchEnd = false) {
     console.log("Retour au menu demandé depuis main.js.");
 
-    // Demande à game.js de désactiver ses écouteurs et de nettoyer son état
-    returnToMainMenu(); // Cette fonction est exportée par game.js
+    returnToMainMenu();
 
-    // Effacer le timeout de suppression du match
     if (matchmakingTimeout) {
         clearTimeout(matchmakingTimeout);
         matchmakingTimeout = null;
         console.log("Timeout de suppression du match annulé.");
     }
 
-    // Réinitialiser l'interface utilisateur de manière générique
     clearHistory();
     updateHealthBar("you-health-bar", 100);
     document.getElementById("player1-pv").textContent = "100 PV";
@@ -481,9 +460,7 @@ export async function backToMenu(fromMatchEnd = false) {
         returnToMenuBtn.style.display = 'none';
     }
 
-
-    // Cacher tous les écrans et montrer le menu principal
-    showMainMenu(); // Cette fonction est de utils.js et gère l'affichage correct
+    showMainMenu();
 
     if (fromMatchEnd) {
         showMessage(mainMenuMsgDisplay.id, "Le match est terminé. Bienvenue au menu principal.");
