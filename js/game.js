@@ -30,6 +30,9 @@ let currentMatchUnsubscribe = null;
 // Verrou pour empêcher processTurn de se déclencher plusieurs fois pour le même tour
 let isProcessingTurnInternally = false;
 
+// NOUVELLE VARIABLE : Verrou pour empêcher de déclencher processAITurn plusieurs fois pour le même tour IA
+let isAIActionScheduled = false; // Initialisation
+
 
 /**
  * Exécute une action choisie par le joueur.
@@ -233,19 +236,31 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
 
         // --- DÉCLENCHEMENT DE L'IA SI C'EST SON TOUR OU SI LE JOUEUR A JOUÉ (PvAI UNIQUEMENT) ---
         if (gameMode === 'PvAI') {
-            // Si c'est le tour de l'IA ET qu'elle n'a pas encore soumis d'action
-            if (matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
-                console.log("DEBUG IA (DEBUT TOUR IA): Conditions remplies. Déclenchement de processAITurn après 1s.");
+            const opponentActionExists = matchData.players[opponentKey].action;
+
+            // Condition pour que l'IA joue (c'est son tour OU le joueur vient de jouer son action)
+            const shouldAIPlay =
+                (matchData.turn === opponentKey && !opponentActionExists) ||
+                (matchData.turn === youKey && matchData.players[youKey].action && !opponentActionExists);
+
+            // Si l'IA DOIT jouer ET qu'aucune action de l'IA n'est déjà planifiée ou en cours
+            if (shouldAIPlay && !isAIActionScheduled) {
+                console.log("DEBUG IA: Conditions remplies. Planification de processAITurn après 1s.");
+                isAIActionScheduled = true; // Définir le verrou pour empêcher d'autres planifications
+
                 setTimeout(async () => {
+                    console.log("DEBUG IA: Exécution de processAITurn après délai.");
                     await processAITurn(matchData);
+                    // Le verrou est relâché ici. Si processAITurn met à jour Firebase (ce qui est le cas en soumettant l'action),
+                    // le onValue se redéclenchera, et la condition shouldAIPlay devrait alors être fausse
+                    // (car opponentActionExists sera vrai après l'action de l'IA).
+                    // Si l'IA est censée rejouer au tour suivant, ce verrou sera réinitialisé par le nouveau cycle de onValue.
+                    isAIActionScheduled = false; // Relâcher le verrou APRÈS l'exécution
                 }, 1000); // Délai d'une seconde
-            }
-            // Si c'est le tour du joueur MAIS que le joueur a déjà soumis son action ET que l'IA n'a PAS encore soumis son action
-            else if (matchData.turn === youKey && matchData.players[youKey].action && !matchData.players[opponentKey].action) {
-                 console.log("DEBUG IA (APRES JOUEUR): Conditions remplies. Déclenchement de processAITurn après 1s.");
-                 setTimeout(async () => {
-                    await processAITurn(matchData);
-                 }, 1000); // Délai d'une seconde
+            } else if (isAIActionScheduled) {
+                console.log("DEBUG IA: Une action de l'IA est déjà planifiée, pas de nouveau déclenchement.");
+            } else {
+                console.log("DEBUG IA: Les conditions pour déclencher processAITurn ne sont pas encore remplies.");
             }
         }
 
