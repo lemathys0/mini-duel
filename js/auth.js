@@ -1,7 +1,7 @@
 // js/auth.js
 
 // 1. Importe les instances 'auth' et 'db' et les fonctions DB depuis ton fichier de configuration Firebase
-import { auth, db, ref, set, get, query, orderByChild, equalTo } from './firebaseConfig.js';
+import { auth, db, ref, set, get, query, orderByChild } from './firebaseConfig.js';
 
 // 2. Importe les fonctions spécifiques d'authentification directement depuis la bibliothèque Firebase Auth
 import {

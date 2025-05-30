@@ -2,7 +2,7 @@
 
 // Importe initializeApp pour initialiser l'application Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-
+import { equalTo } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 // Importe getAuth pour l'authentification Firebase
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 
