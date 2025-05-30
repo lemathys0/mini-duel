@@ -40,7 +40,7 @@ export function updateHealthBar(barId, health) {
 // Fonction pour mettre à jour l'affichage du timer
 export function updateTimerUI(timeLeft) {
     // Cibler l'élément qui affiche la valeur du timer, qui a l'ID "timer-value" dans votre HTML
-    const timerValueDisplay = document.getElementById("timer-value");
+    const timerValueDisplay = document.getElementById("timer-display");
     // Cibler la barre de progression du timer, qui a l'ID "timer-progress-bar"
     const timerProgressBar = document.getElementById("timer-progress-bar");
 
