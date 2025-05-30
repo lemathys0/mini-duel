@@ -1,20 +1,17 @@
-// main.js
+// js/main.js
 
 console.log("main.js chargé."); // DEBUG : Confirme le chargement de main.js
 
 // Importez 'app' et 'db' directement depuis firebaseConfig.js
 import { app, db } from "./firebaseConfig.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+// NOUVEAU : Import de la fonction setupAuthListeners depuis auth.js
+import { setupAuthListeners } from "./auth.js";
 import { ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction, push } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 import { startMatchMonitoring } from "./game.js"; // Importe la fonction de démarrage du monitoring du match
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons } from "./utils.js"; // Importe les fonctions utilitaires
 
-// Initialiser Auth (app est déjà importé de firebaseConfig.js)
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-
 // Variables globales pour le match en cours
-export let currentUser = null;
+export let currentUser = null; // currentUser sera maintenant l'objet utilisateur de notre base de données { pseudo, code, uid }
 export let currentMatchId = null;
 export let youKey = null;
 export let opponentKey = null;
@@ -34,7 +31,7 @@ export function setHasPlayedThisTurn(value) {
 // Fonction pour mettre à jour les variables de match depuis game.js
 export function setMatchVariables(matchId, user, playerKey, mode) {
     currentMatchId = matchId;
-    currentUser = user;
+    currentUser = user; // user sera notre objet utilisateur { pseudo, code, uid }
     youKey = playerKey;
     opponentKey = (playerKey === 'p1') ? 'p2' : 'p1';
     gameMode = mode;
@@ -67,12 +64,13 @@ function updateUserStatsDisplay(stats) {
 }
 
 export async function updateUserStats(result) {
-    if (!currentUser || !currentUser.uid) {
+    // L'UID sera maintenant le pseudo si on utilise notre système personnalisé
+    if (!currentUser || !currentUser.pseudo) {
         console.error("Impossible de mettre à jour les statistiques : utilisateur non connecté.");
         return;
     }
 
-    const userStatsRef = ref(db, `users/${currentUser.uid}/stats`);
+    const userStatsRef = ref(db, `users/${currentUser.pseudo}/stats`);
     await runTransaction(userStatsRef, (currentStats) => {
         if (currentStats === null) {
             currentStats = { wins: 0, losses: 0, draws: 0 };
@@ -171,117 +169,72 @@ export async function backToMenu(fromMatchEnd = false) {
 }
 
 
-// --- Exécution du code après le chargement complet du DOM ---
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("DEBUG: DOMContentLoaded fired! HTML elements should be available now."); // <--- LOG DE DEBUG
+// --- Fonctions de gestion de l'état de connexion de l'utilisateur (appelées par auth.js) ---
+function handleUserLogin(userPseudo, userData) {
+    currentUser = { pseudo: userPseudo, ...userData }; // Stocke le pseudo et les données (dont le code)
+    console.log("Utilisateur connecté :", currentUser.pseudo);
 
-    // Tout le code qui interagit avec les éléments HTML doit être ici
-    const authSection = document.getElementById("auth");
-    const mainMenuSection = document.getElementById("main-menu");
     const userInfoSpan = document.getElementById("user-info");
     const loginBtn = document.getElementById("login-btn");
     const logoutBtn = document.getElementById("logout-btn");
-    const usernameInput = document.getElementById("username-input");
+    const authSection = document.getElementById("auth");
+    const mainMenuSection = document.getElementById("main-menu");
     const pseudoDisplay = document.getElementById("pseudo-display");
     const playerStatsDisplay = document.getElementById("player-stats");
 
-    // --- Fonctions d'authentification (déplacées ici) ---
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            currentUser = user;
-            console.log("Utilisateur connecté :", user.displayName || user.email);
-            if (userInfoSpan) userInfoSpan.textContent = `Connecté en tant que : ${user.displayName || user.email}`;
-            if (loginBtn) loginBtn.style.display = "none";
-            if (logoutBtn) logoutBtn.style.display = "block";
-            if (authSection) authSection.style.display = "none";
-            if (mainMenuSection) mainMenuSection.style.display = "block";
 
-            // Charger le pseudo personnalisé ou utiliser le displayName
-            const userRef = ref(db, `users/${user.uid}`);
-            get(userRef).then(snapshot => {
-                if (snapshot.exists()) {
-                    const userData = snapshot.val();
-                    currentUser.pseudo = userData.pseudo || user.displayName; // Attribue le pseudo à l'objet currentUser
-                    if (pseudoDisplay) pseudoDisplay.textContent = `Pseudo: ${currentUser.pseudo}`;
-                    updateUserStatsDisplay(userData.stats);
-                } else {
-                    // Si l'utilisateur n'a pas de données, créer une entrée avec le displayName comme pseudo
-                    set(userRef, {
-                        pseudo: user.displayName,
-                        stats: { wins: 0, losses: 0, draws: 0 }
-                    }).then(() => {
-                        currentUser.pseudo = user.displayName;
-                        if (pseudoDisplay) pseudoDisplay.textContent = `Pseudo: ${currentUser.pseudo}`;
-                        updateUserStatsDisplay({ wins: 0, losses: 0, draws: 0 });
-                    }).catch(error => console.error("Erreur création profil utilisateur:", error));
-                }
-            }).catch(error => console.error("Erreur lecture profil utilisateur:", error));
-        } else {
-            currentUser = null;
-            console.log("Aucun utilisateur connecté.");
-            if (userInfoSpan) userInfoSpan.textContent = "Non connecté";
-            if (loginBtn) loginBtn.style.display = "block";
-            if (logoutBtn) logoutBtn.style.display = "none";
-            if (authSection) authSection.style.display = "block";
-            if (mainMenuSection) mainMenuSection.style.display = "none";
-            if (pseudoDisplay) pseudoDisplay.textContent = "";
-            if (playerStatsDisplay) playerStatsDisplay.innerHTML = "";
-        }
-    });
+    if (userInfoSpan) userInfoSpan.textContent = `Connecté en tant que : ${currentUser.pseudo}`;
+    // Les boutons signup et login sont gérés dans auth.js, mais on peut les masquer ici
+    // si auth.js ne le fait pas déjà via l'affichage/masquage des sections.
+    if (loginBtn) loginBtn.style.display = "none";
+    // Le bouton signup-btn n'a pas besoin d'être géré ici car on masque la section auth
 
-    if (loginBtn) {
-        loginBtn.addEventListener("click", () => {
-            const provider = new GoogleAuthProvider();
-            signInWithPopup(auth, provider)
-                .catch((error) => {
-                    console.error("Erreur de connexion:", error);
-                    showMessage("auth-msg", "Erreur de connexion.");
-                });
-        });
-    }
+    if (logoutBtn) logoutBtn.style.display = "block";
+    if (authSection) authSection.style.display = "none";
+    if (mainMenuSection) mainMenuSection.style.display = "block";
+    if (pseudoDisplay) pseudoDisplay.textContent = `Pseudo: ${currentUser.pseudo}`;
+    updateUserStatsDisplay(currentUser.stats); // Afficher les stats
 
-    if (logoutBtn) {
-        logoutBtn.addEventListener("click", () => {
-            signOut(auth).then(() => {
-                showMessage("auth-msg", "Déconnecté avec succès.");
-            }).catch((error) => {
-                console.error("Erreur de déconnexion:", error);
-                showMessage("auth-msg", "Erreur de déconnexion.");
-            });
-        });
-    }
+    showMessage("auth-msg", ""); // Nettoyer le message d'authentification
+}
 
-    const saveUsernameBtn = document.getElementById("save-username-btn");
-    if (saveUsernameBtn) {
-        saveUsernameBtn.addEventListener("click", async () => {
-            if (currentUser) {
-                const newPseudo = usernameInput ? usernameInput.value.trim() : '';
-                if (newPseudo) {
-                    const userRef = ref(db, `users/${currentUser.uid}`);
-                    try {
-                        await update(userRef, { pseudo: newPseudo });
-                        currentUser.pseudo = newPseudo;
-                        if (pseudoDisplay) pseudoDisplay.textContent = `Pseudo: ${newPseudo}`;
-                        showMessage("auth-msg", "Pseudo mis à jour !");
-                    } catch (error) {
-                        console.error("Erreur lors de la mise à jour du pseudo :", error);
-                        showMessage("auth-msg", "Erreur lors de la mise à jour du pseudo.");
-                    }
-                } else {
-                    showMessage("auth-msg", "Le pseudo ne peut pas être vide.");
-                }
-            } else {
-                showMessage("auth-msg", "Vous devez être connecté pour changer de pseudo.");
-            }
-        });
-    }
+function handleUserLogout() {
+    currentUser = null;
+    console.log("Aucun utilisateur connecté.");
 
-    // --- Fonctions du menu principal (déplacées ici) ---
+    const userInfoSpan = document.getElementById("user-info");
+    const loginBtn = document.getElementById("login-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const authSection = document.getElementById("auth");
+    const mainMenuSection = document.getElementById("main-menu");
+    const pseudoDisplay = document.getElementById("pseudo-display");
+    const playerStatsDisplay = document.getElementById("player-stats");
+
+    if (userInfoSpan) userInfoSpan.textContent = "Non connecté";
+    if (loginBtn) loginBtn.style.display = "block";
+    if (logoutBtn) logoutBtn.style.display = "none";
+    if (authSection) authSection.style.display = "block";
+    if (mainMenuSection) mainMenuSection.style.display = "none";
+    if (pseudoDisplay) pseudoDisplay.textContent = "";
+    if (playerStatsDisplay) playerStatsDisplay.innerHTML = "";
+
+    showMessage("auth-msg", "Déconnecté avec succès.");
+}
+
+
+// --- Exécution du code après le chargement complet du DOM ---
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("DEBUG: DOMContentLoaded fired! HTML elements should be available now."); // LOG DE DEBUG
+
+    // Initialiser les écouteurs d'authentification en passant les fonctions de gestion d'UI
+    setupAuthListeners(handleUserLogin, handleUserLogout);
+
+    // --- Fonctions du menu principal (inchangées) ---
     const playIaBtn = document.getElementById("play-ia-btn");
     if (playIaBtn) {
         playIaBtn.addEventListener("click", async () => {
             console.log("Clic sur 'Jouer contre l'IA'.");
-            if (!currentUser) {
+            if (!currentUser) { // Vérifie notre currentUser personnalisé
                 showMessage("main-menu-msg", "Veuillez vous connecter pour jouer.");
                 return;
             }
@@ -305,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 lastTurnProcessedAt: serverTimestamp(),
                 players: {
                     p1: {
-                        uid: currentUser.uid,
+                        uid: currentUser.pseudo, // L'UID sera le pseudo pour ce système
                         pseudo: currentUser.pseudo,
                         pv: 100,
                         action: null,
@@ -355,4 +308,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initialisation de l'affichage du timer au chargement initial
     updateTimerUI(timerMax);
 
+    // Initialiser l'état de l'interface au chargement (déconnecté par défaut)
+    handleUserLogout(); // Assure que l'écran d'auth est visible au début
 }); // Fin de DOMContentLoaded
