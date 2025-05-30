@@ -173,7 +173,7 @@ export async function backToMenu(fromMatchEnd = false) {
 
 // --- Exécution du code après le chargement complet du DOM ---
 document.addEventListener("DOMContentLoaded", () => {
-    console.log("DEBUG: DOMContentLoaded fired! HTML elements should be available now."); // <--- NOUVEAU LOG POUR DEBUG
+    console.log("DEBUG: DOMContentLoaded fired! HTML elements should be available now."); // <--- LOG DE DEBUG
 
     // Tout le code qui interagit avec les éléments HTML doit être ici
     const authSection = document.getElementById("auth");
