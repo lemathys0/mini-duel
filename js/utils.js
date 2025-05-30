@@ -8,22 +8,23 @@ const authSection = document.getElementById('auth');
 const mainMenuSection = document.getElementById('main-menu');
 const matchmakingStatusSection = document.getElementById('matchmaking-status');
 const gameScreenSection = document.getElementById('game-screen');
-const leaderboardScreen = document.getElementById('leaderboard-screen');
+const leaderboardScreen = document.getElementById('leaderboard-screen'); // Si vous l'ajoutez plus tard
 const howToPlayScreen = document.getElementById('how-to-play-screen');
 
 // Références spécifiques pour les messages et barres de vie
 const messageContainer = document.getElementById('message-container'); // Conteneur générique pour les messages
-const player1HealthBar = document.getElementById('you-health-bar');
-const player2HealthBar = document.getElementById('opponent-health-bar');
+// Note: player1HealthBar et player2HealthBar ne sont plus utilisées directement ici
+// car updateHealthBar prend l'ID en paramètre.
 const player1PVDisplay = document.getElementById('player1-pv');
 const player2PVDisplay = document.getElementById('player2-pv');
 const timerDisplay = document.getElementById('timer-display');
-const gameHistoryList = document.getElementById('game-history-list');
+const gameHistoryList = document.getElementById('history'); // L'ID du HTML est 'history'
+const timerProgressBar = document.getElementById('timer-progress-bar'); // Ajouté pour la barre de progression
 
-const attackBtn = document.getElementById('attack-btn');
-const defendBtn = document.getElementById('defend-btn');
-const healBtn = document.getElementById('heal-btn');
-const specialAttackBtn = document.getElementById('special-attack-btn');
+const attackBtn = document.getElementById('action-attack'); // IDs réels de vos boutons
+const defendBtn = document.getElementById('action-defend');
+const healBtn = document.getElementById('action-heal');
+// const specialAttackBtn = document.getElementById('special-attack-btn'); // Si vous avez un bouton d'attaque spéciale
 const returnToMenuBtnGame = document.getElementById('back-to-menu-btn-game');
 
 
@@ -31,54 +32,49 @@ const returnToMenuBtnGame = document.getElementById('back-to-menu-btn-game');
 const activeMessages = {};
 
 /**
- * Affiche un message à l'utilisateur dans un conteneur spécifique.
+ * Affiche un message à l'utilisateur dans un conteneur spécifique ou un élément ciblé.
  * Gère la suppression des messages précédents pour le même ID.
- * @param {string} messageId - Un ID unique pour ce type de message (ex: 'auth-msg-email', 'global-message').
+ * @param {string} messageId - Un ID unique pour ce type de message (ex: 'auth-msg-email', 'action-msg').
  * @param {string} text - Le texte du message à afficher.
  * @param {boolean} isSuccess - Vrai pour un message de succès (vert), Faux pour une erreur (rouge).
  * @param {number} duration - Durée d'affichage du message en ms. 0 pour un message persistant.
  */
-export function showMessage(messageId, text, isSuccess = false, duration = 5000) {
+export function afficherMessage(messageId, text, isSuccess = false, duration = 5000) {
     let targetElement = document.getElementById(messageId);
 
-    // Si le targetElement n'existe pas, on cherche un conteneur générique
-    if (!targetElement && messageContainer) {
-        // Crée un conteneur spécifique si on n'en trouve pas, pour y attacher le message
-        targetElement = document.createElement('div');
-        targetElement.id = messageId;
-        messageContainer.appendChild(targetElement);
-    } else if (!targetElement) {
-        console.warn(`showMessage: Element with ID '${messageId}' not found and no generic message-container. Message not displayed.`);
+    // Si le targetElement n'existe pas, on cherche un conteneur générique ou on le crée dynamiquement.
+    // Cette logique dépend de comment vous voulez gérer les messages.
+    // Pour l'instant, on assume que messageId pointe vers un élément existant comme 'action-msg'.
+    if (!targetElement) {
+        console.warn(`afficherMessage: L'élément avec l'ID '${messageId}' n'a pas été trouvé. Le message ne sera pas affiché.`);
         return;
     }
 
-    // Supprime le message précédent s'il existe
-    if (activeMessages[messageId]) {
-        clearTimeout(activeMessages[messageId].timeout);
-        // Supprime l'élément s'il a été créé dynamiquement ou si c'est un message temporaire
-        if (activeMessages[messageId].element && activeMessages[messageId].element.parentNode) {
-            activeMessages[messageId].element.remove();
-        }
-        delete activeMessages[messageId];
-    }
+    // Efface le contenu de l'élément cible pour le nouveau message
+    targetElement.innerHTML = '';
+    targetElement.textContent = text;
+    targetElement.className = isSuccess ? 'message success' : 'message error'; // Assurez-vous d'avoir ces classes CSS
+    targetElement.style.display = 'block';
 
-    // Crée le nouvel élément de message
-    const messageElement = document.createElement('p');
-    messageElement.textContent = text;
-    messageElement.className = isSuccess ? 'message-success' : 'message-error';
-    targetElement.appendChild(messageElement);
-
+    // Si une durée est spécifiée, masquer le message après cette durée
     if (duration > 0) {
-        const timeout = setTimeout(() => {
-            if (messageElement.parentNode) {
-                messageElement.remove();
+        // Efface le timeout précédent pour cet ID si un nouveau message arrive avant la fin du précédent
+        if (activeMessages[messageId]) {
+            clearTimeout(activeMessages[messageId]);
+        }
+        activeMessages[messageId] = setTimeout(() => {
+            if (targetElement) {
+                targetElement.textContent = ''; // Effacer le texte
+                targetElement.style.display = 'none'; // Masquer l'élément
             }
             delete activeMessages[messageId];
         }, duration);
-        activeMessages[messageId] = { element: messageElement, timeout: timeout };
     } else {
-        // Stocke le message sans timeout s'il est persistant
-        activeMessages[messageId] = { element: messageElement, timeout: null };
+        // Pour les messages persistants, s'assurer qu'il n'y a pas de timeout actif
+        if (activeMessages[messageId]) {
+            clearTimeout(activeMessages[messageId]);
+            delete activeMessages[messageId];
+        }
     }
 }
 
@@ -86,40 +82,49 @@ export function showMessage(messageId, text, isSuccess = false, duration = 5000)
 /**
  * Met à jour la barre de vie et l'affichage des PV.
  * @param {string} barId - L'ID de la barre de vie ('you-health-bar' ou 'opponent-health-bar').
- * @param {number} percentage - Le pourcentage de vie (0-100).
+ * @param {number} currentPv - Le nombre de points de vie actuels.
  */
-export function updateHealthBar(barId, percentage) {
+export function mettreAJourBarreDeVie(barId, currentPv) {
     const healthBar = document.getElementById(barId);
     if (healthBar) {
-        const clampedPercentage = Math.max(0, Math.min(100, percentage));
-        healthBar.style.width = `${clampedPercentage}%`;
-        healthBar.style.backgroundColor = `hsl(${clampedPercentage * 1.2}, 70%, 50%)`; // Vert à Rouge
+        const percentage = Math.max(0, Math.min(100, currentPv)); // S'assurer que le pourcentage est entre 0 et 100
+        healthBar.style.width = `${percentage}%`;
+        // Changer la couleur en fonction du pourcentage
+        if (percentage > 50) {
+            healthBar.style.backgroundColor = '#2ecc71'; // Vert
+        } else if (percentage > 20) {
+            healthBar.style.backgroundColor = '#f39c12'; // Orange
+        } else {
+            healthBar.style.backgroundColor = '#e74c3c'; // Rouge
+        }
     }
 
     // Met à jour l'affichage numérique des PV
     if (barId === 'you-health-bar' && player1PVDisplay) {
-        player1PVDisplay.textContent = `${percentage} PV`;
+        player1PVDisplay.textContent = `${currentPv} PV`;
     } else if (barId === 'opponent-health-bar' && player2PVDisplay) {
-        player2PVDisplay.textContent = `${percentage} PV`;
+        player2PVDisplay.textContent = `${currentPv} PV`;
     }
 }
 
 /**
  * Met à jour l'interface utilisateur du minuteur.
- * @param {number} timeLeft - Le temps restant en secondes.
- * @param {number} totalTime - Le temps total du tour en secondes pour le calcul de la couleur.
+ * @param {number} timeLeftSeconds - Le temps restant en secondes.
+ * @param {number} totalTimeSeconds - Le temps total du tour en secondes pour le calcul de la barre de progression.
  */
-export function updateTimerUI(timeLeft, totalTime) {
+export function mettreAJourMinuteurUI(timeLeftSeconds, totalTimeSeconds) {
     if (timerDisplay) {
-        timerDisplay.textContent = `Temps restant: ${timeLeft}s`;
-        const percentage = (timeLeft / totalTime) * 100;
-
-        if (percentage <= 20) {
-            timerDisplay.style.color = 'red';
-        } else if (percentage <= 50) {
-            timerDisplay.style.color = 'orange';
-        } else {
-            timerDisplay.style.color = '#ecf0f1'; // Couleur par défaut (blanc/gris clair)
+        timerDisplay.textContent = `${timeLeftSeconds}s`; // Affiche le temps restant en secondes
+        const percentage = (timeLeftSeconds / totalTimeSeconds) * 100;
+        if (timerProgressBar) {
+            timerProgressBar.style.width = `${percentage}%`;
+            if (percentage > 50) {
+                timerProgressBar.style.backgroundColor = '#2ecc71'; // Vert
+            } else if (percentage > 20) {
+                timerProgressBar.style.backgroundColor = '#f39c12'; // Orange
+            } else {
+                timerProgressBar.style.backgroundColor = '#e74c3c'; // Rouge
+            }
         }
     }
 }
@@ -128,22 +133,23 @@ export function updateTimerUI(timeLeft, totalTime) {
  * Ajoute un message à l'historique du match.
  * @param {string} message - Le message à ajouter.
  */
-export function addHistoryMessage(message) {
+export function ajouterMessageHistorique(message) {
     if (gameHistoryList) {
-        const listItem = document.createElement('li');
+        const listItem = document.createElement('p'); // Utiliser un paragraphe pour un affichage plus simple
         listItem.textContent = message;
-        gameHistoryList.prepend(listItem); // Ajoute au début pour voir les derniers messages en premier
-        // Limite l'historique pour ne pas surcharger le DOM
-        while (gameHistoryList.children.length > 20) {
-            gameHistoryList.lastChild.remove();
-        }
+        gameHistoryList.appendChild(listItem); // Ajoute à la fin pour un ordre chronologique
+        gameHistoryList.scrollTop = gameHistoryList.scrollHeight; // Scroll vers le bas
+        // Optionnel: Limiter l'historique pour ne pas surcharger le DOM
+        // while (gameHistoryList.children.length > 30) { // Exemple: Garder les 30 derniers messages
+        //     gameHistoryList.firstChild.remove();
+        // }
     }
 }
 
 /**
  * Efface tout l'historique du match.
  */
-export function clearHistory() {
+export function effacerHistorique() {
     if (gameHistoryList) {
         gameHistoryList.innerHTML = '';
     }
@@ -152,21 +158,21 @@ export function clearHistory() {
 /**
  * Désactive tous les boutons d'action du joueur.
  */
-export function disableActionButtons() {
+export function desactiverBoutonsAction() {
     if (attackBtn) attackBtn.disabled = true;
     if (defendBtn) defendBtn.disabled = true;
     if (healBtn) healBtn.disabled = true;
-    if (specialAttackBtn) specialAttackBtn.disabled = true;
+    // if (specialAttackBtn) specialAttackBtn.disabled = true;
 }
 
 /**
  * Active tous les boutons d'action du joueur.
  */
-export function enableActionButtons() {
+export function activerBoutonsAction() {
     if (attackBtn) attackBtn.disabled = false;
     if (defendBtn) defendBtn.disabled = false;
     if (healBtn) healBtn.disabled = false;
-    if (specialAttackBtn) specialAttackBtn.disabled = false;
+    // if (specialAttackBtn) specialAttackBtn.disabled = false;
 }
 
 // --- Fonctions de gestion des écrans ---
@@ -174,7 +180,7 @@ export function enableActionButtons() {
 /**
  * Cache tous les écrans.
  */
-function hideAllScreens() {
+function masquerTousLesEcrans() {
     if (authSection) authSection.style.display = 'none';
     if (mainMenuSection) mainMenuSection.style.display = 'none';
     if (matchmakingStatusSection) matchmakingStatusSection.style.display = 'none';
@@ -186,36 +192,32 @@ function hideAllScreens() {
 /**
  * Affiche l'écran d'authentification et cache les autres.
  */
-export function showAuthScreen() {
-    hideAllScreens();
+export function afficherEcranAuth() {
+    masquerTousLesEcrans();
     if (authSection) authSection.style.display = 'block';
-    // Potential place to trigger reCAPTCHA initialization if needed,
-    // but auth.js already handles this based on element presence.
-    // If initializeRecaptcha was exported from auth.js, you could call it here:
-    // if (typeof initializeRecaptcha === 'function') { initializeRecaptcha(); }
 }
 
 /**
  * Affiche l'écran du menu principal et cache les autres.
  */
-export function showMainMenu() {
-    hideAllScreens();
+export function afficherMenuPrincipal() {
+    masquerTousLesEcrans();
     if (mainMenuSection) mainMenuSection.style.display = 'block';
 }
 
 /**
  * Affiche l'écran de matchmaking et cache les autres.
  */
-export function showMatchmakingScreen() {
-    hideAllScreens();
+export function afficherEcranMatchmaking() {
+    masquerTousLesEcrans();
     if (matchmakingStatusSection) matchmakingStatusSection.style.display = 'block';
 }
 
 /**
  * Affiche l'écran de jeu et cache les autres.
  */
-export function showGameScreen() {
-    hideAllScreens();
+export function afficherEcranJeu() {
+    masquerTousLesEcrans();
     if (gameScreenSection) gameScreenSection.style.display = 'block';
     if (returnToMenuBtnGame) {
         returnToMenuBtnGame.style.display = 'block'; // S'assurer que le bouton est visible en jeu
@@ -225,18 +227,15 @@ export function showGameScreen() {
 /**
  * Affiche l'écran du classement et cache les autres.
  */
-export function showLeaderboardScreen() {
-    hideAllScreens();
+export function afficherEcranClassement() {
+    masquerTousLesEcrans();
     if (leaderboardScreen) leaderboardScreen.style.display = 'block';
 }
 
 /**
  * Affiche l'écran "Comment Jouer" et cache les autres.
  */
-export function showHowToPlayScreen() {
-    hideAllScreens();
+export function afficherEcranCommentJouer() {
+    masquerTousLesEcrans();
     if (howToPlayScreen) howToPlayScreen.style.display = 'block';
 }
-
-// Note: Le bouton de retour au menu depuis l'écran de jeu est géré dans main.js
-// via `backToMenu` qui appelle `returnToMainMenu` de game.js et enfin `showMainMenu` d'ici.

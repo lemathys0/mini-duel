@@ -1,470 +1,238 @@
 // js/main.js
 
+import { initializeFirebaseAndAuth, auth, onAuthStateChanged, currentUser } from './auth.js';
+// Importe les fonctions utilitaires nécessaires, avec les nouveaux noms français
+import {
+    afficherMessage,
+    mettreAJourBarreDeVie, // Gardé si vous l'utilisez directement ici pour les PV par ex.
+    afficherEcranAuth,
+    afficherMenuPrincipal,
+    afficherEcranMatchmaking,
+    afficherEcranJeu,
+    afficherEcranClassement, // Si implémenté
+    afficherEcranCommentJouer
+} from './utils.js';
+import { attachGameActionListeners, startMatch, leaveGame } from './game.js';
+import { db, ref, get, set, update, push, remove, onValue, serverTimestamp } from './firebaseConfig.js';
+
+
 console.log("main.js chargé.");
 
-// Importe toutes les fonctions nécessaires de Firebase
-import { auth, db, ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction, push } from "./firebaseConfig.js";
-import { setupAuthListeners } from "./auth.js"; // Import de la fonction d'écouteurs d'authentification
-// Importe les fonctions et variables nécessaires de game.js
-import { startMatchMonitoring, returnToMainMenu, gameId } from "./game.js";
-// Importe les fonctions utilitaires
-import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons, showAuthScreen, showMainMenu, showMatchmakingScreen, showGameScreen, showLeaderboardScreen, showHowToPlayScreen } from "./utils.js";
-import { signOut } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // Importe signOut ici pour la déconnexion
+// Variables globales pour l'état de l'utilisateur
+let currentUserId = null;
+let currentUserName = "Joueur"; // Pseudo par défaut si non authentifié ou pas encore défini
+let playerStatsListener = null; // Pour écouter les stats du joueur
+let selectedAIDifficulty = 'normal'; // Difficulté par défaut pour l'IA
 
-// Constante pour l'ID du message global (pour showMessage)
-const GLOBAL_AUTH_MESSAGE_ID = 'global-auth-message';
-
-// Variables globales de l'état de l'application
-export let currentUser = null; // Contient { uid, pseudo }
-let matchmakingTimeout = null; // Pour gérer le timeout de suppression du match en attente
-
-// --- Références aux éléments du DOM pour une meilleure performance ---
-const authSection = document.getElementById('auth');
-const mainMenuSection = document.getElementById('main-menu');
-const matchmakingStatusSection = document.getElementById('matchmaking-status');
-const gameScreenSection = document.getElementById('game-screen');
-const leaderboardScreen = document.getElementById('leaderboard-screen');
-const howToPlayScreen = document.getElementById('how-to-play-screen');
-
-const userInfoDisplay = document.getElementById('user-info');
+// Références aux éléments du DOM
 const playerNameDisplay = document.getElementById('player-name');
+const pseudoInput = document.getElementById('pseudo-input');
 const pseudoDisplay = document.getElementById('pseudo-display');
 const playerStatsDiv = document.getElementById('player-stats');
-const mainMenuMsgDisplay = document.getElementById('main-menu-msg');
+
+const loginEmailBtn = document.getElementById('login-email-btn');
+const signupEmailBtn = document.getElementById('signup-email-btn');
+const logoutBtn = document.getElementById('logout-btn'); // Bouton de déconnexion sur l'écran d'auth
+const logoutBtnMenu = document.getElementById('logout-btn-menu'); // Bouton de déconnexion sur le menu principal
 
 const playIaBtn = document.getElementById('play-ia-btn');
 const playPlayerBtn = document.getElementById('play-player-btn');
 const howToPlayBtn = document.getElementById('how-to-play-btn');
 const cancelMatchmakingBtn = document.getElementById('cancel-matchmaking-btn');
-let aiDifficultySelect = document.getElementById('ai-difficulty-select');
-
-// Boutons de retour au menu
-const backToMenuBtnLeaderboard = document.getElementById('back-to-menu-btn-leaderboard');
-const backToMenuBtnHowToPlay = document.getElementById('back-to-menu-btn-how-to-play');
 
 
-// Initialisation au chargement du DOM
-document.addEventListener('DOMContentLoaded', () => {
-    console.log("DOM entièrement chargé et analysé.");
-    setupAuthListeners(); // Configure les écouteurs d'authentification
+// --- Fonctions de gestion de l'interface utilisateur ---
 
-    createAIDifficultySelect(); // Appelle cette fonction pour s'assurer que le select existe
-    aiDifficultySelect = document.getElementById('ai-difficulty-select'); // Mettre à jour la référence après la création
+// Met à jour l'affichage des informations du joueur
+function mettreAJourUIUtilisateur(user) {
+    if (user) {
+        currentUserId = user.uid;
+        currentUserName = user.displayName || user.email || "Utilisateur";
 
-    attachMenuListeners(); // Attache les écouteurs des boutons du menu
-    showAuthScreen(); // Affiche l'écran d'authentification par défaut (sera caché par handleUserLogin si connecté)
-});
+        // Récupérer le pseudo depuis Firestore (si vous utilisez Firestore pour les profils)
+        // Ou depuis Realtime Database
+        const userRef = ref(db, `users/${currentUserId}`);
+        onValue(userRef, (snapshot) => {
+            const userData = snapshot.val();
+            if (userData && userData.pseudo) {
+                currentUserName = userData.pseudo;
+                if (playerNameDisplay) playerNameDisplay.textContent = currentUserName;
+                if (pseudoDisplay) pseudoDisplay.textContent = `Pseudo: ${currentUserName}`;
+            } else {
+                // Si pas de pseudo enregistré, utiliser le displayName/email et proposer de définir un pseudo
+                if (playerNameDisplay) playerNameDisplay.textContent = currentUserName;
+                if (pseudoDisplay) pseudoDisplay.textContent = `Veuillez définir un pseudo.`;
+            }
+        }, {
+            onlyOnce: true // Ne pas écouter en temps réel le pseudo pour l'instant
+        });
 
 
-// Fonction pour créer le sélecteur de difficulté (si non présent dans le HTML)
-function createAIDifficultySelect() {
-    const existingSelect = document.getElementById('ai-difficulty-select');
-    if (existingSelect) return;
-
-    const select = document.createElement('select');
-    select.id = 'ai-difficulty-select';
-    select.innerHTML = `
-        <option value="easy">Facile</option>
-        <option value="normal">Normal</option>
-        <option value="hard">Difficile</option>
-    `;
-    select.style.cssText = `
-        padding: 8px;
-        margin-bottom: 15px;
-        border-radius: 5px;
-        background-color: #34495e;
-        color: #ecf0f1;
-        border: 1px solid #2c3e50;
-        font-size: 0.9em;
-    `;
-    const playIaButton = document.getElementById('play-ia-btn');
-    if (playIaButton && playIaButton.parentNode) {
-        playIaButton.parentNode.insertBefore(select, playIaButton);
-        console.log("Sélecteur de difficulté AI créé dynamiquement.");
-    }
-}
-
-// Fonction pour attacher les écouteurs d'événements du menu
-function attachMenuListeners() {
-    if (playIaBtn) {
-        playIaBtn.addEventListener('click', () => handlePlayAI());
-    }
-    if (playPlayerBtn) {
-        playPlayerBtn.addEventListener('click', () => handlePlayPlayer());
-    }
-    if (howToPlayBtn) {
-        howToPlayBtn.addEventListener('click', () => showHowToPlayScreen());
-    }
-    if (cancelMatchmakingBtn) {
-        cancelMatchmakingBtn.addEventListener('click', () => cancelMatchmaking());
-    }
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', async () => {
-            try {
-                await signOut(auth);
-            } catch (error) {
-                console.error("Erreur de déconnexion:", error);
-                showMessage(GLOBAL_AUTH_MESSAGE_ID, `Erreur de déconnexion: ${error.message}`, false);
+        // Écoute les statistiques du joueur en temps réel
+        if (playerStatsListener) {
+            off(ref(db, `user_stats/${currentUserId}`), 'value', playerStatsListener); // Annuler l'ancien listener
+        }
+        playerStatsListener = onValue(ref(db, `user_stats/${currentUserId}`), (snapshot) => {
+            const stats = snapshot.val() || { wins: 0, losses: 0, gamesPlayed: 0 };
+            if (playerStatsDiv) {
+                playerStatsDiv.innerHTML = `
+                    <p>Parties jouées : ${stats.gamesPlayed}</p>
+                    <p>Victoires : ${stats.wins}</p>
+                    <p>Défaites : ${stats.losses}</p>
+                `;
             }
         });
-    }
-    if (document.getElementById('back-to-menu-btn-game')) {
-        document.getElementById('back-to-menu-btn-game').addEventListener('click', () => backToMenu(false));
-    }
-    if (backToMenuBtnLeaderboard) {
-        backToMenuBtnLeaderboard.addEventListener('click', () => showMainMenu());
-    }
-    if (backToMenuBtnHowToPlay) {
-        backToMenuBtnHowToPlay.addEventListener('click', () => showMainMenu());
-    }
-    if (document.getElementById('leaderboard-btn')) {
-        document.getElementById('leaderboard-btn').addEventListener('click', displayLeaderboard);
-    }
-}
 
 
-// --- Fonctions de gestion de l'état de connexion de l'utilisateur (appelées par auth.js) ---
-export async function handleUserLogin(uid, pseudo) {
-    currentUser = { uid: uid, pseudo: pseudo };
-    console.log("Utilisateur connecté :", currentUser.pseudo, "(UID:", currentUser.uid + ")");
-
-    if (userInfoDisplay) userInfoDisplay.textContent = `Connecté en tant que : ${currentUser.pseudo}`;
-    if (playerNameDisplay) playerNameDisplay.textContent = currentUser.pseudo;
-    if (pseudoDisplay) pseudoDisplay.textContent = `Pseudo: ${currentUser.pseudo}`;
-
-    await loadPlayerStats(currentUser.uid);
-    // C'est ici que tu t'assures d'être sur le bon écran après la connexion.
-    showMainMenu();
-    showMessage(mainMenuMsgDisplay.id, `Bienvenue, ${currentUser.pseudo} ! Choisissez un mode de jeu.`, true);
-}
-
-export function handleUserLogout() {
-    currentUser = null;
-    console.log("Utilisateur déconnecté.");
-    if (userInfoDisplay) userInfoDisplay.textContent = 'Non connecté';
-    if (playerNameDisplay) playerNameDisplay.textContent = 'Invité';
-    if (pseudoDisplay) pseudoDisplay.textContent = 'Pseudo: N/A';
-    if (playerStatsDiv) playerStatsDiv.innerHTML = '<p>Connectez-vous pour voir vos statistiques.</p>';
-    showAuthScreen();
-    showMessage(GLOBAL_AUTH_MESSAGE_ID, 'Connectez-vous pour commencer à jouer.', true);
-}
-
-
-// --- Fonctions de statistiques ---
-async function loadPlayerStats(uid) {
-    try {
-        const statsRef = ref(db, `users/${uid}/stats`);
-        const snapshot = await get(statsRef);
-        const stats = snapshot.val();
-        if (stats) {
-            updateUserStatsDisplay(stats);
-        } else {
-            playerStatsDiv.innerHTML = '<p>Pas de statistiques disponibles.</p>';
-        }
-    } catch (error) {
-        console.error("Erreur lors du chargement des stats:", error);
-        playerStatsDiv.innerHTML = '<p>Erreur lors du chargement des statistiques.</p>';
-    }
-}
-
-function updateUserStatsDisplay(stats) {
-    if (playerStatsDiv && stats) {
-        playerStatsDiv.innerHTML = `
-            <p>Victoires: ${stats.wins || 0}</p>
-            <p>Défaites: ${stats.losses || 0}</p>
-            <p>Égalités: ${stats.draws || 0}</p>
-        `;
-    }
-}
-
-export async function updateMatchResult(result) {
-    if (!currentUser || !currentUser.uid) {
-        console.error("Impossible de mettre à jour les statistiques : utilisateur non connecté.");
-        return;
-    }
-
-    const userStatsRef = ref(db, `users/${currentUser.uid}/stats`);
-    await runTransaction(userStatsRef, (currentStats) => {
-        if (currentStats === null) {
-            currentStats = { wins: 0, losses: 0, draws: 0 };
-        }
-        if (result === 'win') {
-            currentStats.wins = (currentStats.wins || 0) + 1;
-        } else if (result === 'loss') {
-            currentStats.losses = (currentStats.losses || 0) + 1;
-        } else if (result === 'draw') {
-            currentStats.draws = (currentStats.draws || 0) + 1;
-        }
-        return currentStats;
-    }).then(() => {
-        console.log(`Statistiques mises à jour : ${result}`);
-        loadPlayerStats(currentUser.uid); // Recharge les stats pour l'affichage
-    }).catch(error => {
-        console.error("Erreur lors de la mise à jour des stats :", error);
-    });
-}
-
-// --- Fonctions de jeu ---
-
-/**
- * Lance un match contre l'IA.
- */
-async function handlePlayAI() {
-    if (!currentUser) {
-        showMessage(mainMenuMsgDisplay.id, 'Vous devez être connecté pour jouer contre l\'IA.', false);
-        return;
-    }
-
-    const difficulty = aiDifficultySelect ? aiDifficultySelect.value : 'easy';
-
-    const newMatchRef = push(ref(db, 'matches'));
-    const newMatchId = newMatchRef.key;
-
-    const initialMatchData = {
-        players: {
-            p1: {
-                uid: currentUser.uid,
-                pseudo: currentUser.pseudo,
-                pv: 100,
-                action: null,
-                healCooldown: 0,
-                disconnected: false
-            },
-            p2: {
-                uid: 'AI',
-                pseudo: `IA (${difficulty})`,
-                pv: 100,
-                action: null,
-                healCooldown: 0,
-                disconnected: false
-            }
-        },
-        status: 'playing',
-        turn: 'p1',
-        turnCounter: 0,
-        turnStartTime: serverTimestamp(),
-        matchMode: 'PvAI',
-        difficulty: difficulty,
-        history: []
-    };
-
-    try {
-        await set(newMatchRef, initialMatchData);
-        startMatchMonitoring(newMatchId, 'p1', 'PvAI');
-        showMessage(mainMenuMsgDisplay.id, `Match contre l'IA (${difficulty}) créé !`, true);
-    } catch (error) {
-        console.error("Erreur lors de la création du match PvAI:", error);
-        showMessage(mainMenuMsgDisplay.id, `Erreur lors de la création du match PvAI: ${error.message}`, false);
-    }
-}
-
-/**
- * Lance le processus de matchmaking PvP.
- */
-async function handlePlayPlayer() {
-    if (!currentUser) {
-        showMessage(mainMenuMsgDisplay.id, 'Vous devez être connecté pour jouer contre un autre joueur.', false);
-        return;
-    }
-    showMatchmakingScreen();
-    showMessage('matchmaking-message', 'Recherche d\'un adversaire...', true);
-    findOrCreatePvPMatch();
-}
-
-/**
- * Cherche ou crée un match PvP.
- */
-async function findOrCreatePvPMatch() {
-    const publicMatchesRef = ref(db, 'matches');
-    let foundMatchId = null;
-
-    const snapshot = await get(query(publicMatchesRef, orderByChild('status'), equalTo('waiting')));
-    snapshot.forEach((childSnapshot) => {
-        const match = childSnapshot.val();
-        if (match.matchMode === 'PvP' && match.players.p1 && match.players.p1.uid !== currentUser.uid) {
-            foundMatchId = childSnapshot.key;
-            return true;
-        }
-    });
-
-    if (foundMatchId) {
-        const matchToJoinRef = ref(db, `matches/${foundMatchId}`);
-        try {
-            await runTransaction(matchToJoinRef, (currentMatch) => {
-                if (currentMatch && currentMatch.status === 'waiting' && currentMatch.players.p1 && currentMatch.players.p1.uid !== currentUser.uid) {
-                    currentMatch.players.p2 = {
-                        uid: currentUser.uid,
-                        pseudo: currentUser.pseudo,
-                        pv: 100,
-                        action: null,
-                        healCooldown: 0,
-                        disconnected: false
-                    };
-                    currentMatch.status = 'playing';
-                    currentMatch.turn = 'p1';
-                    currentMatch.turnCounter = 0;
-                    currentMatch.turnStartTime = serverTimestamp();
-                    currentMatch.history = [...(currentMatch.history || []), `${currentUser.pseudo} a rejoint le match !`];
-                    return currentMatch;
-                }
-                return undefined;
-            });
-            showMessage('matchmaking-message', 'Match trouvé et rejoint !', true);
-            startMatchMonitoring(foundMatchId, 'p2', 'PvP');
-        } catch (error) {
-            console.error("Erreur lors de la tentative de rejoindre un match:", error);
-            showMessage('matchmaking-message', `Erreur lors de la jonction du match: ${error.message}`, false);
-            showMainMenu();
-        }
+        afficherMenuPrincipal();
+        if (logoutBtn) logoutBtn.style.display = 'none'; // Masquer le bouton déconnexion de l'écran d'auth
     } else {
-        const newMatchRef = push(publicMatchesRef);
-        const newMatchId = newMatchRef.key;
-        try {
-            await set(newMatchRef, {
-                players: {
-                    p1: {
-                        uid: currentUser.uid,
-                        pseudo: currentUser.pseudo,
-                        pv: 100,
-                        action: null,
-                        healCooldown: 0,
-                        disconnected: false
-                    }
+        currentUserId = null;
+        currentUserName = "Joueur";
+        if (playerNameDisplay) playerNameDisplay.textContent = currentUserName;
+        if (pseudoDisplay) pseudoDisplay.textContent = '';
+        if (playerStatsDiv) playerStatsDiv.innerHTML = '';
+        if (playerStatsListener) {
+            off(ref(db, `user_stats/${currentUserId}`), 'value', playerStatsListener);
+            playerStatsListener = null;
+        }
+
+        afficherEcranAuth();
+        if (logoutBtn) logoutBtn.style.display = 'block'; // Afficher le bouton déconnexion si on est sur l'écran d'auth
+    }
+}
+
+// Initialise Firebase Auth et configure l'écouteur d'état de l'authentification
+initializeFirebaseAndAuth();
+onAuthStateChanged(auth, (user) => {
+    mettreAJourUIUtilisateur(user);
+});
+
+// --- Fonctions de gestion du jeu ---
+
+async function demarrerMatchPvAI() {
+    if (!currentUserId) {
+        afficherMessage('main-menu-msg', 'Veuillez vous connecter pour jouer contre l\'IA.', false);
+        return;
+    }
+
+    if (!currentUserName || currentUserName === "Joueur") {
+        afficherMessage('main-menu-msg', 'Veuillez définir votre pseudo avant de jouer.', false);
+        return;
+    }
+
+    afficherEcranJeu(); // Afficher l'écran de jeu immédiatement
+    afficherMessage('action-msg', 'Démarrage du match contre l\'IA...', true, 3000); // Message temporaire
+
+    try {
+        // Créer un nouveau match dans la base de données
+        const newMatchRef = push(ref(db, 'matches'));
+        const matchId = newMatchRef.key;
+
+        const initialMatchData = {
+            id: matchId,
+            status: 'playing',
+            turn: 'p1', // Joueur humain commence
+            turnCounter: 0,
+            turnStartTime: serverTimestamp(),
+            players: {
+                p1: {
+                    uid: currentUserId,
+                    pseudo: currentUserName,
+                    pv: 100,
+                    action: null,
+                    healCooldown: 0,
+                    isDefending: false
                 },
-                status: 'waiting',
-                turn: 'p1',
-                turnCounter: 0,
-                turnStartTime: null,
-                matchMode: 'PvP',
-                history: [`${currentUser.pseudo} a créé un match en attente.`],
-                difficulty: 'N/A'
-            });
-            showMessage('matchmaking-message', 'Match créé, en attente d\'un adversaire...', true);
-            startMatchMonitoring(newMatchId, 'p1', 'PvP');
-
-            matchmakingTimeout = setTimeout(async () => {
-                const matchSnapshot = await get(newMatchRef);
-                const matchData = matchSnapshot.val();
-                if (matchData && matchData.status === 'waiting') {
-                    await remove(newMatchRef);
-                    console.log(`Match ${newMatchId} supprimé car aucun adversaire n'a rejoint.`);
-                    backToMenu(false);
-                    showMessage(mainMenuMsgDisplay.id, 'Votre recherche d\'adversaire a expiré.', false);
+                p2: { // IA
+                    uid: 'AI',
+                    pseudo: 'IA redoutable', // Nom de l'IA
+                    pv: 100,
+                    action: null,
+                    healCooldown: 0,
+                    isDefending: false
                 }
-            }, 5 * 60 * 1000);
-        } catch (error) {
-            console.error("Erreur lors de la création du match PvP:", error);
-            showMessage('matchmaking-message', `Erreur lors de la création du match PvP: ${error.message}`, false);
-            showMainMenu();
-        }
-    }
-}
+            },
+            history: [`--- Début du match ${matchId} (PvAI) ---`, `C'est au tour de [${currentUserName}].`],
+            gameMode: 'PvAI'
+        };
 
-/**
- * Annule le matchmaking en cours.
- */
-async function cancelMatchmaking() {
-    if (gameId) {
-        const matchRef = ref(db, `matches/${gameId}`);
-        try {
-            await runTransaction(matchRef, (currentData) => {
-                if (currentData && currentData.status === 'waiting' && currentData.players.p1 && currentData.players.p1.uid === currentUser.uid) {
-                    return null;
-                }
-                return undefined;
-            });
-            showMessage(mainMenuMsgDisplay.id, 'Recherche annulée.', false);
-        } catch (error) {
-            console.error("Erreur lors de l'annulation du matchmaking:", error);
-            showMessage('matchmaking-message', `Erreur lors de l'annulation: ${error.message}`, false);
-        } finally {
-            if (matchmakingTimeout) {
-                clearTimeout(matchmakingTimeout);
-                matchmakingTimeout = null;
-            }
-            backToMenu(false);
-        }
-    } else {
-        backToMenu(false);
-    }
-}
-
-
-/**
- * Affiche le classement.
- */
-async function displayLeaderboard() {
-    showLeaderboardScreen();
-    const leaderboardList = document.getElementById('leaderboard-list');
-    leaderboardList.innerHTML = '<li>Chargement du classement...</li>';
-
-    try {
-        const usersRef = ref(db, 'users');
-        const snapshot = await get(usersRef);
-
-        const usersData = [];
-        if (snapshot.exists()) {
-            snapshot.forEach((childSnapshot) => {
-                const uid = childSnapshot.key;
-                const userData = childSnapshot.val();
-                const pseudo = userData.pseudo || 'Anonyme';
-                const stats = userData.stats || { wins: 0, losses: 0, draws: 0 };
-                usersData.push({ pseudo, stats });
-            });
-        }
-
-        usersData.sort((a, b) => b.stats.wins - a.stats.wins);
-
-        leaderboardList.innerHTML = '';
-        if (usersData.length > 0) {
-            usersData.forEach((user, index) => {
-                const listItem = document.createElement('li');
-                listItem.textContent = `${index + 1}. ${user.pseudo} (V: ${user.stats.wins}, D: ${user.stats.losses}, N: ${user.stats.draws})`;
-                leaderboardList.appendChild(listItem);
-            });
-        } else {
-            leaderboardList.innerHTML = '<li>Aucun joueur dans le classement pour le moment.</li>';
-        }
+        await set(newMatchRef, initialMatchData);
+        console.log(`Match PvAI démarré avec l'ID: ${matchId}`);
+        startMatch(matchId, 'p1', 'PvAI'); // 'p1' car le joueur humain est toujours p1 contre l'IA
 
     } catch (error) {
-        console.error("Erreur lors du chargement du classement:", error);
-        leaderboardList.innerHTML = '<li>Erreur lors du chargement du classement.</li>';
+        console.error("Erreur lors du démarrage du match PvAI:", error);
+        afficherMessage('main-menu-msg', `Échec du démarrage du match : ${error.message}`, false);
+        afficherMenuPrincipal(); // Retour au menu en cas d'erreur
     }
 }
 
-// Fonction pour revenir au menu principal (appelée par game.js ou main.js)
-export async function backToMenu(fromMatchEnd = false) {
-    console.log("Retour au menu demandé depuis main.js.");
 
-    returnToMainMenu();
-
-    if (matchmakingTimeout) {
-        clearTimeout(matchmakingTimeout);
-        matchmakingTimeout = null;
-        console.log("Timeout de suppression du match annulé.");
-    }
-
-    clearHistory();
-    updateHealthBar("you-health-bar", 100);
-    document.getElementById("player1-pv").textContent = "100 PV";
-    updateHealthBar("opponent-health-bar", 100);
-    document.getElementById("player2-pv").textContent = "100 PV";
-    updateTimerUI(30, 30);
-    document.getElementById("timer-display").style.color = '#ecf0f1';
-    document.getElementById("player2-pseudo").textContent = "Adversaire";
-    showMessage("action-msg", "");
-    showMessage("match-msg", "");
-    const returnToMenuBtn = document.getElementById('return-to-menu');
-    if (returnToMenuBtn) {
-        returnToMenuBtn.style.display = 'none';
-    }
-
-    showMainMenu();
-
-    if (fromMatchEnd) {
-        showMessage(mainMenuMsgDisplay.id, "Le match est terminé. Bienvenue au menu principal.");
-    } else {
-        showMessage(mainMenuMsgDisplay.id, "Vous avez quitté le match. Bienvenue au menu principal.");
-    }
+// --- Fonctions pour le matchmaking PvP (à implémenter plus tard) ---
+async function demarrerMatchPvP() {
+    afficherMessage('main-menu-msg', 'Le mode PvP est en cours de développement. Veuillez jouer contre l\'IA pour le moment.', false, 5000);
 }
+
+// Fonction pour afficher l'écran "Comment Jouer"
+function afficherReglesDuJeu() {
+    afficherEcranCommentJouer();
+    // Vous pouvez charger le contenu des règles ici ou directement dans le HTML
+}
+
+
+// --- Écouteurs d'événements pour les boutons ---
+
+// Boutons d'authentification
+if (loginEmailBtn) {
+    loginEmailBtn.addEventListener('click', () => {
+        // La logique d'authentification est dans auth.js
+        // Vous pouvez déclencher les fonctions d'auth ici si elles sont exportées
+    });
+}
+if (signupEmailBtn) {
+    signupEmailBtn.addEventListener('click', () => {
+        // La logique d'authentification est dans auth.js
+    });
+}
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+        auth.signOut(); // Déconnexion via Firebase Auth
+        afficherMessage('auth-msg-email', 'Déconnecté avec succès !', true);
+        afficherEcranAuth(); // Revenir à l'écran d'authentification
+    });
+}
+if (logoutBtnMenu) {
+    logoutBtnMenu.addEventListener('click', () => {
+        auth.signOut();
+        afficherMessage('global-auth-message', 'Déconnecté avec succès !', true); // Message sur l'écran d'auth
+        afficherEcranAuth();
+    });
+}
+
+// Boutons du menu principal
+if (playIaBtn) {
+    playIaBtn.addEventListener('click', demarrerMatchPvAI);
+}
+if (playPlayerBtn) {
+    playPlayerBtn.addEventListener('click', demarrerMatchPvP);
+}
+if (howToPlayBtn) {
+    howToPlayBtn.addEventListener('click', afficherReglesDuJeu);
+}
+
+// Bouton d'annulation du matchmaking (si implémenté)
+if (cancelMatchmakingBtn) {
+    cancelMatchmakingBtn.addEventListener('click', () => {
+        afficherMessage('matchmaking-message', 'Recherche de match annulée.', true);
+        afficherMenuPrincipal();
+        // Logique pour annuler la recherche de match dans Firebase
+    });
+}
+
+// Attacher les écouteurs d'actions de jeu (déplacé dans game.js et appelé au démarrage du match)
+// attachGameActionListeners(); // Ceci est maintenant appelé par startMatch dans game.js
+
+// Initialisation au chargement de la page:
+// L'écouteur onAuthStateChanged dans auth.js gère déjà l'affichage initial.
+// Donc pas besoin d'appeler afficherEcranAuth() ici directement.
