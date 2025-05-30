@@ -1,7 +1,7 @@
 // js/game.js
 
 // Importer les modules Firebase depuis ton fichier de configuration centralisé
-import { app, database, auth, ref, get, set, runTransaction, onValue, off } from './firebaseConfig.js';
+import { app, db, auth, ref, get, set, runTransaction, onValue, off } from './firebaseConfig.js';
 // Note: onAuthStateChanged est importé dans auth.js et main.js pour sa gestion globale
 // mais si tu as besoin de l'utiliser spécifiquement ici, tu devras l'importer aussi depuis firebase-auth.js.
 // Pour l'instant, je le retire car il est géré par auth.js et main.js
