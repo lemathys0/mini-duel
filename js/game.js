@@ -22,15 +22,13 @@ import {
     updateUserStats
 } from "./main.js";
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons } from "./utils.js";
-import { processAITurn } from "./aiLogic.js"; // Importe processAITurn
+import { processAITurn, isAITurnCurrentlyProcessing, lastAITurnProcessed } from "./aiLogic.js"; // Importez processAITurn et les nouvelles variables
 
 // Variable pour annuler l'écouteur onValue principal du match
 let currentMatchUnsubscribe = null;
 
 // Verrou pour empêcher processTurn de se déclencher plusieurs fois pour le même tour
 let isProcessingTurnInternally = false;
-
-// isAIActionScheduled a été déplacé et géré dans aiLogic.js désormais.
 
 
 /**
@@ -246,16 +244,25 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         // --- DÉCLENCHEMENT DE L'IA SI C'EST SON TOUR OU SI LE JOUEUR A JOUÉ (PvAI UNIQUEMENT) ---
         if (gameMode === 'PvAI') {
             const opponentActionExists = matchData.players[opponentKey].action;
+            const currentMatchTurnCounter = matchData.turnCounter || 0; // Utiliser turnCounter pour un identifiant de tour unique
 
-            // Condition pour que l'IA joue (c'est son tour OU le joueur vient de jouer son action)
+            // Condition pour que l'IA joue
+            // 1. C'est le tour de l'IA et elle n'a pas encore agi
+            // OU
+            // 2. C'est le tour du joueur, le joueur a agi, et l'IA n'a pas encore agi
             const shouldAIPlay =
                 (matchData.turn === opponentKey && !opponentActionExists) ||
                 (matchData.turn === youKey && matchData.players[youKey].action && !opponentActionExists);
 
-            // Si l'IA DOIT jouer, nous appelons processAITurn. La gestion du délai et du verrou est interne à aiLogic.
-            if (shouldAIPlay) {
+            // Si l'IA DOIT jouer ET qu'un traitement n'est pas déjà en cours
+            // ET que l'IA n'a pas déjà été traitée pour ce tour
+            if (shouldAIPlay && !isAITurnCurrentlyProcessing && lastAITurnProcessed !== currentMatchTurnCounter) {
                 console.log("DEBUG IA: Conditions remplies. Appel de processAITurn (gestion du délai interne à aiLogic).");
                 await processAITurn(matchData); // On l'appelle directement, aiLogic va gérer le reste
+            } else if (isAITurnCurrentlyProcessing) {
+                console.log("DEBUG IA: Traitement de l'IA déjà en cours, pas de nouveau déclenchement.");
+            } else if (lastAITurnProcessed === currentMatchTurnCounter) {
+                console.log(`DEBUG IA: L'IA a déjà agi pour le tour ${currentMatchTurnCounter}.`);
             } else {
                 console.log("DEBUG IA: Les conditions pour déclencher processAITurn ne sont pas encore remplies.");
             }
@@ -432,6 +439,9 @@ export async function processTurn(matchData) { // Exportez processTurn
         historyUpdates.push(`${p2.pseudo} est K.O. ! ${p1.pseudo} a gagné !`);
     }
 
+    // Ajout d'un compteur de tour pour un meilleur suivi
+    const newTurnCounter = (matchData.turnCounter || 0) + 1;
+
     const updates = {
         [`players/p1/pv`]: newP1Pv,
         [`players/p2/pv`]: newP2Pv,
@@ -445,7 +455,8 @@ export async function processTurn(matchData) { // Exportez processTurn
         lastTurnProcessedAt: serverTimestamp(),
         turn: (matchData.turn === 'p1' ? 'p2' : 'p1'),
         turnStartTime: serverTimestamp(),
-        status: newStatus
+        status: newStatus,
+        turnCounter: newTurnCounter // Mettre à jour le compteur de tour
     };
 
     if (newStatus === 'finished') {
