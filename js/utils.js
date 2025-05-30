@@ -39,17 +39,41 @@ export function updateHealthBar(barId, health) {
 
 // Fonction pour mettre à jour l'affichage du timer
 export function updateTimerUI(timeLeft) {
-    const timerDisplay = document.getElementById("timer-display");
-    if (timerDisplay) {
-        timerDisplay.textContent = `Temps restant : ${timeLeft}s`;
+    // Cibler l'élément qui affiche la valeur du timer, qui a l'ID "timer-value" dans votre HTML
+    const timerValueDisplay = document.getElementById("timer-value");
+    // Cibler la barre de progression du timer, qui a l'ID "timer-progress-bar"
+    const timerProgressBar = document.getElementById("timer-progress-bar");
+
+    if (timerValueDisplay) {
+        timerValueDisplay.textContent = `${timeLeft}`; // Affiche seulement le nombre de secondes
     } else {
-        console.warn("Élément 'timer-display' non trouvé.");
+        console.warn("Élément 'timer-value' non trouvé."); // Avertissement si 'timer-value' est manquant
+    }
+
+    if (timerProgressBar) {
+        // NOTE : Assurez-vous que timerMax est accessible ici, par exemple en l'important ou en le passant en paramètre si nécessaire
+        // Pour l'instant, je le mets en dur à 30 comme votre log l'indique.
+        const percentage = (timeLeft / 30) * 100;
+        timerProgressBar.style.width = `${percentage}%`;
+        // Changez la couleur en fonction du temps restant
+        if (percentage < 25) {
+            timerProgressBar.style.backgroundColor = '#e74c3c'; // Rouge
+        } else if (percentage < 50) {
+            timerProgressBar.style.backgroundColor = '#f39c12'; // Orange
+        } else {
+            timerProgressBar.style.backgroundColor = '#2ecc71'; // Vert
+        }
+    } else {
+        console.warn("Élément 'timer-progress-bar' non trouvé."); // Avertissement si 'timer-progress-bar' est manquant
     }
 }
 
 // Fonction pour désactiver les boutons d'action
 export function disableActionButtons() {
-    const buttons = document.querySelectorAll(".action-btn");
+    // Cibler les boutons par leur ID si vous avez une liste explicite, ou par une classe
+    // Pour l'instant, je cible les boutons d'action par leur classe commune 'action-buttons button' si vous avez défini un style spécifique.
+    // Ou si vous avez ajouté une classe '.action-btn' à chacun.
+    const buttons = document.querySelectorAll("#action-attack, #action-defend, #action-heal");
     console.log("disableActionButtons: Désactivation des boutons d'action."); // Log pour suivre l'appel
     buttons.forEach(button => {
         button.disabled = true;
@@ -60,7 +84,7 @@ export function disableActionButtons() {
 
 // Fonction pour activer les boutons d'action
 export function enableActionButtons() {
-    const buttons = document.querySelectorAll(".action-btn");
+    const buttons = document.querySelectorAll("#action-attack, #action-defend, #action-heal");
     console.log("enableActionButtons: Activation des boutons d'action."); // Log pour suivre l'appel
     buttons.forEach(button => {
         button.disabled = false;

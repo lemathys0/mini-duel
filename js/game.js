@@ -41,7 +41,7 @@ export async function performAction(actionType) {
     console.log(`Tentative d'action : ${actionType}`); // DEBUG : Confirme que performAction est appelée
 
     // DEBUG : Log des valeurs des variables clés
-    console.log(`performAction - currentMatchId: ${currentMatchId}, currentUser: ${currentUser ? currentUser.uid : 'null'}, youKey: ${youKey}, hasPlayedThisTurn: ${hasPlayedThisTurn}`);
+    console.log(`performAction - currentMatchId: ${currentMatchId}, currentUser: ${currentUser ? currentUser.pseudo : 'null'}, youKey: ${youKey}, hasPlayedThisTurn: ${hasPlayedThisTurn}`);
 
     if (!currentMatchId || !currentUser || !youKey) {
         showMessage("action-msg", "Erreur : Les informations du match ne sont pas disponibles.");
@@ -455,6 +455,10 @@ export async function processTurn(matchData) { // Exportez processTurn
     try {
         await update(matchRef, updates);
         console.log("Tour traité avec succès. Mise à jour Firebase. Prochain tour pour :", updates.turn);
+        // NOUVEAU : Réinitialiser hasPlayedThisTurn après la mise à jour Firebase du nouveau tour
+        setHasPlayedThisTurn(false);
+        console.log(`DEBUG main.js: hasPlayedThisTurn réinitialisé à ${hasPlayedThisTurn} après traitement du tour.`); // Log pour confirmation
+
     } catch (error) {
         console.error("Erreur lors du traitement du tour :", error);
         showMessage("action-msg", "Erreur interne lors du traitement du tour.");
