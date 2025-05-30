@@ -187,7 +187,7 @@ async function createMatch(mode) {
                 healCooldown: 0,
             }
         },
-        history: [`Match ${mode === 'PvP' ? 'PvP' : 'IA'} créé par ${pseudo}. ${mode === 'PvP' ? 'En attente d'un adversaire...' : 'Le duel contre l'IA commence !'}`],
+        history: [`Match ${mode === 'PvP' ? 'PvP' : 'IA'} créé par ${pseudo}. ${mode === 'PvP' ? 'En attente d\'un adversaire...' : 'Le duel contre l\'IA commence !'}`],
         lastTurnProcessedAt: serverTimestamp(),
         turnStartTime: serverTimestamp() // Ajout du timestamp de début de tour
     };
