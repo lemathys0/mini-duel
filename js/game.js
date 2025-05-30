@@ -235,13 +235,17 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         if (gameMode === 'PvAI') {
             // Si c'est le tour de l'IA ET qu'elle n'a pas encore soumis d'action
             if (matchData.turn === opponentKey && !matchData.players[opponentKey].action) {
-                console.log("DEBUG IA (DEBUT TOUR IA): Conditions remplies. Déclenchement de processAITurn.");
-                await processAITurn(matchData);
+                console.log("DEBUG IA (DEBUT TOUR IA): Conditions remplies. Déclenchement de processAITurn après 1s.");
+                setTimeout(async () => {
+                    await processAITurn(matchData);
+                }, 1000); // Délai d'une seconde
             }
             // Si c'est le tour du joueur MAIS que le joueur a déjà soumis son action ET que l'IA n'a PAS encore soumis son action
             else if (matchData.turn === youKey && matchData.players[youKey].action && !matchData.players[opponentKey].action) {
-                 console.log("DEBUG IA (APRES JOUEUR): Conditions remplies. Déclenchement de processAITurn.");
-                 await processAITurn(matchData);
+                 console.log("DEBUG IA (APRES JOUEUR): Conditions remplies. Déclenchement de processAITurn après 1s.");
+                 setTimeout(async () => {
+                    await processAITurn(matchData);
+                 }, 1000); // Délai d'une seconde
             }
         }
 
