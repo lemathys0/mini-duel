@@ -3,38 +3,32 @@
 console.log("utils.js chargé.");
 
 // --- Références aux éléments du DOM pour une meilleure performance ---
-// Ces constantes sont définies ici car elles sont utilisées par plusieurs fonctions de utils.js
 const authSection = document.getElementById('auth');
 const mainMenuSection = document.getElementById('main-menu');
 const matchmakingStatusSection = document.getElementById('matchmaking-status');
 const gameScreenSection = document.getElementById('game-screen');
-const leaderboardScreen = document.getElementById('leaderboard-screen'); // Si vous l'ajoutez plus tard
+const leaderboardScreen = document.getElementById('leaderboard-screen');
 const howToPlayScreen = document.getElementById('how-to-play-screen');
 
 // Références spécifiques pour les messages et barres de vie
-const messageContainer = document.getElementById('message-container'); // Conteneur générique pour les messages
-// Note: player1HealthBar et player2HealthBar ne sont plus utilisées directement ici
-// car updateHealthBar prend l'ID en paramètre.
 const player1PVDisplay = document.getElementById('player1-pv');
 const player2PVDisplay = document.getElementById('player2-pv');
 const timerDisplay = document.getElementById('timer-display');
 const gameHistoryList = document.getElementById('history'); // L'ID du HTML est 'history'
-const timerProgressBar = document.getElementById('timer-progress-bar'); // Ajouté pour la barre de progression
+const timerProgressBar = document.getElementById('timer-progress-bar');
 
-const attackBtn = document.getElementById('action-attack'); // IDs réels de vos boutons
+const attackBtn = document.getElementById('action-attack');
 const defendBtn = document.getElementById('action-defend');
 const healBtn = document.getElementById('action-heal');
-// const specialAttackBtn = document.getElementById('special-attack-btn'); // Si vous avez un bouton d'attaque spéciale
+const specialAttackBtn = document.getElementById('special-attack-btn'); // Gardez si vous l'avez dans votre HTML
 const returnToMenuBtnGame = document.getElementById('back-to-menu-btn-game');
-
 
 // Cache des messages affichés pour pouvoir les supprimer par ID
 const activeMessages = {};
 
 /**
- * Affiche un message à l'utilisateur dans un conteneur spécifique ou un élément ciblé.
- * Gère la suppression des messages précédents pour le même ID.
- * @param {string} messageId - Un ID unique pour ce type de message (ex: 'auth-msg-email', 'action-msg').
+ * Affiche un message à l'utilisateur dans un élément ciblé.
+ * @param {string} messageId - L'ID de l'élément où afficher le message (ex: 'action-msg', 'auth-msg-email').
  * @param {string} text - Le texte du message à afficher.
  * @param {boolean} isSuccess - Vrai pour un message de succès (vert), Faux pour une erreur (rouge).
  * @param {number} duration - Durée d'affichage du message en ms. 0 pour un message persistant.
@@ -42,42 +36,34 @@ const activeMessages = {};
 export function afficherMessage(messageId, text, isSuccess = false, duration = 5000) {
     let targetElement = document.getElementById(messageId);
 
-    // Si le targetElement n'existe pas, on cherche un conteneur générique ou on le crée dynamiquement.
-    // Cette logique dépend de comment vous voulez gérer les messages.
-    // Pour l'instant, on assume que messageId pointe vers un élément existant comme 'action-msg'.
     if (!targetElement) {
         console.warn(`afficherMessage: L'élément avec l'ID '${messageId}' n'a pas été trouvé. Le message ne sera pas affiché.`);
         return;
     }
 
-    // Efface le contenu de l'élément cible pour le nouveau message
-    targetElement.innerHTML = '';
+    targetElement.innerHTML = ''; // Efface le contenu précédent
     targetElement.textContent = text;
-    targetElement.className = isSuccess ? 'message success' : 'message error'; // Assurez-vous d'avoir ces classes CSS
+    targetElement.className = isSuccess ? 'message success' : 'message error';
     targetElement.style.display = 'block';
 
-    // Si une durée est spécifiée, masquer le message après cette durée
     if (duration > 0) {
-        // Efface le timeout précédent pour cet ID si un nouveau message arrive avant la fin du précédent
         if (activeMessages[messageId]) {
             clearTimeout(activeMessages[messageId]);
         }
         activeMessages[messageId] = setTimeout(() => {
             if (targetElement) {
-                targetElement.textContent = ''; // Effacer le texte
-                targetElement.style.display = 'none'; // Masquer l'élément
+                targetElement.textContent = '';
+                targetElement.style.display = 'none';
             }
             delete activeMessages[messageId];
         }, duration);
     } else {
-        // Pour les messages persistants, s'assurer qu'il n'y a pas de timeout actif
         if (activeMessages[messageId]) {
             clearTimeout(activeMessages[messageId]);
             delete activeMessages[messageId];
         }
     }
 }
-
 
 /**
  * Met à jour la barre de vie et l'affichage des PV.
@@ -87,19 +73,17 @@ export function afficherMessage(messageId, text, isSuccess = false, duration = 5
 export function mettreAJourBarreDeVie(barId, currentPv) {
     const healthBar = document.getElementById(barId);
     if (healthBar) {
-        const percentage = Math.max(0, Math.min(100, currentPv)); // S'assurer que le pourcentage est entre 0 et 100
+        const percentage = Math.max(0, Math.min(100, currentPv));
         healthBar.style.width = `${percentage}%`;
-        // Changer la couleur en fonction du pourcentage
         if (percentage > 50) {
-            healthBar.style.backgroundColor = '#2ecc71'; // Vert
+            healthBar.style.backgroundColor = '#2ecc71';
         } else if (percentage > 20) {
-            healthBar.style.backgroundColor = '#f39c12'; // Orange
+            healthBar.style.backgroundColor = '#f39c12';
         } else {
-            healthBar.style.backgroundColor = '#e74c3c'; // Rouge
+            healthBar.style.backgroundColor = '#e74c3c';
         }
     }
 
-    // Met à jour l'affichage numérique des PV
     if (barId === 'you-health-bar' && player1PVDisplay) {
         player1PVDisplay.textContent = `${currentPv} PV`;
     } else if (barId === 'opponent-health-bar' && player2PVDisplay) {
@@ -114,16 +98,16 @@ export function mettreAJourBarreDeVie(barId, currentPv) {
  */
 export function mettreAJourMinuteurUI(timeLeftSeconds, totalTimeSeconds) {
     if (timerDisplay) {
-        timerDisplay.textContent = `${timeLeftSeconds}s`; // Affiche le temps restant en secondes
+        timerDisplay.textContent = `${timeLeftSeconds}s`;
         const percentage = (timeLeftSeconds / totalTimeSeconds) * 100;
         if (timerProgressBar) {
             timerProgressBar.style.width = `${percentage}%`;
             if (percentage > 50) {
-                timerProgressBar.style.backgroundColor = '#2ecc71'; // Vert
+                timerProgressBar.style.backgroundColor = '#2ecc71';
             } else if (percentage > 20) {
-                timerProgressBar.style.backgroundColor = '#f39c12'; // Orange
+                timerProgressBar.style.backgroundColor = '#f39c12';
             } else {
-                timerProgressBar.style.backgroundColor = '#e74c3c'; // Rouge
+                timerProgressBar.style.backgroundColor = '#e74c3c';
             }
         }
     }
@@ -135,14 +119,10 @@ export function mettreAJourMinuteurUI(timeLeftSeconds, totalTimeSeconds) {
  */
 export function ajouterMessageHistorique(message) {
     if (gameHistoryList) {
-        const listItem = document.createElement('p'); // Utiliser un paragraphe pour un affichage plus simple
+        const listItem = document.createElement('p');
         listItem.textContent = message;
-        gameHistoryList.appendChild(listItem); // Ajoute à la fin pour un ordre chronologique
-        gameHistoryList.scrollTop = gameHistoryList.scrollHeight; // Scroll vers le bas
-        // Optionnel: Limiter l'historique pour ne pas surcharger le DOM
-        // while (gameHistoryList.children.length > 30) { // Exemple: Garder les 30 derniers messages
-        //     gameHistoryList.firstChild.remove();
-        // }
+        gameHistoryList.appendChild(listItem);
+        gameHistoryList.scrollTop = gameHistoryList.scrollHeight;
     }
 }
 
@@ -162,7 +142,7 @@ export function desactiverBoutonsAction() {
     if (attackBtn) attackBtn.disabled = true;
     if (defendBtn) defendBtn.disabled = true;
     if (healBtn) healBtn.disabled = true;
-    // if (specialAttackBtn) specialAttackBtn.disabled = true;
+    if (specialAttackBtn) specialAttackBtn.disabled = true; // Si présent
 }
 
 /**
@@ -172,7 +152,7 @@ export function activerBoutonsAction() {
     if (attackBtn) attackBtn.disabled = false;
     if (defendBtn) defendBtn.disabled = false;
     if (healBtn) healBtn.disabled = false;
-    // if (specialAttackBtn) specialAttackBtn.disabled = false;
+    if (specialAttackBtn) specialAttackBtn.disabled = false; // Si présent
 }
 
 // --- Fonctions de gestion des écrans ---
@@ -220,7 +200,7 @@ export function afficherEcranJeu() {
     masquerTousLesEcrans();
     if (gameScreenSection) gameScreenSection.style.display = 'block';
     if (returnToMenuBtnGame) {
-        returnToMenuBtnGame.style.display = 'block'; // S'assurer que le bouton est visible en jeu
+        returnToMenuBtnGame.style.display = 'block';
     }
 }
 

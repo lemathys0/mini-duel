@@ -1,6 +1,6 @@
 // js/main.js
 
-import { initializeFirebaseAndAuth, auth, onAuthStateChanged, currentUser } from './auth.js';
+import { initializeFirebaseAndAuth, auth, onAuthStateChanged } from './auth.js'; // 'auth' est maintenant exporté
 // Importe les fonctions utilitaires nécessaires, avec les nouveaux noms français
 import {
     afficherMessage,
@@ -9,7 +9,7 @@ import {
     afficherMenuPrincipal,
     afficherEcranMatchmaking,
     afficherEcranJeu,
-    afficherEcranClassement, // Si implémenté
+    afficherEcranClassement,
     afficherEcranCommentJouer
 } from './utils.js';
 import { attachGameActionListeners, startMatch, leaveGame } from './game.js';
@@ -26,7 +26,7 @@ let selectedAIDifficulty = 'normal'; // Difficulté par défaut pour l'IA
 
 // Références aux éléments du DOM
 const playerNameDisplay = document.getElementById('player-name');
-const pseudoInput = document.getElementById('pseudo-input');
+const pseudoInput = document.getElementById('pseudo-input'); // Utilisé pour définir le pseudo
 const pseudoDisplay = document.getElementById('pseudo-display');
 const playerStatsDiv = document.getElementById('player-stats');
 
@@ -49,8 +49,7 @@ function mettreAJourUIUtilisateur(user) {
         currentUserId = user.uid;
         currentUserName = user.displayName || user.email || "Utilisateur";
 
-        // Récupérer le pseudo depuis Firestore (si vous utilisez Firestore pour les profils)
-        // Ou depuis Realtime Database
+        // Récupérer le pseudo depuis Firebase Realtime Database
         const userRef = ref(db, `users/${currentUserId}`);
         onValue(userRef, (snapshot) => {
             const userData = snapshot.val();
@@ -62,9 +61,11 @@ function mettreAJourUIUtilisateur(user) {
                 // Si pas de pseudo enregistré, utiliser le displayName/email et proposer de définir un pseudo
                 if (playerNameDisplay) playerNameDisplay.textContent = currentUserName;
                 if (pseudoDisplay) pseudoDisplay.textContent = `Veuillez définir un pseudo.`;
+                // Vous pouvez ajouter ici une logique pour forcer la saisie du pseudo
+                // Par exemple, en affichant un champ de saisie directement.
             }
         }, {
-            onlyOnce: true // Ne pas écouter en temps réel le pseudo pour l'instant
+            onlyOnce: true // Écoute une seule fois pour le pseudo initial
         });
 
 
@@ -83,10 +84,11 @@ function mettreAJourUIUtilisateur(user) {
             }
         });
 
-
+        // Afficher le menu principal après connexion
         afficherMenuPrincipal();
         if (logoutBtn) logoutBtn.style.display = 'none'; // Masquer le bouton déconnexion de l'écran d'auth
     } else {
+        // Utilisateur déconnecté
         currentUserId = null;
         currentUserName = "Joueur";
         if (playerNameDisplay) playerNameDisplay.textContent = currentUserName;
@@ -97,15 +99,16 @@ function mettreAJourUIUtilisateur(user) {
             playerStatsListener = null;
         }
 
+        // Afficher l'écran d'authentification
         afficherEcranAuth();
-        if (logoutBtn) logoutBtn.style.display = 'block'; // Afficher le bouton déconnexion si on est sur l'écran d'auth
+        if (logoutBtn) logoutBtn.style.display = 'block'; // Afficher le bouton déconnexion de l'écran d'auth
     }
 }
 
 // Initialise Firebase Auth et configure l'écouteur d'état de l'authentification
-initializeFirebaseAndAuth();
+initializeFirebaseAndAuth(); // Cette fonction devrait être dans auth.js et exporter `auth`
 onAuthStateChanged(auth, (user) => {
-    mettreAJourUIUtilisateur(user);
+    mettreAJourUIUtilisateur(user); // Cette fonction est appelée chaque fois que l'état d'auth change
 });
 
 // --- Fonctions de gestion du jeu ---
@@ -183,30 +186,20 @@ function afficherReglesDuJeu() {
 
 // --- Écouteurs d'événements pour les boutons ---
 
-// Boutons d'authentification
-if (loginEmailBtn) {
-    loginEmailBtn.addEventListener('click', () => {
-        // La logique d'authentification est dans auth.js
-        // Vous pouvez déclencher les fonctions d'auth ici si elles sont exportées
-    });
-}
-if (signupEmailBtn) {
-    signupEmailBtn.addEventListener('click', () => {
-        // La logique d'authentification est dans auth.js
-    });
-}
+// Les boutons d'authentification sont gérés dans auth.js qui appelle cette fonction pour mettre à jour l'UI
+// Ici, on gère les déconnexions
 if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-        auth.signOut(); // Déconnexion via Firebase Auth
-        afficherMessage('auth-msg-email', 'Déconnecté avec succès !', true);
-        afficherEcranAuth(); // Revenir à l'écran d'authentification
+    logoutBtn.addEventListener('click', async () => {
+        await auth.signOut(); // Déconnexion via Firebase Auth
+        afficherMessage('global-auth-message', 'Déconnecté avec succès !', true);
+        // L'écouteur onAuthStateChanged s'occupera d'appeler mettreAJourUIUtilisateur(null)
     });
 }
 if (logoutBtnMenu) {
-    logoutBtnMenu.addEventListener('click', () => {
-        auth.signOut();
-        afficherMessage('global-auth-message', 'Déconnecté avec succès !', true); // Message sur l'écran d'auth
-        afficherEcranAuth();
+    logoutBtnMenu.addEventListener('click', async () => {
+        await auth.signOut();
+        afficherMessage('global-auth-message', 'Déconnecté avec succès !', true);
+        // L'écouteur onAuthStateChanged s'occupera d'appeler mettreAJourUIUtilisateur(null)
     });
 }
 
@@ -226,13 +219,8 @@ if (cancelMatchmakingBtn) {
     cancelMatchmakingBtn.addEventListener('click', () => {
         afficherMessage('matchmaking-message', 'Recherche de match annulée.', true);
         afficherMenuPrincipal();
-        // Logique pour annuler la recherche de match dans Firebase
+        // Logique pour annuler la recherche de match dans Firebase si elle était active
     });
 }
 
-// Attacher les écouteurs d'actions de jeu (déplacé dans game.js et appelé au démarrage du match)
-// attachGameActionListeners(); // Ceci est maintenant appelé par startMatch dans game.js
-
-// Initialisation au chargement de la page:
-// L'écouteur onAuthStateChanged dans auth.js gère déjà l'affichage initial.
-// Donc pas besoin d'appeler afficherEcranAuth() ici directement.
+// Note: `attachGameActionListeners()` est appelée dans `game.js` quand un match démarre.

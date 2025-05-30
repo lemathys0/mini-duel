@@ -33,6 +33,8 @@ import { handleUserLogin, handleUserLogout } from './main.js';
 
 console.log("auth.js chargé.");
 
+export const auth = getAuth(app);
+
 // Variables pour stocker le confirmationResult pour l'authentification par téléphone
 let confirmationResult = null;
 let recaptchaVerifierInstance = null; // Variable pour garder l'instance reCAPTCHA
