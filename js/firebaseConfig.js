@@ -3,7 +3,8 @@
 // Importe initializeApp pour initialiser l'application Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 
-import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // <-- AJOUTE CETTE LIGNE
+// Importe getAuth pour l'authentification Firebase
+import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // <-- C'est bon, cette ligne est là
 
 // Importe TOUTES les fonctions nécessaires de Firebase Realtime Database
 import {
@@ -18,7 +19,7 @@ import {
     serverTimestamp,
     runTransaction,
     push,
-    onDisconnect // <-- C'est celle qui manquait pour la dernière erreur !
+    onDisconnect
 } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
 
 
@@ -40,7 +41,11 @@ export const app = initializeApp(firebaseConfig);
 // Obtenir l'instance de la base de données
 export const db = getDatabase(app);
 
+// Obtenir l'instance de l'authentification ET L'EXPORTER
+export const auth = getAuth(app); // <-- **CETTE LIGNE MANQUAIT !**
+
 // EXPORTE TOUTES LES FONCTIONS DE LA BASE DE DONNÉES POUR LES AUTRES MODULES
+// Tu peux laisser cet export comme il est, 'auth' étant déjà exporté plus haut.
 export {
     ref,
     set,
