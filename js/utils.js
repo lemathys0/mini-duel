@@ -1,85 +1,78 @@
-// utils.js (aucune modification majeure nécessaire, car la correction est dans game.js)
 // utils.js
 
-export function showMessage(elementId, message, append = false) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        if (append) {
-            const p = document.createElement('p');
-            p.textContent = message;
-            element.appendChild(p);
-            element.scrollTop = element.scrollHeight; // Scroll to bottom
+// Fonction pour afficher des messages dans la zone de message
+export function showMessage(targetId, message, isHistory = false) {
+    const targetElement = document.getElementById(targetId);
+    if (targetElement) {
+        const p = document.createElement("p");
+        p.textContent = message;
+        if (isHistory) {
+            targetElement.prepend(p); // Ajoute les messages d'historique en haut
         } else {
-            element.textContent = message;
+            targetElement.innerHTML = ''; // Efface le message précédent
+            targetElement.appendChild(p); // Ajoute le nouveau message
         }
     } else {
-        console.warn(`Element with ID '${elementId}' not found for message: ${message}`);
+        console.warn(`Élément avec l'ID '${targetId}' non trouvé pour afficher le message.`);
     }
 }
 
+// Fonction pour mettre à jour la barre de vie
 export function updateHealthBar(barId, health) {
     const healthBar = document.getElementById(barId);
-    const pvDisplay = document.getElementById(barId.replace('health-bar', 'pv-display'));
-
     if (healthBar) {
         healthBar.style.width = `${health}%`;
-        if (health <= 25) {
-            healthBar.style.backgroundColor = '#e74c3c'; // Rouge
-        } else if (health <= 50) {
-            healthBar.style.backgroundColor = '#f1c40f'; // Jaune
+        healthBar.textContent = `${health} PV`;
+        // Ajouter des classes pour la couleur en fonction de la santé
+        healthBar.classList.remove('bg-danger', 'bg-warning', 'bg-success');
+        if (health < 25) {
+            healthBar.classList.add('bg-danger');
+        } else if (health < 50) {
+            healthBar.classList.add('bg-warning');
         } else {
-            healthBar.style.backgroundColor = '#2ecc71'; // Vert
+            healthBar.classList.add('bg-success');
         }
     } else {
-        console.error(`Elements for ${barId} health bar not found.`);
-    }
-
-    if (pvDisplay) {
-        pvDisplay.textContent = `${health} PV`;
+        console.warn(`Barre de vie avec l'ID '${barId}' non trouvée.`);
     }
 }
 
+// Fonction pour mettre à jour l'affichage du timer
 export function updateTimerUI(timeLeft) {
-    const timerValueElement = document.getElementById("timer-value");
-    const timerProgressBarElement = document.getElementById("timer-progress-bar");
-    
-    if (timerValueElement) {
-        timerValueElement.textContent = timeLeft;
-    }
-    
-    if (timerProgressBarElement) {
-        // Supposons que timerMax est disponible via import ou est une valeur constante dans utils.js
-        // Si timerMax n'est pas importé, vous devrez l'importer de main.js ou le définir ici
-        // Pour l'instant, je le suppose disponible (il l'est via main.js)
-        const timerMax = 30; // Remplacez par votre valeur réelle si non importée
-        const percentage = (timeLeft / timerMax) * 100;
-        timerProgressBarElement.style.width = `${percentage}%`;
-
-        if (timeLeft <= 5) { // 5 dernières secondes en rouge
-            timerProgressBarElement.style.backgroundColor = '#e74c3c';
-        } else if (timeLeft <= 15) { // 15 secondes en orange
-            timerProgressBarElement.style.backgroundColor = '#e67e22';
-        } else {
-            timerProgressBarElement.style.backgroundColor = '#3498db'; // Bleu
-        }
+    const timerDisplay = document.getElementById("timer-display");
+    if (timerDisplay) {
+        timerDisplay.textContent = `Temps restant : ${timeLeft}s`;
+    } else {
+        console.warn("Élément 'timer-display' non trouvé.");
     }
 }
 
+// Fonction pour désactiver les boutons d'action
+export function disableActionButtons() {
+    const buttons = document.querySelectorAll(".action-btn");
+    console.log("disableActionButtons: Désactivation des boutons d'action."); // Log pour suivre l'appel
+    buttons.forEach(button => {
+        button.disabled = true;
+        button.classList.add('disabled'); // Ajoute une classe pour le style visuel
+        console.log(`disableActionButtons: Bouton '${button.id}' désactivé.`); // Log détaillé
+    });
+}
+
+// Fonction pour activer les boutons d'action
+export function enableActionButtons() {
+    const buttons = document.querySelectorAll(".action-btn");
+    console.log("enableActionButtons: Activation des boutons d'action."); // Log pour suivre l'appel
+    buttons.forEach(button => {
+        button.disabled = false;
+        button.classList.remove('disabled'); // Supprime la classe de style visuel
+        console.log(`enableActionButtons: Bouton '${button.id}' activé.`); // Log détaillé
+    });
+}
+
+// Fonction pour vider l'historique des messages
 export function clearHistory() {
     const historyElement = document.getElementById("history");
     if (historyElement) {
-        historyElement.innerHTML = ''; // Vide l'historique
+        historyElement.innerHTML = '';
     }
-}
-
-export function disableActionButtons() {
-    document.getElementById("action-attack").disabled = true;
-    document.getElementById("action-defend").disabled = true;
-    document.getElementById("action-heal").disabled = true;
-}
-
-export function enableActionButtons() {
-    document.getElementById("action-attack").disabled = false;
-    document.getElementById("action-defend").disabled = false;
-    document.getElementById("action-heal").disabled = false;
 }

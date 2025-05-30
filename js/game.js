@@ -61,6 +61,7 @@ export async function performAction(actionType) {
         return;
     }
 
+    console.log("performAction: Appel de disableActionButtons.");
     disableActionButtons();
     showMessage("action-msg", "Traitement de votre action...");
 
@@ -70,12 +71,14 @@ export async function performAction(actionType) {
     try {
         await update(matchRef, { [playerActionPath]: actionType });
         setHasPlayedThisTurn(true);
+        console.log(`performAction: hasPlayedThisTurn défini à ${hasPlayedThisTurn}.`);
         showMessage("action-msg", `Vous avez choisi : ${actionType}`);
         console.log(`Action '${actionType}' enregistrée pour ${youKey}.`);
 
     } catch (error) {
         console.error("Erreur lors de l'envoi de l'action :", error);
         showMessage("action-msg", "Erreur lors de l'envoi de votre action. Réessayez.");
+        console.log("performAction: Appel de enableActionButtons suite à une erreur.");
         enableActionButtons();
     }
 }
@@ -136,6 +139,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         }
 
         console.log("Données du match mises à jour :", matchData);
+        console.log(`onValue: Current hasPlayedThisTurn: ${hasPlayedThisTurn}`); // Ajout de log
 
         const you = matchData.players[youKey];
         const opponent = matchData.players[opponentKey];
@@ -158,6 +162,7 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                 clearInterval(timerInterval);
                 setTimerInterval(null);
             }
+            console.log("Match terminé: Appel de disableActionButtons.");
             disableActionButtons();
             const lastHistoryEntry = matchData.history[matchData.history.length - 1];
             showMessage("match-msg", lastHistoryEntry);
@@ -196,14 +201,17 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
         }
 
         console.log("Tour actuel selon Firebase :", matchData.turn, " | Votre clé de joueur :", youKey);
+        console.log(`Statut action joueur (${youKey}): ${you.action}`); // Log l'état de votre action
+        console.log(`Statut action adversaire (${opponentKey}): ${opponent.action}`); // Log l'état de l'action adversaire
 
-        // Cette partie du code gère l'affichage et l'activation/désactivation des boutons.
-        // La logique de DECLENCHEMENT de processTurn se fait en dehors de ces if/else.
+
         if (matchData.turn === youKey) {
             if (!matchData.players[youKey].action) {
-                console.log("C'est votre tour. Vous n'avez pas encore soumis d'action.");
+                console.log("C'est votre tour. Vous n'avez pas encore soumis d'action. Réactivation des boutons.");
                 showMessage("action-msg", "C'est votre tour ! Choisissez une action.");
                 setHasPlayedThisTurn(false);
+                console.log(`onValue: hasPlayedThisTurn réinitialisé à ${hasPlayedThisTurn}.`); // Log après réinitialisation
+                console.log("onValue: Appel de enableActionButtons.");
                 enableActionButtons();
                 if (validStartTimeForTimer !== null) {
                     startTimer(validStartTimeForTimer);
@@ -212,8 +220,9 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
                     updateTimerUI(timerMax);
                 }
             } else {
-                console.log("C'est votre tour. Votre action a été soumise. En attente de l'adversaire.");
+                console.log("C'est votre tour. Votre action a été soumise. En attente de l'adversaire. Désactivation des boutons.");
                 showMessage("action-msg", "Action soumise. En attente de l'adversaire...");
+                console.log("onValue: Appel de disableActionButtons car action soumise.");
                 disableActionButtons();
                 if (timerInterval) {
                     clearInterval(timerInterval);
@@ -223,8 +232,9 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
             }
         }
         else { // matchData.turn === opponentKey
-            console.log("C'est le tour de l'adversaire.");
+            console.log("C'est le tour de l'adversaire. Désactivation des boutons.");
             showMessage("action-msg", `C'est le tour de ${opponent.pseudo}.`);
+            console.log("onValue: Appel de disableActionButtons car tour de l'adversaire.");
             disableActionButtons();
             if (timerInterval) {
                 clearInterval(timerInterval);
@@ -318,6 +328,7 @@ export async function processTurn(matchData) { // Exportez processTurn
         clearInterval(timerInterval);
         setTimerInterval(null);
     }
+    console.log("processTurn: Appel de disableActionButtons au début du traitement du tour.");
     disableActionButtons();
 
     // Cette condition est désormais moins critique ici car le déclencheur dans onValue est plus précis
@@ -438,6 +449,7 @@ export async function processTurn(matchData) { // Exportez processTurn
     } catch (error) {
         console.error("Erreur lors du traitement du tour :", error);
         showMessage("action-msg", "Erreur interne lors du traitement du tour.");
+        console.log("processTurn: Appel de enableActionButtons suite à une erreur de traitement.");
         enableActionButtons();
     } finally {
         isProcessingTurnInternally = false;
