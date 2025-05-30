@@ -1,20 +1,19 @@
-// game.js
+// js/game.js
 
 // Importer les modules Firebase depuis ton fichier de configuration centralisé
-import { app, database, auth } from './firebaseConfig.js'; // Assure-toi que le chemin est correct
+import { app, database, auth, ref, get, set, runTransaction, onValue, off } from './firebaseConfig.js';
+// Note: onAuthStateChanged est importé dans auth.js et main.js pour sa gestion globale
+// mais si tu as besoin de l'utiliser spécifiquement ici, tu devras l'importer aussi depuis firebase-auth.js.
+// Pour l'instant, je le retire car il est géré par auth.js et main.js
 
-import { ref, get, set, runTransaction, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+console.log("game.js chargé.");
 
-// Références Firebase
-const gameSessionRef = ref(database, 'current_game_session');
-const usersRef = ref(database, 'users'); // Si tu as besoin de ça, sinon tu peux l'enlever
 
 let currentUser = null;
 let gameDataListener = null;
 let gameId = null; // ID unique de la session de jeu
 
-// Éléments de l'interface utilisateur (s'assurer que les IDs correspondent à ton HTML)
+// Éléments de l'interface utilisateur
 const gameContainer = document.getElementById('game-container');
 const waitingScreen = document.getElementById('waiting-screen');
 const playerHealthElement = document.getElementById('player-health');
@@ -31,20 +30,33 @@ const leaveGameButton = document.getElementById('leave-game-button');
 const gameResultElement = document.getElementById('game-result');
 const rematchButton = document.getElementById('rematch-button');
 
+// Références Firebase spécifiques au jeu
+const gameSessionRef = ref(database, 'current_game_session'); // Ajuste ceci si tu gères plusieurs sessions
 
 // --- Initialisation de l'utilisateur et gestion des sessions ---
+
+// onAuthStateChanged doit être géré de manière centralisée, par exemple dans main.js ou auth.js
+// Ici, nous nous attendons à ce que `currentUser` soit défini via une autre partie du code
+// ou que la logique de redirection soit gérée avant d'arriver à game.js.
+
+// Supposons que tu utilises onAuthStateChanged dans main.js et que tu appelles une fonction pour définir currentUser
+// ou que tu as une redirection si l'utilisateur n'est pas connecté.
+// Pour que ce script fonctionne, nous allons ajouter un onAuthStateChanged localement pour la démo,
+// mais dans un projet réel, il est souvent géré globalement.
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
         currentUser = user;
-        console.log("Connecté en tant que :", currentUser.uid);
-        // Vérifier si l'utilisateur est déjà dans une partie
+        console.log("Game.js: Connecté en tant que :", currentUser.uid);
         checkAndJoinGame();
     } else {
-        console.log("Aucun utilisateur connecté, redirection vers la page de connexion.");
-        window.location.href = 'index.html'; // Rediriger vers la page de connexion/inscription
+        console.log("Game.js: Aucun utilisateur connecté, redirection vers la page de connexion.");
+        // Gérer la redirection si game.html est accessible sans connexion
+        window.location.href = 'index.html';
     }
 });
+
 
 async function checkAndJoinGame() {
     // Tenter de trouver une session existante ou en créer une
@@ -61,18 +73,29 @@ async function checkAndJoinGame() {
         console.log("Reprendre la partie existante :", gameId);
         listenToGameUpdates(gameId);
         showGameUI();
-    } else {
-        // Créer une nouvelle partie
+    } else if (!sessionData || (sessionData.status !== 'waiting' && sessionData.player1.uid === currentUser.uid)) {
+        // Si aucune session n'existe, ou si la session existante n'est pas 'waiting'
+        // et que vous êtes le player1, créer une nouvelle partie.
+        // Cela empêche un joueur de rejoindre sa propre partie en attente comme player2.
         gameId = "game_" + Date.now(); // ID de partie simple basé sur le timestamp
         await createGame(gameId, currentUser.uid);
+    } else {
+        // Cas où une partie existe mais vous ne pouvez pas la rejoindre (ex: déjà 2 joueurs)
+        // et vous n'êtes pas l'un des joueurs.
+        console.log("Partie en cours ou déjà pleine, impossible de rejoindre ou créer.");
+        // Optionnel: Gérer ce cas pour l'utilisateur, par exemple, le rediriger ou lui proposer de chercher une autre partie
+        alert("Une partie est en cours ou pleine. Veuillez réessayer plus tard ou lancer votre propre partie.");
+        window.location.href = 'dashboard.html'; // Exemple de redirection
     }
 }
 
 async function createGame(newGameId, player1Uid) {
     try {
         // Récupérer le nom d'utilisateur et l'avatar depuis la base de données
-        const player1Name = (await get(ref(database, `users/${player1Uid}/username`))).val() || `Joueur ${player1Uid.substring(0, 4)}`;
-        const player1Avatar = (await get(ref(database, `users/${player1Uid}/avatar`))).val() || `images/default-avatar.png`;
+        const player1Snapshot = await get(ref(database, `users/${player1Uid}`));
+        const player1Data = player1Snapshot.val() || {};
+        const player1Name = player1Data.pseudo || `Joueur ${player1Uid.substring(0, 4)}`;
+        const player1Avatar = player1Data.avatar || `images/default-avatar.png`; // Assurez-vous d'avoir une image par défaut
 
         const initialGameData = {
             id: newGameId,
@@ -110,8 +133,10 @@ async function createGame(newGameId, player1Uid) {
 
 async function joinGame(existingGameId, player2Uid) {
     try {
-        const player2Name = (await get(ref(database, `users/${player2Uid}/username`))).val() || `Joueur ${player2Uid.substring(0, 4)}`;
-        const player2Avatar = (await get(ref(database, `users/${player2Uid}/avatar`))).val() || `images/default-avatar.png`;
+        const player2Snapshot = await get(ref(database, `users/${player2Uid}`));
+        const player2Data = player2Snapshot.val() || {};
+        const player2Name = player2Data.pseudo || `Joueur ${player2Uid.substring(0, 4)}`;
+        const player2Avatar = player2Data.avatar || `images/default-avatar.png`;
 
         await runTransaction(gameSessionRef, (currentSession) => {
             if (currentSession && currentSession.id === existingGameId && currentSession.status === 'waiting' && !currentSession.player2) {
@@ -165,7 +190,7 @@ function listenToGameUpdates(id) {
         } else if (!gameData) {
             // La session a été supprimée (par exemple, par le leave du joueur)
             console.log("La session de jeu a été supprimée ou n'existe plus.");
-            alert("La partie a été terminée par votre adversaire.");
+            alert("La partie a été terminée par votre adversaire ou n'existe plus.");
             window.location.href = 'dashboard.html'; // Retour au tableau de bord
         }
     });
@@ -174,6 +199,9 @@ function listenToGameUpdates(id) {
 // --- Mise à jour de l'interface utilisateur ---
 
 function updateGameUI(gameData) {
+    // S'assurer que currentUser est défini avant d'accéder à ses propriétés
+    if (!currentUser) return;
+
     const yourPlayerState = gameData.player1.uid === currentUser.uid ? gameData.player1 : gameData.player2;
     const opponentPlayerState = gameData.player1.uid === currentUser.uid ? gameData.player2 : gameData.player1;
 
@@ -289,7 +317,7 @@ async function performAction(actionType) {
                 if (currentSession.activePlayer !== currentUser.uid) {
                     logEvent(`[Erreur] Ce n'est pas votre tour.`, currentSession);
                     // Retourner undefined pour annuler la transaction sans erreur
-                    return undefined;
+                    return undefined; // Transaction annulée
                 }
 
                 let actionMessage = '';
@@ -302,7 +330,7 @@ async function performAction(actionType) {
                     if ((yourPlayer.healCooldown || 0) > 0) {
                         actionMessage = `[Erreur] Le soin sera disponible dans ${yourPlayer.healCooldown} tour(s).`;
                         // Retourner undefined pour annuler la transaction
-                        return undefined;
+                        return undefined; // Transaction annulée
                     }
                     yourPlayer.health += yourPlayer.healAmount;
                     if (yourPlayer.health > yourPlayer.maxHealth) {
@@ -340,8 +368,7 @@ async function performAction(actionType) {
         });
     } catch (error) {
         console.error("Erreur lors de l'action :", error);
-        // Si la transaction est annulée, le listener updateGameUI va gérer le réactivation des boutons
-        // via l'état du tour ou du cooldown.
+        // Si la transaction est annulée par un "return undefined", cette erreur ne sera pas déclenchée.
         // Sinon, réactiver les boutons ici si une vraie erreur se produit
         attackButton.disabled = false;
         healButton.disabled = false;
@@ -429,7 +456,7 @@ async function resetRematchState(playerUid) {
 async function leaveGame() {
     if (!currentUser || !gameId) return;
 
-    if (!confirm("Voulez-vous vraiment quitter la partie ? La partie sera perdue.")) {
+    if (!confirm("Voulez-vous vraiment quitter la partie ? La partie sera perdue pour vous.")) {
         return;
     }
 
@@ -442,16 +469,16 @@ async function leaveGame() {
 
         await runTransaction(gameSessionRef, (currentSession) => {
             if (currentSession && currentSession.id === gameId) {
-                // Si l'autre joueur existe, le définir comme gagnant
-                if (currentSession.player1 && currentSession.player2) {
+                // Si l'autre joueur existe et la partie n'est pas déjà terminée par un gagnant
+                if (currentSession.player1 && currentSession.player2 && !currentSession.winner) {
                     const opponentUid = currentSession.player1.uid === currentUser.uid ? currentSession.player2.uid : currentSession.player1.uid;
                     currentSession.winner = opponentUid;
                     currentSession.status = 'finished';
                     logEvent(`[${currentUser.uid === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}] a quitté la partie.`, currentSession);
                     logEvent(`[${opponentUid === currentSession.player1.uid ? currentSession.player1.username : currentSession.player2.username}] remporte la partie par forfait !`, currentSession);
-                } else {
-                    // Si un seul joueur (partie en attente), on peut simplement supprimer la session
-                    return null; // Supprime la session
+                } else if (currentSession.status === 'waiting' && currentSession.player1.uid === currentUser.uid && !currentSession.player2) {
+                     // Si c'est l'hôte et qu'il est en attente, on peut simplement supprimer la session
+                     return null; // Supprime la session
                 }
             }
             return currentSession;
@@ -467,10 +494,10 @@ async function leaveGame() {
 
 // Gérer la déconnexion inattendue ou la fermeture de l'onglet
 window.addEventListener('beforeunload', async () => {
-    // Cela ne fonctionne pas toujours de manière fiable pour les transactions
-    // car le navigateur peut tuer le processus avant que la transaction ne s'exécute.
-    // Une solution plus robuste impliquerait un mécanisme de "présence" (Firebase Realtime Database)
-    // et des fonctions Cloud pour gérer les déconnexions.
+    // Cette fonction tente de marquer le joueur comme perdant en cas de déconnexion inattendue.
+    // Elle n'est pas garantie de s'exécuter à 100% dans tous les scénarios de fermeture de navigateur.
+    // Pour une robustesse totale, il est souvent recommandé d'utiliser des fonctions Cloud Firebase
+    // et des mécanismes de "présence" en plus.
     if (currentUser && gameId) {
         try {
             const snapshot = await get(gameSessionRef);

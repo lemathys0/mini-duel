@@ -1,8 +1,19 @@
 // js/auth.js
 
-import { auth, db, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, ref, set, get } from './firebaseConfig.js';
-import { showMessage } from './utils.js'; // Assurez-vous que showMessage est exporté
-import { handleUserLogin, handleUserLogout } from './main.js'; // Fonctions callback de main.js
+// 1. Importe les instances 'auth' et 'db' et les fonctions DB depuis ton fichier de configuration Firebase
+import { auth, db, ref, set, get } from './firebaseConfig.js';
+
+// 2. Importe les fonctions spécifiques d'authentification directement depuis la bibliothèque Firebase Auth
+import {
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // L'URL doit correspondre à ta version de Firebase
+
+// Assurez-vous que ces chemins sont corrects pour vos autres fichiers
+import { showMessage } from './utils.js';
+import { handleUserLogin, handleUserLogout } from './main.js';
 
 console.log("auth.js chargé.");
 

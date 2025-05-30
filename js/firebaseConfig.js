@@ -1,10 +1,10 @@
-// firebaseConfig.js
+// js/firebaseConfig.js
 
 // Importe initializeApp pour initialiser l'application Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 
 // Importe getAuth pour l'authentification Firebase
-import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js"; // <-- C'est bon, cette ligne est là
+import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 
 // Importe TOUTES les fonctions nécessaires de Firebase Realtime Database
 import {
@@ -42,10 +42,10 @@ export const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 
 // Obtenir l'instance de l'authentification ET L'EXPORTER
-export const auth = getAuth(app); // <-- **CETTE LIGNE MANQUAIT !**
+export const auth = getAuth(app); // C'est cette ligne qui était manquante !
 
 // EXPORTE TOUTES LES FONCTIONS DE LA BASE DE DONNÉES POUR LES AUTRES MODULES
-// Tu peux laisser cet export comme il est, 'auth' étant déjà exporté plus haut.
+// Ces fonctions spécifiques de la DB peuvent être réimportées directement d'ici
 export {
     ref,
     set,
