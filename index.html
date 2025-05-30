@@ -11,25 +11,33 @@
         <div></div><div></div><div></div><div></div><div></div>
     </div>
 
-    <div class="container" id="root"> <h1>Mini Duel de Cartes</h1>
+    <div class="container" id="root">
+        <h1>Mini Duel de Cartes</h1>
 
         <div id="auth" class="menu-section">
             <h2>Authentification</h2>
-            <input type="text" id="pseudo" placeholder="Votre Pseudo">
-            <input type="password" id="code" placeholder="Votre Code (4 chiffres)">
-            <button id="login-btn">Se Connecter</button>
-            <button id="signup-btn">S'inscrire</button>
+            <p id="user-info">Non connecté</p>
+
+            <input type="text" id="username-input" placeholder="Votre Pseudo">
+            <button id="save-username-btn">Sauvegarder Pseudo</button>
+            <br><br> <button id="login-btn">Se connecter avec Google</button>
             <p id="auth-msg" class="message"></p>
-        </div>
+            </div>
 
         <div id="main-menu" class="menu-section" style="display:none;">
             <h2>Bienvenue <span id="player-name" style="color:#f1c40f;"></span> !</h2>
-            <p id="pseudo-display"></p> <p id="match-msg" class="message"></p>
+            <p id="pseudo-display"></p>
+            <p id="match-msg" class="message"></p>
+
+            <h3>Vos Statistiques</h3>
+            <div id="player-stats" class="stats-display">
+                </div>
 
             <h3>Choisissez un mode de jeu</h3>
             <div style="display: flex; flex-wrap: wrap; justify-content: center; margin-top: 10px;">
-                <button id="start-ai-game-btn" style="flex: 1 1 auto; margin: 5px; background-color: #27ae60;">Jouer contre l'IA</button>
-                <button id="start-pvp-game-btn" style="flex: 1 1 auto; margin: 5px; background-color: #3498db;">Rejoindre un match PvP</button>
+                <button id="play-ia-btn" style="flex: 1 1 auto; margin: 5px; background-color: #27ae60;">Jouer contre l'IA</button>
+                <button id="play-player-btn" style="flex: 1 1 auto; margin: 5px; background-color: #3498db;">Rejoindre un match PvP</button>
+                <button id="how-to-play-btn" style="flex: 1 1 auto; margin: 5px; background-color: #f39c12;">Comment jouer ?</button>
             </div>
             
             <button id="logout-btn" class="menu-button" style="margin-top: 20px;">Déconnexion</button>
@@ -41,7 +49,8 @@
             <button id="cancel-matchmaking-btn" class="menu-button">Annuler la recherche</button>
         </div>
 
-        <div id="game" class="menu-section" style="display:none;"> <h2>Match: <span id="current-match" style="color:#f1c40f;"></span></h2>
+        <div id="game" class="menu-section" style="display:none;">
+            <h2>Match: <span id="current-match" style="color:#f1c40f;"></span></h2>
 
             <div class="player-info you">
                 <span id="you-name" class="player-name">Vous</span>
