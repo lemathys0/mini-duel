@@ -66,7 +66,7 @@ export function startMatch(matchId, role, mode) {
     gameMode = mode;
     afficherEcranJeu();
     effacerHistorique(); // Effacer l'historique pour un nouveau match
-    desactiverBoutonsAction(); // Désactiver les boutons au début, ils seront activés par le tour
+    desactiverBoutonsAction(); // Désactiver les boutons au début
 
     attachGameActionListeners(); // Attacher les écouteurs d'action
 
@@ -77,25 +77,28 @@ export function startMatch(matchId, role, mode) {
         off(matchRef, 'value', currentMatchListener);
     }
 
-    // Écoute les changements du match en temps réel
-    currentMatchListener = onValue(matchRef, (snapshot) => {
-        const matchData = snapshot.val();
-        if (!matchData) {
-            console.log("Match terminé ou n'existe plus.");
-            afficherMessage('game-msg', 'Le match a été terminé.', false);
-            leaveGame(); // Revenir au menu si le match disparaît
-            return;
-        }
+    // Ajoutez un petit délai avant d'attacher le listener onValue
+    // Cela peut aider à laisser le temps à l'UI de se stabiliser ou à la base de données de se préparer
+    setTimeout(() => { // <--- AJOUTEZ CE BLOC setTimeout
+        currentMatchListener = onValue(matchRef, (snapshot) => {
+            const matchData = snapshot.val();
+            if (!matchData) {
+                console.log("Match terminé ou n'existe plus.");
+                afficherMessage('game-msg', 'Le match a été terminé.', false);
+                leaveGame();
+                return;
+            }
 
-        updateGameUI(matchData); // Met à jour toute l'interface
-        handleTurnLogic(matchData); // Gère la logique du tour
-        checkGameEnd(matchData); // Vérifie si le match est terminé
+            updateGameUI(matchData);
+            handleTurnLogic(matchData);
+            checkGameEnd(matchData);
 
-    }, (error) => {
-        console.error("Erreur d'écoute du match:", error);
-        afficherMessage('game-msg', `Erreur de connexion au match: ${error.message}`, false);
-        leaveGame();
-    });
+        }, (error) => {
+            console.error("Erreur d'écoute du match:", error);
+            afficherMessage('game-msg', `Erreur de connexion au match: ${error.message}`, false);
+            leaveGame();
+        });
+    }, 100); // Délai de 100ms
 }
 
 /**

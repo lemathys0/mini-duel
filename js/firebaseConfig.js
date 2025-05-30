@@ -23,12 +23,6 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app); // C'EST ICI QUE 'auth' EST DÉCLARÉ ET EXPORTÉ UNE FOIS POUR TOUTES
 export const db = getDatabase(app); // C'EST ICI QUE 'db' EST DÉCLARÉ ET EXPORTÉ
 
-// Pour le débogage local de reCAPTCHA (peut être supprimé en production)
-if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    // Si vous testez avec des numéros de téléphone spécifiques, vous pouvez désactiver la vérification d'application.
-    // auth.settings.appVerificationDisabledForTesting = true;
-    console.warn("Firebase Auth: appVerificationDisabledForTesting est probablement activé pour localhost/127.0.0.1 via les règles de sécurité ou une configuration Firebase.");
-}
 
 // Export des fonctions de Realtime Database pour un accès facile
 export { ref, set, get, query, orderByChild, equalTo, push, remove, onValue, serverTimestamp, off, update, onAuthStateChanged };
