@@ -4,7 +4,7 @@ console.log("main.js chargé.");
 
 import { auth, db, ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction } from "./firebaseConfig.js";
 import { setupAuthListeners } from "./auth.js"; // Import de la fonction d'écouteurs d'authentification
-import { startMatchMonitoring, currentMatchId, youKey, gameMode } from "./game.js"; // Importe les fonctions de démarrage du monitoring du match
+import { startMatchMonitoring, gameId, youKey, gameMode } from "./game.js"; // Importe les fonctions de démarrage du monitoring du match
 import { showMessage, updateHealthBar, updateTimerUI, clearHistory, disableActionButtons, enableActionButtons, showAuthScreen, showMainMenu, showMatchmakingScreen, showGameScreen } from "./utils.js"; // Importe les fonctions utilitaires
 
 // Variables globales de l'état de l'application

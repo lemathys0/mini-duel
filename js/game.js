@@ -11,7 +11,7 @@ console.log("game.js chargé.");
 
 let currentUser = null;
 let gameDataListener = null;
-let gameId = null; // ID unique de la session de jeu
+export let gameId = null; // ID unique de la session de jeu
 
 // Éléments de l'interface utilisateur
 const gameContainer = document.getElementById('game-container');
