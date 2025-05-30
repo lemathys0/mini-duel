@@ -10,11 +10,10 @@ const gameScreenSection = document.getElementById('game-screen');
 const leaderboardScreen = document.getElementById('leaderboard-screen');
 const howToPlayScreen = document.getElementById('how-to-play-screen');
 
-// Références spécifiques pour les messages et barres de vie
 const player1PVDisplay = document.getElementById('player1-pv');
 const player2PVDisplay = document.getElementById('player2-pv');
 const timerDisplay = document.getElementById('timer-display');
-const gameHistoryList = document.getElementById('history'); // L'ID du HTML est 'history'
+const gameHistoryList = document.getElementById('history');
 const timerProgressBar = document.getElementById('timer-progress-bar');
 
 const attackBtn = document.getElementById('action-attack');
@@ -23,7 +22,6 @@ const healBtn = document.getElementById('action-heal');
 const specialAttackBtn = document.getElementById('special-attack-btn'); // Gardez si vous l'avez dans votre HTML
 const returnToMenuBtnGame = document.getElementById('back-to-menu-btn-game');
 
-// Cache des messages affichés pour pouvoir les supprimer par ID
 const activeMessages = {};
 
 /**
@@ -41,7 +39,7 @@ export function afficherMessage(messageId, text, isSuccess = false, duration = 5
         return;
     }
 
-    targetElement.innerHTML = ''; // Efface le contenu précédent
+    targetElement.innerHTML = '';
     targetElement.textContent = text;
     targetElement.className = isSuccess ? 'message success' : 'message error';
     targetElement.style.display = 'block';
@@ -142,7 +140,7 @@ export function desactiverBoutonsAction() {
     if (attackBtn) attackBtn.disabled = true;
     if (defendBtn) defendBtn.disabled = true;
     if (healBtn) healBtn.disabled = true;
-    if (specialAttackBtn) specialAttackBtn.disabled = true; // Si présent
+    if (specialAttackBtn) specialAttackBtn.disabled = true;
 }
 
 /**
@@ -152,14 +150,10 @@ export function activerBoutonsAction() {
     if (attackBtn) attackBtn.disabled = false;
     if (defendBtn) defendBtn.disabled = false;
     if (healBtn) healBtn.disabled = false;
-    if (specialAttackBtn) specialAttackBtn.disabled = false; // Si présent
+    if (specialAttackBtn) specialAttackBtn.disabled = false;
 }
 
 // --- Fonctions de gestion des écrans ---
-
-/**
- * Cache tous les écrans.
- */
 function masquerTousLesEcrans() {
     if (authSection) authSection.style.display = 'none';
     if (mainMenuSection) mainMenuSection.style.display = 'none';
@@ -169,33 +163,21 @@ function masquerTousLesEcrans() {
     if (howToPlayScreen) howToPlayScreen.style.display = 'none';
 }
 
-/**
- * Affiche l'écran d'authentification et cache les autres.
- */
 export function afficherEcranAuth() {
     masquerTousLesEcrans();
     if (authSection) authSection.style.display = 'block';
 }
 
-/**
- * Affiche l'écran du menu principal et cache les autres.
- */
 export function afficherMenuPrincipal() {
     masquerTousLesEcrans();
     if (mainMenuSection) mainMenuSection.style.display = 'block';
 }
 
-/**
- * Affiche l'écran de matchmaking et cache les autres.
- */
 export function afficherEcranMatchmaking() {
     masquerTousLesEcrans();
     if (matchmakingStatusSection) matchmakingStatusSection.style.display = 'block';
 }
 
-/**
- * Affiche l'écran de jeu et cache les autres.
- */
 export function afficherEcranJeu() {
     masquerTousLesEcrans();
     if (gameScreenSection) gameScreenSection.style.display = 'block';
@@ -204,17 +186,11 @@ export function afficherEcranJeu() {
     }
 }
 
-/**
- * Affiche l'écran du classement et cache les autres.
- */
 export function afficherEcranClassement() {
     masquerTousLesEcrans();
     if (leaderboardScreen) leaderboardScreen.style.display = 'block';
 }
 
-/**
- * Affiche l'écran "Comment Jouer" et cache les autres.
- */
 export function afficherEcranCommentJouer() {
     masquerTousLesEcrans();
     if (howToPlayScreen) howToPlayScreen.style.display = 'block';
