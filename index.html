@@ -5,118 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini Duel de Cartes</title>
     <link rel="stylesheet" href="css/style.css">
-    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
-</head>
+    </head>
 <body>
-    <div class="bg-shapes">
-        <div></div><div></div><div></div><div></div><div></div>
-    </div>
+    <p id="global-auth-message" class="message"></p>
 
-    <div class="container" id="root">
-        <h1>Mini Duel de Cartes</h1>
+    <script type="module" src="js/firebaseConfig.js"></script>
 
-        <div id="auth" class="menu-section">
-            <h2>Authentification</h2>
-            <p id="user-info">Non connecté</p>
-
-            <h3>Pseudo / Email & Mot de passe</h3>
-            <input type="text" id="pseudo-input" placeholder="Votre Pseudo (pour le jeu)">
-            <input type="email" id="email-input" placeholder="Votre Email (pour la connexion)">
-            <input type="password" id="password-input" placeholder="Mot de passe (min. 6 caractères)">
-            <button id="signup-email-btn">S'inscrire (Email/Mdp)</button>
-            <button id="login-email-btn">Se connecter (Email/Mdp)</button>
-            <p id="auth-msg-email" class="message"></p>
-
-            <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
-
-            <h3>Ou via Google</h3>
-            <button id="login-google-btn" style="background-color: #db4437;">Se connecter avec Google</button>
-            <p id="auth-msg-google" class="message"></p>
-
-            <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
-
-            <h3>Ou via Téléphone</h3>
-            <input type="tel" id="phone-input" placeholder="Votre numéro de téléphone (+33...)">
-            <div id="recaptcha-container"></div>
-            <button id="send-otp-btn" style="background-color: #28a745;">Envoyer Code SMS</button>
-            <input type="text" id="otp-input" placeholder="Code de vérification SMS (OTP)">
-            <button id="verify-otp-btn" style="background-color: #17a2b8;">Vérifier Code</button>
-            <p id="auth-msg-phone" class="message"></p>
-
-
-            <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
-
-            <button id="logout-btn" class="menu-button" style="margin-top: 20px; display:none;">Déconnexion</button>
-        </div>
-
-        <div id="main-menu" class="menu-section" style="display:none;">
-            <h2>Bienvenue <span id="player-name" style="color:#f1c40f;"></span> !</h2>
-            <p id="pseudo-display"></p>
-            <p id="main-menu-msg" class="message"></p>
-
-            <h3>Vos Statistiques</h3>
-            <div id="player-stats" class="stats-display">
-            </div>
-
-            <h3>Choisissez un mode de jeu</h3>
-            <div style="display: flex; flex-wrap: wrap; justify-content: center; margin-top: 10px;">
-                <button id="play-ia-btn" style="flex: 1 1 auto; margin: 5px; background-color: #27ae60;">Jouer contre l'IA</button>
-                <button id="play-player-btn" style="flex: 1 1 auto; margin: 5px; background-color: #3498db;">Rejoindre un match PvP</button>
-                <button id="how-to-play-btn" style="flex: 1 1 auto; margin: 5px; background-color: #f39c12;">Comment jouer ?</button>
-            </div>
-            
-            <button id="logout-btn-menu" class="menu-button" style="margin-top: 20px;">Déconnexion</button>
-        </div>
-
-        <div id="matchmaking-status" class="menu-section" style="display:none;">
-            <h3>Recherche de match PvP...</h3>
-            <p id="matchmaking-message"></p>
-            <button id="cancel-matchmaking-btn" class="menu-button">Annuler la recherche</button>
-        </div>
-
-        <div id="game-screen" class="menu-section" style="display:none;">
-            <h2>Match: <span id="current-match" style="color:#f1c40f;"></span></h2>
-
-            <div class="player-info you">
-                <span id="player1-pseudo" class="player-name">Vous</span>
-                <div class="health-bar-container">
-                    <div class="health-bar" id="you-health-bar"></div>
-                </div>
-                <span class="pv-display" id="player1-pv">100 PV</span>
-            </div>
-
-            <div class="player-info opponent">
-                <span id="player2-pseudo" class="player-name">Adversaire</span>
-                <div class="health-bar-container">
-                    <div class="health-bar opponent-bar" id="opponent-health-bar"></div>
-                </div>
-                <span class="pv-display" id="player2-pv">100 PV</span>
-                <span id="opponent-action-status"></span>
-            </div>
-
-            <div class="timer-container">
-                <span class="timer-label">Temps restant:</span>
-                <div class="timer-bar-wrapper">
-                    <div class="timer-progress-bar" id="timer-progress-bar"></div>
-                </div>
-                <span class="timer-value" id="timer-display">20</span>
-            </div>
-
-            <div class="game-controls action-buttons">
-                <p id="action-msg" class="message"></p>
-                <button id="action-attack">Attaquer (10 dégâts)</button>
-                <button id="action-defend">Défendre (-5 dégâts reçus)</button>
-                <button id="action-heal">Soigner (+15 PV)</button>
-            </div>
-
-            <div class="history-section">
-                <h3>Historique du match</h3>
-                <div id="history"></div>
-            </div>
-            <button id="return-to-menu" style="margin-top: 20px; background-color: #9b59b6;">Retour au Menu</button>
-        </div>
-    </div>
-
+    <script type="module" src="js/utils.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/game.js"></script>
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
