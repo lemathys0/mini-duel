@@ -286,19 +286,28 @@ export function startMatchMonitoring(matchId, user, playerKey, mode) {
     const backBtn = document.getElementById("back-to-menu-btn");
 
     if (attackBtn) {
-        attackBtn.onclick = () => performAction('attack');
+        attackBtn.onclick = () => {
+            console.log("DEBUG CLICK: Bouton 'attack' cliqué. hasPlayedThisTurn avant appel performAction:", hasPlayedThisTurn); // NOUVEAU LOG
+            performAction('attack');
+        };
         console.log("DEBUG: Écouteur 'attack' attaché.");
     } else {
         console.error("ERREUR : Bouton 'action-attack' non trouvé !");
     }
     if (defendBtn) {
-        defendBtn.onclick = () => performAction('defend');
+        defendBtn.onclick = () => {
+            console.log("DEBUG CLICK: Bouton 'defend' cliqué. hasPlayedThisTurn avant appel performAction:", hasPlayedThisTurn); // NOUVEAU LOG
+            performAction('defend');
+        };
         console.log("DEBUG: Écouteur 'defend' attaché.");
     } else {
         console.error("ERREUR : Bouton 'action-defend' non trouvé !");
     }
     if (healBtn) {
-        healBtn.onclick = () => performAction('heal');
+        healBtn.onclick = () => {
+            console.log("DEBUG CLICK: Bouton 'heal' cliqué. hasPlayedThisTurn avant appel performAction:", hasPlayedThisTurn); // NOUVEAU LOG
+            performAction('heal');
+        };
         console.log("DEBUG: Écouteur 'heal' attaché.");
     } else {
         console.error("ERREUR : Bouton 'heal' non trouvé !");
