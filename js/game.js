@@ -1,8 +1,11 @@
-// Imports
-import { db } from "./firebaseConfig.js";
-import { ref, onValue, update, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+// js/game.js
+
+// Importe les fonctions de la base de données DEPUIS firebaseConfig.js
+// C'est TRÈS IMPORTANT que ce soit "./firebaseConfig.js" et non l'URL CDN de Firebase
+import { db, ref, onValue, update, remove, serverTimestamp, onDisconnect, get } from "./firebaseConfig.js";
+
 import { showMessage, enableActionButtons, disableActionButtons } from "./utils.js";
-import { processAITurn, isAITurnCurrentlyProcessing, lastAITurnProcessed } from "./aiLogic.js"; // Importez les variables de aiLogic
+import { processAITurn, isAITurnCurrentlyProcessing, lastAITurnProcessed } from "./aiLogic.js"; // Importe les variables de aiLogic
 
 // Variables de match (assurez-vous qu'elles sont initialisées via main.js ou un état global)
 export let currentMatchId = null;
@@ -17,7 +20,7 @@ let timerInterval = null; // Pour gérer le timer de tour
 // Fonction pour mettre à jour hasPlayedThisTurn (utilisée par main.js)
 export function setHasPlayedThisTurn(value) {
     hasPlayedThisTurn = value;
-    console.log(`DEBUG main.js: hasPlayedThisTurn mis à jour vers ${hasPlayedThisTurn}`);
+    console.log(`DEBUG game.js: hasPlayedThisTurn mis à jour vers ${hasPlayedThisTurn}`);
 }
 
 // Fonction pour démarrer la surveillance d'un match
@@ -35,6 +38,7 @@ export function startMatchMonitoring(matchId, playerKey, mode) {
     console.log("--- DÉBOGAGE onDisconnect ---");
     console.log("1. Valeur de db :", db);
     console.log("2. Valeur de playerPresenceRef :", playerPresenceRef);
+    // UTILISE la fonction onDisconnect importée, en lui passant la référence
     onDisconnect(playerPresenceRef).set(true)
         .then(() => {
             console.log(`Opérations onDisconnect configurées pour ${youKey}`);
@@ -368,7 +372,7 @@ export async function processTurn(matchData) {
         await update(matchRef, updates);
         console.log("Tour traité avec succès. Mise à jour Firebase. Prochain tour pour :", updates.turn);
         setHasPlayedThisTurn(false);
-        console.log(`DEBUG main.js: hasPlayedThisTurn réinitialisé à ${hasPlayedThisTurn} après traitement du tour.`);
+        console.log(`DEBUG game.js: hasPlayedThisTurn réinitialisé à ${hasPlayedThisTurn} après traitement du tour.`);
 
     } catch (error) {
         console.error("Erreur lors du traitement du tour :", error);
