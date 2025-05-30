@@ -18,20 +18,20 @@ export async function processAITurn(matchData) {
     console.log("IA - opponentKey:", opponentKey);
     console.log("IA - gameMode:", gameMode);
 
-    // Vérification initiale pour s'assurer que c'est bien le tour de l'IA
-    // et qu'elle n'a pas déjà soumis une action pour ce tour.
-    // Cette vérification est cruciale.
     const aiPlayer = matchData.players[opponentKey];
     const humanPlayer = matchData.players[youKey]; // Pour l'IA, "youKey" est le joueur humain
 
-    // Si l'IA a déjà une action ou si le verrou est actif, on sort.
-    if (aiPlayer && aiPlayer.action) {
-        console.warn("processAITurn : L'IA a déjà une action soumise. Annulation.");
-        return;
-    }
-    
-    if (isAITurnCurrentlyProcessing) {
-        console.warn("processAITurn : Le tour de l'IA est déjà en cours de traitement, annulation d'un appel redondant.");
+    // Combiner les conditions d'entrée pour la clarté et l'efficacité
+    // L'IA ne doit pas jouer si elle n'existe pas, si elle a déjà une action pour ce tour,
+    // ou si un traitement de l'IA est déjà en cours.
+    if (!aiPlayer || aiPlayer.action || isAITurnCurrentlyProcessing) {
+        if (!aiPlayer) {
+            console.warn("processAITurn : Données de l'IA manquantes. Annulation.");
+        } else if (aiPlayer.action) {
+            console.warn("processAITurn : L'IA a déjà une action soumise pour ce tour. Annulation.");
+        } else if (isAITurnCurrentlyProcessing) {
+            console.warn("processAITurn : Le tour de l'IA est déjà en cours de traitement, annulation d'un appel redondant.");
+        }
         return;
     }
 
