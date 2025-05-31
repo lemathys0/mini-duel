@@ -3,6 +3,8 @@
 // Importe 'auth' et 'onAuthStateChanged' directement de firebaseConfig.js
 import { auth, onAuthStateChanged, db, ref, onValue, set, push, serverTimestamp, off } from './firebaseConfig.js';
 import { setupAuthListeners } from './auth.js'; // Importe la fonction qui configure les écouteurs d'auth
+import { signOut } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js'; // Importe signOut
+
 import {
     afficherMessage,
     mettreAJourBarreDeVie,
@@ -185,6 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (howToPlayBtn) {
         howToPlayBtn.addEventListener('click', afficherReglesDuJeu);
     }
+
+    // NOUVEAU : Écouteur pour le bouton de retour de la section "Comment jouer ?"
+    const backFromHowToPlayBtn = document.getElementById('back-from-how-to-play-btn');
+    if (backFromHowToPlayBtn) {
+        backFromHowToPlayBtn.addEventListener('click', afficherMenuPrincipal);
+    }
+    // FIN NOUVEAU
+
     if (cancelMatchmakingBtn) {
         cancelMatchmakingBtn.addEventListener('click', () => {
             afficherMessage('matchmaking-message', 'Recherche de match annulée.', true);
