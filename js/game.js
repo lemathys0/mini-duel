@@ -79,7 +79,7 @@ export function startMatch(matchId, role, mode) {
 
     // Ajoutez un petit délai avant d'attacher le listener onValue
     // Cela peut aider à laisser le temps à l'UI de se stabiliser ou à la base de données de se préparer
-    setTimeout(() => { // <--- AJOUTEZ CE BLOC setTimeout
+    setTimeout(() => {
         currentMatchListener = onValue(matchRef, (snapshot) => {
             const matchData = snapshot.val();
             if (!matchData) {

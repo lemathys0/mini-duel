@@ -114,7 +114,34 @@
             </div>
             <button id="back-to-menu-btn-game" style="margin-top: 20px; background-color: #9b59b6;">Retour au Menu</button>
         </div>
-    </div>
+
+        <div id="how-to-play-screen" class="menu-section" style="display:none;">
+            <h2>Comment jouer ?</h2>
+            <div class="rules-content">
+                <p>Bienvenue dans Mini Duel de Cartes ! Voici les règles simples pour jouer :</p>
+                <ul>
+                    <li>Chaque joueur commence avec 100 PV (Points de Vie).</li>
+                    <li>Le but est de réduire les PV de votre adversaire à 0.</li>
+                    <li>Chaque tour, vous avez un temps limité pour choisir une action :</li>
+                </ul>
+                <h3>Actions disponibles :</h3>
+                <ul>
+                    <li><strong>Attaquer :</strong> Inflige 20 dégâts à l'adversaire. Si l'adversaire défend, les dégâts sont réduits de 50%.</li>
+                    <li><strong>Défendre :</strong> Réduit les dégâts reçus de 50% pour ce tour.</li>
+                    <li><strong>Soigner :</strong> Restaure 25 PV. Attention, cette action a un temps de recharge de 3 tours !</li>
+                </ul>
+                <h3>Déroulement du tour :</h3>
+                <ol>
+                    <li>Les deux joueurs choisissent leur action simultanément.</li>
+                    <li>Les actions sont résolues en fonction des choix des deux joueurs.</li>
+                    <li>Le joueur dont c'est le tour change.</li>
+                    <li>Le jeu continue jusqu'à ce qu'un joueur n'ait plus de PV.</li>
+                </ol>
+                <p>Bonne chance et amusez-vous bien !</p>
+            </div>
+            <button id="back-from-how-to-play-btn" class="menu-button" style="margin-top: 20px;">Retour au Menu</button>
+        </div>
+        </div>
 
     <script type="module" src="js/firebaseConfig.js"></script>
     <script type="module" src="js/utils.js"></script>
